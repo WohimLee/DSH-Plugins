@@ -16,7 +16,6 @@ import { registerRightPanels } from './panels/register.js';
 import { contribution } from '../remote.js';
 import { createDrafts } from './workspace/drafts.js';
 import { workspaceCommands } from './workspace/commands.js';
-import { ungrouped } from './workspace/tree.js';
 import { SectionAction } from './workspace/SectionAction.js';
 import { WorkspaceTree } from './workspace/WorkspaceTree.js';
 import { createTreeStore } from './workspace/store.js';
@@ -40,13 +39,6 @@ function assemble(ctx: Context): void {
   ctx.effect(() => () => lifetime.abort());
   const drafts = createDrafts();
   const sources = sessionSources(ctx);
-  const newSession = () => {
-    sources.select('dsh');
-    view.showWorkbench();
-    ctx.layout.selectPanel(null);
-    if (typeof document !== 'undefined' && document.querySelector('[data-sidebar-collapsed="true"]')) ctx.layout.toggleSidebar();
-    drafts.begin({ kind: 'session', parent: ungrouped, chooseProject: true });
-  };
   ctx.effect(() => ctx.locale.register('workbench', messages));
   ctx.effect(() => installAppearance());
   registerRightPanels(ctx);
@@ -81,7 +73,7 @@ function assemble(ctx: Context): void {
   ctx.slots.inject('sidebar.session.action', () => ctx.slots.register({
     name: 'sidebar.session.action', id: 'dsh-workbench:new-section', locale: 'workbench',
     inject: () => ({
-      newSection: () => drafts.begin({ kind: 'section', parent: '' }), newSession, hooks: { sources, nativeView: view.native },
+      newSection: () => drafts.begin({ kind: 'section', parent: '' }), hooks: { sources, nativeView: view.native },
     }),
   }, ({ useSources, useNativeView, ...props }) => {
     const source = useSources(state => state.selected);

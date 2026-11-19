@@ -44,13 +44,13 @@ export async function apply(ctx, config) {
     await ctx.sessionController.rename({ sessionId, title: 'Workbench ' + suffix });
   }
   const recordActivity = () => {
-    const id = readFileSync(config.activity, 'utf8');
-    if (id !== 'workbench-test-extra-9') return;
-    const session = ctx.agents.get(id).session;
+    const { id, text } = JSON.parse(readFileSync(config.activity, 'utf8'));
+    const session = ctx.agents.get(id)?.session;
+    if (!session) return;
     const turn = (session.ownEvents().findLast(event => event.type === 'turn/start')?.data.turn ?? 0) + 1;
     session.append([
       ['turn/start', { turn }],
-      ['user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: 'Synthetic activity event' }], source: { kind: 'user' } }, { surfaceOp: 'append' }],
+      ['user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } }, { surfaceOp: 'append' }],
       ['turn/end', { turn, reason: { kind: 'aborted', reason: { kind: 'user' } } }],
     ]);
   };

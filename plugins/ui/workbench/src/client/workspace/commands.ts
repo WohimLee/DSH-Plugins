@@ -27,14 +27,7 @@ export function workspaceCommands(ctx: Context, signal: AbortSignal) {
     renameProject: (id: WorkspaceId, title: string) => ctx.workspaces.rename(id, title),
     removeProject: (id: WorkspaceId) => ctx.workspaces.delete(id),
     async reveal(path: string) { value(await ctx.remote.session.openWorkspacePath({ path, action: 'reveal' }, signal)); },
-    async createSession(name: string, project?: WorkspaceId) {
-      const id = project ? await ctx.sessions.create({ workspaceId: project })
-        : value(await ctx.remote.workbenchSessions.createStandalone(signal)) as SessionId;
-      // The session already exists if renaming fails. Show it rather than retrying creation.
-      try { await renameSession(id, name); }
-      catch { return { id, titled: false }; }
-      return { id, titled: true };
-    },
+    startSession: (project?: WorkspaceId) => ctx.uiWorkspace.startSession(project),
     renameSession,
     forkSession: (id: SessionId) => ctx.uiWorkspace.forkSession(id),
     archiveSession: (id: SessionId) => ctx.uiWorkspace.archiveSession(id),

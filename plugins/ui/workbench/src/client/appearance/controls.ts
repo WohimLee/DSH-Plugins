@@ -11,7 +11,7 @@ export const controlStyles = `
 .wb-section-session { flex: 1; min-inline-size: 0; }
 .wb-section-session button { inline-size: 100%; }
 .wb-section-trigger { display: grid; place-items: center; flex: none; }
-.wb-inline-name input, .wb-inline-name select, .wb-directory input, .wb-guide input {
+.wb-inline-name input, .wb-directory input, .wb-rename-session input, .wb-guide input {
   border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 7px; color: inherit;
   background: var(--dsw-alias-background-hover, #8882); padding: 7px 9px; font: inherit; min-inline-size: 0;
 }

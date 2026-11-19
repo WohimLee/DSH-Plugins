@@ -3,15 +3,15 @@ import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-session-controller/client';
-import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client';
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots';
 import type { Section, TreeState } from './tree.js';
-import { defaultSection, insert, moveProject, moveSession, placeSession, projectGroups, sessionGroups, ungrouped } from './tree.js';
+import { defaultSection, insert, moveProject, moveSession, projectGroups, sessionGroups, ungrouped } from './tree.js';
 import { useTreeDrag } from './drag.js';
 import { DirectoryDialog } from './DirectoryDialog.js';
 import { InlineName } from './InlineName.js';
+import { RenameSessionDialog } from './RenameSessionDialog.js';
 import { RowMenu } from './RowMenu.js';
 import type { MenuEntry, MenuTarget } from './RowMenu.js';
 import type { Draft, Drafts } from './drafts.js';
@@ -54,13 +54,12 @@ function Action({ label, icon, run, pinned, busy }: {
     onClick={busy ? undefined : run}><Glyph icon={icon} /></button>;
 }
 
-function ProjectChildren({ project, children, sessions, draft, showMoreLabel, depth }: {
-  project: string; children: ReactNode; sessions: ReactNode[]; draft?: ReactNode; showMoreLabel: string; depth: number;
+function ProjectChildren({ project, children, sessions, showMoreLabel, depth }: {
+  project: string; children: ReactNode; sessions: ReactNode[]; showMoreLabel: string; depth: number;
 }) {
   const [showMore, setShowMore] = useState(false);
   return <div className="wb-tree-children" data-wb-project-children={project}>
     {children}
-    {draft}
     {showMore ? sessions : sessions.slice(0, visibleLimit)}
     {!showMore && sessions.length > visibleLimit &&
       <button type="button" className="wb-tree-show-more" style={{ '--wb-depth': depth } as CSSProperties}
@@ -79,11 +78,10 @@ function SessionItem({ session, selected, depth, pinned, busy, unread, dragProps
   return <div className="wb-tree-row" data-row-key={'session:' + session.id} data-wb-kind="session"
     onContextMenu={menu} data-selected={selected || undefined} data-drop={drop} style={{ '--wb-depth': depth } as CSSProperties} {...dragProps}>
     <button type="button" className="wb-tree-label" aria-current={selected ? 'true' : undefined}
-      aria-label={session.blank && !session.title ? t('newSession') : session.displayTitle}
-      title={session.blank && !session.title ? t('newSession') : session.displayTitle} onClick={open}>
+      aria-label={session.displayTitle} title={session.displayTitle} onClick={open}>
       {session.running && <span className="wb-tree-running" aria-label={t('running')} />}
       {!session.running && unread && <span className="wb-tree-running" aria-label={t('unread')} />}
-      <span>{session.blank && !session.title ? t('newSession') : session.displayTitle}</span>
+      <span>{session.displayTitle}</span>
     </button>
     <div className="wb-tree-actions">
       <Action label={t('sessionMenu')} icon="more" run={menu} />
@@ -100,9 +98,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const closeMenu = useCallback(() => setMenu(undefined), []);
   const [directory, setDirectory] = useState<{ initial?: string; confirm: (path: string) => Promise<void>; cancel?: () => void }>();
   const [rename, setRename] = useState<{ id: string; name: string; commit: (title: string) => void }>();
-  const [projectChoice, setProjectChoice] = useState<{ draft: Draft; project?: WorkspaceId }>();
-  const [creating, setCreating] = useState(false);
-  const creatingRef = useRef(false);
+  const [sessionRename, setSessionRename] = useState<{ id: SessionId; title: string }>();
   const sessions = useSessions(state => state);
   const workspaces = useWorkspaces(state => state);
   const onConversation = usePanelInfo(info => info.activePanelId === null);
@@ -148,7 +144,6 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const begin = (next: Draft) => {
     setRename(undefined);
     if (next.parent) show(next.parent);
-    if (next.parent === ungrouped) show(defaultSection);
     drafts.begin(next);
   };
   const titleDraft = (item: Draft, title: string) => {
@@ -156,54 +151,28 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       if (save(state => ({ ...state, sections: [{ id: 'section:' + crypto.randomUUID(), title }, ...state.sections] }))) drafts.end(item);
       return;
     }
-    if (item.kind === 'project') {
-      setDirectory({
-        initial: projects.get(item.parent)?.path,
-        cancel: () => drafts.end(item),
-        confirm: async path => {
-          const workspace = await commands.createProject(path);
-          const id = workspace.workspaceId;
-          const available = projects.has(id) ? projectIds : [...projectIds, id];
-          const first = projectGroups(tree, available).get(item.parent)?.find(project => project !== id);
-          const position = first ? { id: first, after: false } : undefined;
-          if (moveProject(tree, id, item.parent, available, position) === tree) throw new Error('Invalid project parent');
-          if (workspace.title !== title) await commands.renameProject(id, title);
-          if (!save(state => moveProject(state, id, item.parent, available, position))) throw new Error('Could not persist project placement');
-          drafts.end(item);
-          setDirectory(undefined);
-        },
-      });
-      return;
-    }
-    if (creatingRef.current) return;
-    creatingRef.current = true;
-    setCreating(true);
-    const project = item.chooseProject ? (projectChoice?.draft === item ? projectChoice.project : undefined) : projects.get(item.parent)?.workspaceId;
-    const parent = project ?? ungrouped;
-    report(async () => {
-      try {
-        const { id, titled } = await commands.createSession(title, project);
-        save(state => placeSession(state, id, parent, chatGroups.get(parent) ?? [], pins, undefined, true));
-        show(parent);
-        show(defaultSection);
+    setDirectory({
+      initial: projects.get(item.parent)?.path,
+      cancel: () => drafts.end(item),
+      confirm: async path => {
+        const workspace = await commands.createProject(path);
+        const id = workspace.workspaceId;
+        const available = projects.has(id) ? projectIds : [...projectIds, id];
+        const first = projectGroups(tree, available).get(item.parent)?.find(project => project !== id);
+        const position = first ? { id: first, after: false } : undefined;
+        if (moveProject(tree, id, item.parent, available, position) === tree) throw new Error('Invalid project parent');
+        if (workspace.title !== title) await commands.renameProject(id, title);
+        if (!save(state => moveProject(state, id, item.parent, available, position))) throw new Error('Could not persist project placement');
         drafts.end(item);
-        openSession(id);
-        if (!titled) setError('actionFailed');
-      } finally { creatingRef.current = false; setCreating(false); }
+        setDirectory(undefined);
+      },
     });
   };
   const nameDraft = (item: Draft, depth = 0) => <InlineName key={item.kind + ':' + item.parent}
-    label={t(item.kind === 'section' ? 'sectionName' : item.kind === 'project' ? 'projectName' : 'sessionName')}
-    depth={depth} cancel={() => { if (!creatingRef.current && !directory) drafts.end(item); }}
+    label={t(item.kind === 'section' ? 'sectionName' : 'projectName')}
+    depth={depth} cancel={() => { if (!directory) drafts.end(item); }}
     confirm={title => titleDraft(item, title)}
-    controls={<>
-      {item.chooseProject && <select aria-label={t('sessionProject')} defaultValue="" disabled={creating}
-        onChange={event => setProjectChoice({ draft: item, project: projects.get(event.target.value)?.workspaceId })}>
-        <option value="">{t('noProject')}</option>
-        {workspaces.items.map(project => <option key={project.workspaceId} value={project.workspaceId}>{project.title}</option>)}
-      </select>}
-      <button type="submit" className="wb-control" disabled={creating}>{t('create')}</button>
-    </>} />;
+    controls={<button type="submit" className="wb-control">{t('create')}</button>} />;
   const editingName = (id: string, depth = 0) => rename?.id === id
     ? <InlineName label={t('rename')} depth={depth} initial={rename.name} cancel={() => setRename(undefined)} confirm={rename.commit} />
     : null;
@@ -264,9 +233,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     const setRead = () => save(state => ({ ...state,
       unread: state.unread?.includes(id) ? state.unread.filter(item => item !== id) : [...(state.unread ?? []), id] }));
     const entries: MenuEntry[] = [
-      { label: t('rename'), run: () => setRename({ id, name: session.title ?? '', commit: title => report(async () => {
-        await commands.renameSession(id, title); setRename(undefined);
-      }) }) },
+      { label: t('rename'), run: () => setSessionRename({ id, title: session.title ?? '' }) },
       { label: t('edit'), run: () => report(async () => {
         const initial = await commands.directory(id);
         setDirectory({ initial, confirm: async path => { await commands.setDirectory(id, path); setDirectory(undefined); } });
@@ -295,9 +262,8 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
 
   const rows = (project: string, depth: number) => (chatGroups.get(project) ?? [])
     .map(id => sessions.byId[id as SessionId])
-    .filter(session => !archived.has(session.id) && (!session.blank || session.title || session.id === active))
-    .map(session => <Fragment key={session.id}>
-      {editingName(session.id, depth) ?? <SessionItem session={session} selected={session.id === active && onConversation}
+    .filter(session => !archived.has(session.id) && (!session.blank || session.title))
+    .map(session => <SessionItem key={session.id} session={session} selected={session.id === active && onConversation}
         depth={depth} pinned={pins.has(session.id)} busy={pinning !== undefined} unread={tree.unread?.includes(session.id) ?? false}
         dragProps={drag.row({ kind: 'session', id: session.id, parent: project })}
         drop={drag.highlight?.id === session.id ? drag.highlight.placement : undefined}
@@ -306,8 +272,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           if (tree.unread?.includes(session.id)) save(state => ({ ...state, unread: state.unread?.filter(id => id !== session.id) }));
           openSession(session.id);
         }}
-        toggle={() => { void togglePin(session.id); }} t={t} useSessionAccess={useSessionAccess} />}
-    </Fragment>);
+        toggle={() => { void togglePin(session.id); }} t={t} useSessionAccess={useSessionAccess} />);
 
   function projectMenu(project: (typeof workspaces.items)[number], id: string, parent: string): MenuEntry[] {
     const pinned = tree.projectPins?.includes(id);
@@ -344,7 +309,6 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     const expanded = !collapsed.has(id);
     const placement = drag.highlight?.id === id ? drag.highlight.placement : undefined;
     const showProjectMenu = project ? (event: MouseEvent) => openMenu(event, t('projectMenu'), projectMenu(project, id, parent)) : undefined;
-    const sessionDraft = draft?.kind === 'session' && draft.parent === id;
     return <Fragment key={id}>
       {editingName(id, depth) ?? <div className="wb-tree-row" data-wb-kind="project" data-row-key={'project:' + id} data-drop={placement}
         onContextMenu={showProjectMenu} style={{ '--wb-depth': depth } as CSSProperties} {...drag.row({ kind: 'project', id, parent }, project !== undefined)}>
@@ -354,11 +318,13 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         {project && <div className="wb-tree-actions">
           <Action label={t('projectMenu')} icon="more" run={showProjectMenu} />
           {canAdd && <Action label={t('addSubproject')} icon="folderAdd" run={() => begin({ kind: 'project', parent: id })} />}
-          {canCreateSession && <Action label={t('newSession')} icon="new" run={() => begin({ kind: 'session', parent: id })} />}
+          {canCreateSession && <Action label={t('newSession')} icon="new" run={() => {
+            show(id);
+            commands.startSession(project.workspaceId);
+          }} />}
         </div>}
       </div>}
-      {(expanded || sessionDraft) && <ProjectChildren project={id} depth={depth + 1} sessions={rows(id, depth + 1)} showMoreLabel={t('showMore')}
-        draft={sessionDraft ? nameDraft(draft, depth + 1) : undefined}>
+      {expanded && <ProjectChildren project={id} depth={depth + 1} sessions={rows(id, depth + 1)} showMoreLabel={t('showMore')}>
         {draft?.kind === 'project' && draft.parent === id && nameDraft(draft, depth + 1)}
         {(grouped.get(id) ?? []).map(child => projectRow(child, id, depth + 1))}
       </ProjectChildren>}
@@ -384,7 +350,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           if (window.confirm(t('removeSectionConfirm'))) save(state => ({ ...state, sections: state.sections.filter(item => item.id !== section.id) }));
         } },
       ]);
-      const showUngrouped = isDefault && (draft?.parent === ungrouped || rows(ungrouped, 1).length > 0);
+      const showUngrouped = isDefault && rows(ungrouped, 1).length > 0;
       return <div className="wb-tree-section" key={section.id}>
         {editingName(section.id) ?? <div className="wb-tree-row" onContextMenu={showSectionMenu} data-wb-kind="section" data-row-key={section.id}
           data-drop={drag.highlight?.id === section.id ? drag.highlight.placement : undefined}
@@ -396,12 +362,12 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
             {showSectionMenu && <Action label={t('sectionMenu')} icon="more" run={showSectionMenu} />}
             {canAdd && <Action label={t('addProject')} icon="folderAdd" run={() => begin({ kind: 'project', parent: section.id })} />}
             {isDefault && canCreateSession && <Action label={t('newSession')} icon="new"
-              run={() => begin({ kind: 'session', parent: ungrouped, chooseProject: true })} />}
+              run={() => commands.startSession()} />}
           </div>
         </div>}
         {expanded && draft?.kind === 'project' && draft.parent === section.id && nameDraft(draft)}
         {expanded && (grouped.get(section.id) ?? []).map(id => projectRow(id, section.id, 0))}
-        {(expanded || draft?.parent === ungrouped) && showUngrouped && projectRow(ungrouped, section.id, 0)}
+        {expanded && showUngrouped && projectRow(ungrouped, section.id, 0)}
       </div>;
     })}
     <div className="wb-tree-tail" data-workbench-tree-end aria-hidden="true"
@@ -411,5 +377,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       unavailable={t('actionUnavailable')} back={t('back')} />}
     {directory && <DirectoryDialog initial={directory.initial} list={commands.listDirectory} pick={commands.pickDirectory}
       t={t} cancel={() => { directory.cancel?.(); setDirectory(undefined); }} confirm={directory.confirm} />}
+    {sessionRename && <RenameSessionDialog key={sessionRename.id} initial={sessionRename.title} t={t}
+      close={() => setSessionRename(undefined)} save={title => commands.renameSession(sessionRename.id, title)} />}
   </div>;
 }

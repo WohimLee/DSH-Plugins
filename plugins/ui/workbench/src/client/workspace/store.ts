@@ -75,8 +75,9 @@ export function createTreeStore(ctx: Context): TreeStore {
     // The host advances the list timestamp when it records a user message.
     // A newly loaded row is a baseline, not activity.
     const changed = snapshot.ids.filter(id => {
-      const before = previous.byId[id]?.updatedAt;
-      return before !== undefined && snapshot.byId[id].updatedAt > before;
+      const before = previous.byId[id];
+      const after = snapshot.byId[id];
+      return before !== undefined && !after.blank && (before.blank || after.updatedAt > before.updatedAt);
     }).sort((a, b) => snapshot.byId[a].updatedAt - snapshot.byId[b].updatedAt);
     previous = snapshot;
     if (!changed.length) return;

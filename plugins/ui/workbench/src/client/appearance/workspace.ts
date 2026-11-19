@@ -105,9 +105,8 @@ export const workspaceStyles = `
   margin-block: 2px; flex: none;
 }
 .wb-inline-name input { flex: 1 1 95px; inline-size: 0; }
-.wb-inline-name select { flex: 1 1 80px; max-inline-size: 100%; }
 .wb-inline-name .wb-control { margin-inline-start: auto; }
-.wb-row-menu, .wb-directory {
+.wb-row-menu, .wb-directory, .wb-rename-session {
   border: 1px solid var(--dsw-alias-border-primary, #8884);
   background: var(--dsw-specific-sidebar-fill, #27282b); color: var(--dsw-alias-label-primary, #eee);
   box-shadow: 0 6px 24px #0006; border-radius: 12px; -webkit-app-region: no-drag;
@@ -125,10 +124,18 @@ export const workspaceStyles = `
 .wb-row-menu button:disabled { opacity: .4; cursor: default; }
 .wb-row-menu button[data-danger]:enabled { color: #ee897d; }
 .wb-directory { inline-size: min(440px, 90vw); padding: 14px; }
-.wb-directory::backdrop { background: #0006; }
+.wb-directory::backdrop, .wb-rename-session::backdrop { background: #0006; }
 .wb-directory form, .wb-directory label { display: grid; gap: 7px; }
 .wb-directory input { inline-size: 100%; box-sizing: border-box; }
 .wb-directory-bar { display: flex; justify-content: end; gap: 6px; }
 .wb-directory-entries { display: grid; gap: 2px; max-block-size: 28vh; overflow: auto; }
 .wb-directory-entries button { text-align: start; overflow-wrap: anywhere; }
+.wb-rename-session { inline-size: min(360px, 84vw); padding: 18px; }
+.wb-rename-session form { display: grid; gap: 12px; }
+.wb-rename-session strong { font-size: 1.15em; }
+.wb-rename-actions { display: flex; justify-content: end; gap: 8px; }
+.wb-rename-actions button[type="submit"]:enabled {
+  background: var(--dsw-alias-label-primary, #eee);
+  color: var(--dsw-specific-sidebar-fill, #27282b);
+}
 `;

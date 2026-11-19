@@ -1,6 +1,6 @@
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots';
 
-export type Draft = { kind: 'section' | 'project' | 'session'; parent: string; chooseProject?: boolean };
+export type Draft = { kind: 'section' | 'project'; parent: string };
 export type Drafts = HostObservable<Draft | undefined> & { begin(draft: Draft): void; end(draft: Draft): void };
 
 export function createDrafts(): Drafts {
