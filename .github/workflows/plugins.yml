@@ -33,11 +33,12 @@ jobs:
             echo 'shared=true' >> "$GITHUB_OUTPUT"
           else
             echo "base=$base" >> "$GITHUB_OUTPUT"
-            git diff --name-only "$base" HEAD > /tmp/dshp-changed-paths
-            if rg '^(packages/|templates/|scripts/|package.json$|pnpm-lock.yaml$|pnpm-workspace.yaml$|tsconfig.base.json$|\.github/workflows/plugins.yml$)' /tmp/dshp-changed-paths; then
-              echo 'shared=true' >> "$GITHUB_OUTPUT"
-            else
+            if git diff --quiet "$base" HEAD -- packages/ templates/ scripts/ package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json .github/workflows/plugins.yml; then
               echo 'shared=false' >> "$GITHUB_OUTPUT"
+            else
+              status=$?
+              if [[ "$status" != 1 ]]; then exit "$status"; fi
+              echo 'shared=true' >> "$GITHUB_OUTPUT"
             fi
           fi
       - name: Check all consumers of shared changes
