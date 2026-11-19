@@ -1,0 +1,32 @@
+# dsh-model-picker
+
+左侧栏的「模型管理」集中显示连接状态与可用模型。Codex 复用 DSH 宿主上的本机 CLI 登录，可在页面检查状态。Qoder 可在页面绑定、更新或解绑账号。
+
+在 DSH 输入框的菜单中悬停「Models」（中文界面为「模型」）打开选择器。浮层优先贴主菜单右边，空间不足时贴左边。双列布局按厂商行数决定高度，鼠标移到厂商行即可切换等高的模型列表，较长的列表在右栏内滚动。触屏可点按入口和厂商。搜索覆盖所有已加载的厂商和账号，选中模型才改变当前会话的选择。选择结果与 `/model` 共用同一份会话状态。推理强度、团队设置和其他菜单扩展由原生菜单管理。
+
+- **DeepSeek** 显示已登录平台账号的钱包余额及赠金。配置了 API Key 时，可从同一厂商选择另一个计费入口。
+- **Codex** 在有周额度时优先展示周剩余比例。选择厂商后可查看各时间窗口和重置时间。连接状态需 [dsh-codex 0.1.5](../../runtime/codex/README.md)。
+- **Qoder** 按所选账号展示套餐、额外购买和组织 Credits。管理页需 [dsh-qoder 0.1.4](../../runtime/qoder/README.md)。
+- 未返回额度或余额时，显示「用量暂不可用」。选模型照常工作。
+
+## 安装与验证
+
+需要 DSH `0.2.2-rc.5`、Node.js >=24.9.0。该插件可以与 Workbench 独立安装。
+
+```sh
+pnpm --filter dsh-model-picker check
+pnpm --filter dsh-model-picker pack --pack-destination /tmp
+dsh plugin --profile web add /tmp/dsh-model-picker-0.1.5.tgz
+```
+
+Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filter dsh-model-picker test:host`，需要本机 Chrome 或 `DSH_TEST_BROWSER_EXECUTABLE`。测试使用合成输入和临时 profile。
+
+## 接入其他厂商
+
+适配器在账号就绪后发布可用模型，解绑后撤回相应路由，并通过 DSH 的模型目录事件通知界面刷新。可用路由自动进入模型管理页和模型选择器。
+
+需要提供连接表单的适配器可通过 `ctx.slots.inject` 注册 `modelPicker.connections`。它是 root 作用域的 list 插槽，贡献 ID 使用厂商标识。账号凭据由适配器使用宿主支持的机制保存。
+
+## 源码组织评估
+
+使用现有 workspace，由 DSH-Plugins 统一维护并独立打包。模型选择和额度查询通过宿主接口接入，源码无需追踪第三方历史。若维护权限或发布流程形成独立仓库边界，再评估 Git submodule。

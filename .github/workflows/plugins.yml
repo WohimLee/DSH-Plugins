@@ -1,0 +1,53 @@
+name: Plugins
+on:
+  push:
+    paths: ['plugins/**', 'packages/**', 'templates/**', 'scripts/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json', 'docs/plugins.md', 'docs/plugin-categories.*', '.github/workflows/plugins.yml']
+  pull_request:
+    paths: ['plugins/**', 'packages/**', 'templates/**', 'scripts/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.base.json', 'docs/plugins.md', 'docs/plugin-categories.*', '.github/workflows/plugins.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:dsh-version
+      - run: pnpm check:plugins && pnpm catalog:check
+      - name: Select checks from actual changes
+        id: scope
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          base="${PR_BASE:-$PUSH_BASE}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}"; then
+            echo 'shared=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "base=$base" >> "$GITHUB_OUTPUT"
+            git diff --name-only "$base" HEAD > /tmp/dshp-changed-paths
+            if rg '^(packages/|templates/|scripts/|package.json$|pnpm-lock.yaml$|pnpm-workspace.yaml$|tsconfig.base.json$|\.github/workflows/plugins.yml$)' /tmp/dshp-changed-paths; then
+              echo 'shared=true' >> "$GITHUB_OUTPUT"
+            else
+              echo 'shared=false' >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Check all consumers of shared changes
+        if: steps.scope.outputs.shared == 'true'
+        run: pnpm -r --if-present check
+      - name: Check changed plugins and their dependents
+        if: steps.scope.outputs.shared != 'true'
+        env:
+          BASE: ${{ steps.scope.outputs.base }}
+        run: pnpm --filter "...[$BASE]" --filter '!dsh-plugins-workspace' --if-present check
+      - name: Verify scaffold artifacts and real DSH composition
+        if: steps.scope.outputs.shared == 'true'
+        run: pnpm test:host

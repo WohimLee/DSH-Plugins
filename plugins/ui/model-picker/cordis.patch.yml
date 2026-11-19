@@ -1,0 +1,3 @@
+- insert:
+    - id: 'dsh-model-picker:main'
+      name: 'dsh-model-picker'

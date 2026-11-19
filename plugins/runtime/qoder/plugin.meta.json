@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "category": "runtime",
+  "tags": [
+    "qoder",
+    "models",
+    "sdk"
+  ],
+  "surfaces": {
+    "web": {
+      "status": "unverified",
+      "evidence": "2026-11-19，macOS / DSH 0.2.2-rc.5：0.1.3 在隔离 Web 验证无预设账号、添加账号、可选备注、改名保留模型路由和解绑移除入口。真实账户推理待验收。"
+    },
+    "desktop": {
+      "status": "unverified"
+    },
+    "headless": {
+      "status": "unverified",
+      "evidence": "2026-11-19，macOS / Qoder CLI 1.1.83：0.1.2 在无登录的隔离 SDK 会话中报告认证失败并返回空模型目录。DSH 0.2.2-rc.5 的模型目录隔离与流式处理通过合成测试。 0.1.3 的凭据和备注通过合成存储的重载及旧版绑定兼容测试。"
+    }
+  }
+}

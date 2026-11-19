@@ -1,0 +1,22 @@
+name: Agent infrastructure
+on:
+  push:
+    paths: ['AGENTS.md', 'CLAUDE.md', 'README.md', 'CONTRIBUTING.md', '.agents/**', '.github/**', 'docs/**', 'plugins/**/AGENTS.md', 'scripts/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']
+  pull_request:
+    paths: ['AGENTS.md', 'CLAUDE.md', 'README.md', 'CONTRIBUTING.md', '.agents/**', '.github/**', 'docs/**', 'plugins/**/AGENTS.md', 'scripts/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:infra
+      - run: pnpm test:infra

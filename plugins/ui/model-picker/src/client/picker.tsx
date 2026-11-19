@@ -1,0 +1,279 @@
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import type { KeyboardEvent } from 'react';
+import type { ModelDirectory, ModelDirectoryState } from '@deepseek-ai/dsh-client-ui-model-selection/client';
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
+import type { ProviderUsage } from '../remote.js';
+import { activeRoute, groupProviders } from './model.js';
+
+type Route = ModelDirectoryState['groups'][number];
+type Model = Route['models'][number];
+type T = PropsLocale<'modelPicker'>['t'];
+type Wallet = { currency: string; balance: string };
+type Usage = ProviderUsage | { wallets: readonly Wallet[]; bonus: readonly Wallet[] };
+export type ReadUsage = (provider: string, signal: AbortSignal) => Promise<Usage | null>;
+type Props = Pick<PropsRuntime<'conversation.input.model.options'>, 'locked' | 'dismiss' | 'reportFailure'> & PropsLocale<'modelPicker'> & {
+  directory: ModelDirectory;
+  readUsage: ReadUsage;
+  language: string;
+  back: () => void;
+};
+
+const narrow = () => window.matchMedia('(max-width: 389px), (pointer: coarse)').matches;
+
+export function Picker({ directory, readUsage, language, locked, dismiss, reportFailure, back, t }: Props) {
+  const state = useSyncExternalStore(directory.store.subscribe, directory.store.getSnapshot);
+  const legacyQoder = state.current?.provider === 'qoder';
+  const groups = useMemo(() => {
+    const named = state.groups.some(route => route.id.startsWith('qoder-account-'));
+    return groupProviders(named && !legacyQoder ? state.groups.filter(route => route.id !== 'qoder') : state.groups);
+  }, [state.groups, legacyQoder]);
+  const [provider, setProvider] = useState('');
+  const [accounts, setAccounts] = useState<Record<string, string>>({});
+  const [entered, setEntered] = useState(false);
+  const [query, setQuery] = useState('');
+  const [usage, setUsage] = useState<Record<string, Usage | null>>({});
+  const [failed, setFailed] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const results = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const group = groups.find(item => item.id === provider)
+    ?? groups.find(item => item.routes.some(route => route.id === state.current?.provider)) ?? groups[0];
+  const route = group && activeRoute(group, accounts[group.id] ?? state.current?.provider);
+  const busy = locked || state.status === 'selecting';
+  const term = query.trim().toLocaleLowerCase();
+  const searching = term !== '';
+
+  useLayoutEffect(() => {
+    if (results.current) results.current.scrollTop = 0;
+  }, [route?.id, searching]);
+
+  useEffect(() => {
+    let active = true;
+    void directory.load().catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, [directory]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const keys = new Set<string>();
+    for (const item of groups) {
+      if (item.id === 'deepseek') keys.add('deepseek-account');
+      if (item.id === 'codex') keys.add('codex');
+      if (item.id === 'qoder') for (const route of item.routes) keys.add(route.id);
+    }
+    for (const key of keys) {
+      void readUsage(key, controller.signal).catch(() => null).then(value => {
+        if (!controller.signal.aborted) setUsage(previous => ({ ...previous, [key]: value }));
+      });
+    }
+    return () => controller.abort();
+  }, [groups, readUsage]);
+
+  const models = (term
+    ? groups.flatMap(item => item.routes.map(route => ({ route, provider: item.name })))
+    : route ? [{ route, provider: '' }] : [])
+    .map(item => ({ ...item, models: item.route.models.filter(model => !term
+      || [model.name, model.id, item.provider, item.route.name].some(name => name.toLocaleLowerCase().includes(term))) }))
+    .filter(item => item.models.length > 0);
+
+  function choose(route: Route, model: Model): void {
+    if (busy) return;
+    const same = state.current?.provider === route.id && state.current.model === model.id;
+    if (same) { dismiss(); return; }
+    const effort = model.reasoning?.defaultEffort;
+    void directory.select({ provider: route.id, model: model.id, ...(effort === undefined ? {} : { reasoningEffort: effort }) })
+      .then(result => { if (result.ok) dismiss(); else reportFailure(t('selectionFailed')); })
+      .catch(() => reportFailure(t('selectionFailed')));
+  }
+
+  function focusRow(selector: string, direction: number, from?: EventTarget): void {
+    const rows = Array.from(root.current?.querySelectorAll<HTMLButtonElement>(selector) ?? [])
+      .filter(row => row.getClientRects().length > 0 && !row.disabled);
+    if (rows.length === 0) return;
+    const index = rows.findIndex(row => row === from);
+    const start = index < 0 && direction < 0 ? 0 : index;
+    rows[(start + direction + rows.length) % rows.length]?.focus();
+  }
+
+  function keys(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === 'Tab') {
+      const controls = Array.from(root.current?.querySelectorAll<HTMLElement>('input, select, button:not(:disabled)') ?? [])
+        .filter(node => node.getClientRects().length > 0);
+      const index = controls.findIndex(node => node === event.target);
+      if (controls[index + (event.shiftKey ? -1 : 1)]) event.stopPropagation();
+      return;
+    }
+    if (event.key === 'Escape' && (!narrow() || !entered || term)) {
+      event.preventDefault();
+      event.stopPropagation();
+      back();
+      return;
+    }
+    if (event.target instanceof HTMLSelectElement) {
+      if (event.key.startsWith('Arrow')) event.stopPropagation();
+      return;
+    }
+    const providerRow = event.target instanceof HTMLElement && event.target.hasAttribute('data-provider-row');
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      const selector = providerRow || (!term && event.target === search.current && (!entered && narrow() || !narrow()))
+        ? '[data-provider-row]' : '[data-model-row]';
+      focusRow(selector, event.key === 'ArrowDown' ? 1 : -1, event.target);
+    } else if (event.key === 'ArrowRight' && providerRow) {
+      event.preventDefault();
+      event.stopPropagation();
+      setEntered(true);
+      requestAnimationFrame(() => focusRow('[data-model-row]', 1));
+    } else if ((event.key === 'ArrowLeft' && event.target instanceof HTMLButtonElement
+        && event.target.hasAttribute('data-model-row') || event.key === 'Escape' && narrow() && entered) && !term) {
+      event.preventDefault();
+      event.stopPropagation();
+      setEntered(false);
+      requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>('[data-provider-row][aria-current="true"]')?.focus());
+    }
+  }
+
+  const details = group?.id === 'deepseek' ? usage['deepseek-account'] : route && usage[route.id];
+  return (
+    <div data-dsh-model-picker="" data-entered={String(entered)} ref={root} onKeyDown={keys}>
+      <input ref={search} type="search" aria-label={t('search')} placeholder={t('search')}
+        value={query} onChange={event => setQuery(event.target.value)} />
+      {failed && <div className="picker-detail" role="status">{t('catalogFailed')}</div>}
+      {state.failures.map(failure => <div key={failure.id} className="picker-detail" role="status">
+        {failure.name} · {t('catalogFailed')}
+      </div>)}
+      {groups.length === 0 && <div role="status">{t(state.status === 'loading' ? 'loading' : 'empty')}</div>}
+      {groups.length > 0 && <div className={term ? undefined : 'picker-columns'}>
+        {!term && <div className="picker-providers" aria-label={t('providers')} role="group">
+          {groups.map(item => {
+            const highlighted = item.id === group?.id;
+            const defaultRoute = activeRoute(item, accounts[item.id] ?? state.current?.provider);
+            const snapshot = usage[item.id === 'deepseek' ? 'deepseek-account' : defaultRoute.id];
+            const summary = item.id === 'codex' || item.id === 'qoder' || item.id === 'deepseek'
+              ? primary(snapshot, item.id, t, language) : undefined;
+            const title = item.id === 'qoder' && item.routes.length > 1
+              ? `${item.name} · ${routeName(defaultRoute, t)}` : item.name;
+            return <button key={item.id} type="button" data-provider-row="" aria-current={highlighted}
+              aria-controls={id} onPointerEnter={event => {
+                if (event.pointerType === 'mouse' && !narrow()) setProvider(item.id);
+              }} onFocus={() => { if (!narrow()) setProvider(item.id); }}
+              onClick={() => {
+                setProvider(item.id);
+                setEntered(true);
+                requestAnimationFrame(() => focusRow('[data-model-row]', 1));
+              }}>
+              <span className="picker-provider-copy">
+                <span className="picker-title">{title}</span>
+                {summary && <span className="picker-detail">{summary.text}</span>}
+              </span>
+              {summary && <span aria-hidden="true" className="picker-ring"
+                style={{ '--picker-fill': `${summary.percent ?? 0}%` } as React.CSSProperties} />}
+              <span aria-hidden="true">›</span>
+            </button>;
+          })}
+        </div>}
+        <div ref={results} id={id} className="picker-models" aria-label={t('models')} role="group">
+          {!term && <>
+            <button type="button" className="picker-back" onClick={() => {
+              setEntered(false);
+              requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>('[data-provider-row][aria-current="true"]')?.focus());
+            }}>‹ {t('back')}</button>
+            {group && group.routes.length > 1 && <div className="picker-account">
+              <label htmlFor={`${id}-account`}>{t('account')}</label>
+              <select id={`${id}-account`} value={route?.id} onChange={event => {
+                const value = event.target.value;
+                setAccounts(previous => ({ ...previous, [group.id]: value }));
+              }}>
+                {group.routes.map(route => <option key={route.id} value={route.id}>{routeName(route, t)}</option>)}
+              </select>
+            </div>}
+            {details && <div className="picker-detail picker-usage">
+              {usageDetails(details, t, language).map((line, index) => <div key={index}>{line}</div>)}
+            </div>}
+          </>}
+          {models.map(item => <div key={item.route.id}>
+            {term && <div className="picker-detail picker-section">{item.provider === item.route.name
+              ? item.provider : `${item.provider} · ${routeName(item.route, t)}`}</div>}
+            {item.models.map(model => {
+              const selected = state.current?.provider === item.route.id && state.current.model === model.id;
+              return <button key={model.id} type="button" data-model-row="" aria-current={selected} disabled={busy}
+                onClick={() => choose(item.route, model)}>
+                <span className="picker-title">{model.name}</span>{selected && <span aria-hidden="true">✓</span>}
+              </button>;
+            })}
+          </div>)}
+          {models.length === 0 && <div className="picker-detail" role="status">{t(term ? 'noMatches' : 'empty')}</div>}
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+function routeName(route: Route, t: T): string {
+  if (route.id === 'deepseek-account') return t('deepseekAccount');
+  if (route.id === 'deepseek-official') return t('deepseekKey');
+  if (route.id === 'qoder') return t('defaultAccount');
+  return route.name.replace(/^Qoder · /, '');
+}
+
+function walletText(wallet: Wallet, language: string): string {
+  const value = Number(wallet.balance);
+  return Number.isFinite(value) && /^[A-Z]{3}$/.test(wallet.currency)
+    ? new Intl.NumberFormat(language, { style: 'currency', currency: wallet.currency, maximumFractionDigits: 4 }).format(value)
+    : `${wallet.balance} ${wallet.currency}`;
+}
+
+function windowText(minutes: number, t: T, language: string): string {
+  if (minutes === 7 * 24 * 60) return t('weekly');
+  if (!minutes) return t('window');
+  const unit = minutes % 1440 === 0 ? 'day' : minutes % 60 === 0 ? 'hour' : 'minute';
+  return new Intl.NumberFormat(language, { style: 'unit', unit }).format(minutes / (unit === 'day' ? 1440 : unit === 'hour' ? 60 : 1));
+}
+
+function primary(data: Usage | null | undefined, provider: string, t: T, language: string): { text: string; percent?: number } {
+  if (data && 'wallets' in data) {
+    if (data.wallets.length) return { text: `${t('balanceShort')} ${walletText(data.wallets[0], language)}` };
+  } else if (data) {
+    const windows = data.windows ?? [];
+    const window = windows.find(window => window.minutes === 10080) ?? windows[0];
+    if (window && provider === 'codex') {
+      return { text: `${windowText(window.minutes, t, language)} · ${t('left', { value: `${window.remainingPercent}%` })}`,
+        percent: window.remainingPercent };
+    }
+    const credits = data.credits;
+    const quota = credits?.plan ?? credits?.addOn ?? credits?.organization;
+    if (quota) {
+      const label = credits?.plan ? 'plan' : credits?.addOn ? 'addOn' : 'organization';
+      const value = `${new Intl.NumberFormat(language).format(quota.remaining)} ${t('credits')}`;
+      return { text: `${t(label)} · ${t('left', { value })}`,
+        percent: quota.total ? Math.min(100, 100 * quota.remaining / quota.total) : undefined };
+    }
+  }
+  return { text: t('unavailable') };
+}
+
+function usageDetails(data: Usage, t: T, language: string): string[] {
+  if ('wallets' in data) {
+    return [...data.wallets.map(w => `${t('balance')} ${walletText(w, language)}`),
+      ...data.bonus.map(w => `${t('bonus')} ${walletText(w, language)}`)];
+  }
+  const credits = data.credits;
+  return [
+    ...(data.windows ?? []).map(window => {
+      const date = window.resetsAt === undefined ? undefined : new Date(window.resetsAt * 1000);
+      const reset = date && Number.isFinite(date.valueOf())
+        ? ` · ${t('resets')} ${new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(date)}` : '';
+      return `${windowText(window.minutes, t, language)} · ${t('left', { value: `${window.remainingPercent}%` })}${reset}`;
+    }),
+    ...(['plan', 'addOn', 'organization'] as const).flatMap(label => {
+      const quota = credits?.[label];
+      if (!quota) return [];
+      const format = new Intl.NumberFormat(language);
+      const value = `${format.format(quota.remaining)}${quota.total === undefined ? '' : ` / ${format.format(quota.total)}`} ${t('credits')}`;
+      return [`${t(label)} · ${t('left', { value })}`];
+    }),
+  ];
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "category": "integrations",
+  "tags": [
+    "codex",
+    "sessions",
+    "workbench"
+  ],
+  "surfaces": {
+    "web": {
+      "status": "verified",
+      "evidence": "2026-11-19，macOS，DSH 0.2.2-rc.4 与 rc.5 / Chrome 157.0.8103.79：同一 dsh-agent-sync 0.1.1 与 dsh-workbench 0.4.1 tarball 通过隔离宿主测试，包含合成 Codex App Server 同步、侧栏来源切换和断开回退。\n2026-11-18，macOS，DSH 0.2.2-rc.3 / Chrome 157.0.8103.79：pnpm --filter dsh-workbench test:host 通过。0.1.0 与 dsh-workbench 0.4.0 在隔离 Web Host 安装 tarball，合成 Codex App Server 响应覆盖项目、工作目录、会话与归档同步，来源切换、断开及热停用恢复 DSH 均通过。"
+    },
+    "desktop": {
+      "status": "unverified"
+    },
+    "headless": {
+      "status": "unsupported"
+    }
+  }
+}

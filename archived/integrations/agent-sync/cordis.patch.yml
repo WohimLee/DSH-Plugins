@@ -1,0 +1,3 @@
+- insert:
+    - id: 'dsh-agent-sync:main'
+      name: 'dsh-agent-sync'

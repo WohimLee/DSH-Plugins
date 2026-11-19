@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Codex Connector",
+    "description": "Sync local Codex projects, working directories and chats into the DSH Workbench sidebar."
+  }
+}

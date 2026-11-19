@@ -1,0 +1,3 @@
+- insert:
+    - id: 'dsh-{{slug}}:main'
+      name: 'dsh-{{slug}}'

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Qoder",
+    "description": "Use Qoder models with a Qoder CLI login or a personal access token from the host environment."
+  }
+}

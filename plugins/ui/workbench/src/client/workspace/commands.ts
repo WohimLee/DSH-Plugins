@@ -1,0 +1,45 @@
+import type { Context } from '@deepseek-ai/cordis';
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol';
+
+export type SessionId = ReturnType<Context['sessions']['list']['getSnapshot']>['ids'][number];
+type WorkspaceId = Parameters<Context['workspaces']['rename']>[0];
+
+function value<T>(result: RemoteResult<T>): T {
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
+}
+
+export function workspaceCommands(ctx: Context, signal: AbortSignal) {
+  const renameSession = async (id: SessionId, name: string) => {
+    value(await ctx.remote.session.rename({ sessionId: id, title: name }));
+    await ctx.sessions.refresh();
+  };
+  return {
+    async listDirectory(path: string | undefined, request: AbortSignal) {
+      const result = await ctx.remote.directoryPicker.list(path, AbortSignal.any([signal, request]));
+      if (!result.ok && result.error.code === 'directory-picker/unavailable') {
+        return { native: result.error.details.capability === 'native' };
+      }
+      return { listing: value(result), native: false };
+    },
+    async pickDirectory() { return value(await ctx.remote.directoryPicker.pick(signal)); },
+    createProject: (path: string) => ctx.workspaces.create({ path }),
+    renameProject: (id: WorkspaceId, title: string) => ctx.workspaces.rename(id, title),
+    removeProject: (id: WorkspaceId) => ctx.workspaces.delete(id),
+    async reveal(path: string) { value(await ctx.remote.session.openWorkspacePath({ path, action: 'reveal' }, signal)); },
+    async createSession(name: string, project?: WorkspaceId) {
+      const id = project ? await ctx.sessions.create({ workspaceId: project })
+        : value(await ctx.remote.workbenchSessions.createStandalone(signal)) as SessionId;
+      // The session already exists if renaming fails. Show it rather than retrying creation.
+      try { await renameSession(id, name); }
+      catch { return { id, titled: false }; }
+      return { id, titled: true };
+    },
+    renameSession,
+    forkSession: (id: SessionId) => ctx.uiWorkspace.forkSession(id),
+    archiveSession: (id: SessionId) => ctx.uiWorkspace.archiveSession(id),
+    async directory(id: SessionId) { return value(await ctx.remote.workbenchSessions.directory(id, signal)); },
+    async setDirectory(id: SessionId, path: string) { value(await ctx.remote.workbenchSessions.setDirectory(id, path, signal)); },
+  };
+}
+export type WorkspaceCommands = ReturnType<typeof workspaceCommands>;

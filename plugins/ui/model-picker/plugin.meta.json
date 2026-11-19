@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "category": "ui",
+  "tags": [
+    "models",
+    "quota"
+  ],
+  "surfaces": {
+    "web": {
+      "status": "verified",
+      "evidence": "2026-11-19，macOS / Chrome 157.0.8103.79，DSH 0.2.2-rc.5。pnpm --filter dsh-model-picker test:host 验证 0.1.4 三个厂商恰占三行，添加第四行仅增加一行高度，切换短长模型列表时双列尺寸及位置稳定。另覆盖窄屏贴边、缩放、切换、独立滚动、搜索、原生控件及热启停。"
+    },
+    "desktop": {
+      "status": "verified",
+      "evidence": "2026-11-19，macOS Desktop 0.2.2-rc.5，通过内置 CLI 同名更新至 0.1.4。实际桌面打开 Models，从 DeepSeek 切到长 Codex 列表后，厂商栏保持三行，模型区在相同高度内显示。"
+    },
+    "headless": {
+      "status": "unsupported"
+    }
+  }
+}

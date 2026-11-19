@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "category": "{{category}}",
+  "tags": [],
+  "surfaces": {
+    "web": {
+      "status": "unverified"
+    },
+    "desktop": {
+      "status": "unverified"
+    },
+    "headless": {
+      "status": "unsupported"
+    }
+  }
+}

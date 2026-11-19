@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Qoder",
+    "description": "使用 Qoder CLI 登录或宿主环境中的访问令牌接入 Qoder 模型。"
+  }
+}

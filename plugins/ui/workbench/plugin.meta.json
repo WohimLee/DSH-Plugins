@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "category": "ui",
+  "tags": [
+    "workbench",
+    "layout",
+    "navigation"
+  ],
+  "surfaces": {
+    "web": {
+      "status": "verified",
+      "evidence": "2026-11-19，macOS，DSH 0.2.2-rc.5 / Chrome 157.0.8103.79，0.5.0 的 pnpm --filter dsh-workbench test:host 通过安装、分区末尾拖动、空名称取消、行内创建、右键与更多菜单一致、子项目归组、会话目录修改与宿主重启恢复、无项目独立目录、原生导航、右栏、连接器及热启停。测试未调用真实模型。"
+    },
+    "desktop": {
+      "status": "verified",
+      "evidence": "2026-11-19，macOS Desktop 0.2.2-rc.5：通过内置 CLI 将日常 desktop profile 的 dsh-workbench 从 0.4.1 升级到 0.5.0，内置 CLI 列出新版本，在实际窗口分别通过会话行右键和行尾省略号打开同一个菜单。验收范围为安装、加载和会话菜单入口。"
+    },
+    "headless": {
+      "status": "unsupported"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "id": "development",
+    "title": "开发辅助",
+    "description": "Git、代码审查、构建诊断、调试和 LSP"
+  },
+  {
+    "id": "knowledge",
+    "title": "记忆与知识",
+    "description": "项目记忆、知识库、笔记和会话检索"
+  },
+  {
+    "id": "research",
+    "title": "搜索与研究",
+    "description": "搜索、网页采集、资料整理和引用"
+  },
+  {
+    "id": "integrations",
+    "title": "外部服务接入",
+    "description": "飞书、GitHub、邮件、数据库和业务系统"
+  },
+  {
+    "id": "automation",
+    "title": "自动化与协作",
+    "description": "定时任务、工作流、多 Agent 协作和通知"
+  },
+  {
+    "id": "ui",
+    "title": "界面与交互",
+    "description": "侧栏、布局、主题和交互式回答"
+  },
+  {
+    "id": "media",
+    "title": "图像、语音与文档",
+    "description": "图片理解、语音、媒体生成和文档处理"
+  },
+  {
+    "id": "runtime",
+    "title": "模型与执行环境",
+    "description": "模型适配、路由、浏览器操作和远程执行"
+  },
+  {
+    "id": "security",
+    "title": "安全与治理",
+    "description": "权限、脱敏、审计和调用预算"
+  }
+]

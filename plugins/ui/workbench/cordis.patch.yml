@@ -1,0 +1,3 @@
+- insert:
+    - id: 'dsh-workbench:main'
+      name: 'dsh-workbench'

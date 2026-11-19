@@ -1,0 +1,41 @@
+{
+  "name": "dsh-plugins-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=24.9.0",
+    "pnpm": ">=11.7.0 <12"
+  },
+  "scripts": {
+    "check": "pnpm check:infra && pnpm check:plugins && pnpm catalog:check && pnpm test:infra && pnpm -r --if-present check",
+    "check:infra": "bash .agents/scripts/validate.sh",
+    "check:plugins": "node scripts/validate-plugins.mjs",
+    "catalog:generate": "node scripts/generate-catalog.mjs",
+    "catalog:check": "node scripts/generate-catalog.mjs --check",
+    "create:plugin": "node scripts/create-plugin.mjs",
+    "test:infra": "node --test scripts/tests/*.test.mjs",
+    "check:templates": "node scripts/check-templates.mjs",
+    "test:host": "node scripts/check-templates.mjs --host",
+    "check:dsh-version": "node scripts/check-dsh-version.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-skill": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.5",
+    "@types/node": "^26.6.6",
+    "@types/react": "^18.3.31",
+    "esbuild": "0.28.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "semver": "7.8.6",
+    "typescript": "7.0.2",
+    "yaml": "2.9.0"
+  }
+}

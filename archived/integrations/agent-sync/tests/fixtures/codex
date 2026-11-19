@@ -1,0 +1,29 @@
+#!/usr/bin/env node
+const { createInterface } = require('node:readline');
+const assert = require('node:assert/strict');
+const main = { id: '00000000-0000-7000-8000-000000000001', name: 'Codex design review', cwd: '/codex/worktree/design', projectId: 'codex-project', updatedAt: 600 };
+const orphan = { id: '00000000-0000-7000-8000-000000000002', preview: 'Codex unassigned', cwd: '/codex/standalone', projectId: null, updatedAt: 500 };
+const archived = { ...main, id: '00000000-0000-7000-8000-000000000003', name: 'Codex archived' };
+let ready = false;
+createInterface({ input: process.stdin }).on('line', line => {
+  const { id, method, params } = JSON.parse(line);
+  function reply(result) { process.stdout.write(JSON.stringify({ id, result }) + '\n'); }
+  if (method === 'initialize') { assert.equal(params.capabilities.experimentalApi, true); return reply({}); }
+  if (method === 'initialized') { ready = true; return; }
+  assert.ok(ready);
+  if (process.env.AGENT_SYNC_FIXTURE === 'hang') return;
+  if (method === 'project/list') {
+    if (process.env.AGENT_SYNC_FIXTURE === 'legacy') {
+      return process.stdout.write(JSON.stringify({ id, error: { code: -32601 } }) + '\n');
+    }
+    if (params.cursor) return reply({ data: [{ id: 'empty', name: 'Empty Codex Project', roots: [] }], nextCursor: null });
+    return reply({ data: [{ id: 'codex-project', name: 'Codex Project', roots: [{ path: '/codex/main' }] }], nextCursor: 'other' });
+  }
+  assert.equal(method, 'thread/list');
+  assert.equal(params.currentAccountOnly, true);
+  assert.equal(params.useStateDbOnly, true);
+  assert.ok(params.sourceKinds.includes('appServer'));
+  if (params.archived) return reply({ data: [archived].filter(row => !params.cwd || row.cwd === params.cwd), nextCursor: null });
+  if (params.cursor) return reply({ data: [orphan, main].filter(row => !params.cwd || row.cwd === params.cwd), nextCursor: null });
+  return reply({ data: [main].filter(row => !params.cwd || row.cwd === params.cwd), nextCursor: 'other' });
+});
