@@ -7,7 +7,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/clie
 import type {} from '@deepseek-ai/dsh-client-ui-session/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots';
-import type { TreeState } from './tree.js';
+import type { Section, TreeState } from './tree.js';
 import { defaultSection, insert, moveProject, moveSession, placeSession, projectGroups, sessionGroups, ungrouped } from './tree.js';
 import { useTreeDrag } from './drag.js';
 import { DirectoryDialog } from './DirectoryDialog.js';
@@ -123,6 +123,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const chatGroups = useMemo(() => sessionGroups(tree, workspaces.items.map(item => ({
     id: item.workspaceId, sessionIds: item.sessionIds,
   })), sessions.ids.map(id => sessions.byId[id]), pins), [tree, workspaces.items, sessions, pins]);
+  const sectionLabel = (section: Section) => section.id === defaultSection ? t('recents') : section.title || t('projects');
 
   const show = (id: string) => setCollapsed(previous => {
     if (!previous.has(id)) return previous;
@@ -147,6 +148,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const begin = (next: Draft) => {
     setRename(undefined);
     if (next.parent) show(next.parent);
+    if (next.parent === ungrouped) show(defaultSection);
     drafts.begin(next);
   };
   const titleDraft = (item: Draft, title: string) => {
@@ -317,7 +319,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         await commands.renameProject(project.workspaceId, title); setRename(undefined);
       }) }) },
       { label: t('moveSection'), children: tree.sections.filter(section => section.id !== parent).map(section => ({
-        label: section.title || t('projects'), run: () => {
+        label: sectionLabel(section), run: () => {
           save(state => moveProject(state, id, section.id, projectIds)); show(section.id);
         },
       })) },
@@ -370,19 +372,19 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     {error && <p role="status" className="wb-tree-error">{t(error)}</p>}
     {draft?.kind === 'section' && nameDraft(draft)}
     {tree.sections.map(section => {
+      const isDefault = section.id === defaultSection;
       const expanded = !collapsed.has(section.id);
-      const label = section.title || t('projects');
-      const sectionActions: MenuEntry[] = [
+      const label = sectionLabel(section);
+      const showSectionMenu = isDefault ? undefined : (event: MouseEvent) => openMenu(event, t('sectionMenu'), [
         { label: t('rename'), run: () => setRename({ id: section.id, name: label, commit: title => {
           if (save(state => ({ ...state, sections: state.sections.map(item => item.id === section.id ? { ...item, title } : item) }))) setRename(undefined);
         } }) },
         { label: t('addProject'), run: canAdd ? () => begin({ kind: 'project', parent: section.id }) : undefined },
-        { label: t('removeSection'), danger: true, run: section.id === defaultSection ? undefined : () => {
+        { label: t('removeSection'), danger: true, run: () => {
           if (window.confirm(t('removeSectionConfirm'))) save(state => ({ ...state, sections: state.sections.filter(item => item.id !== section.id) }));
         } },
-      ];
-      const showSectionMenu = (event: MouseEvent) => openMenu(event, t('sectionMenu'), sectionActions);
-      const showUngrouped = section.id === defaultSection && (draft?.parent === ungrouped || rows(ungrouped, 1).length > 0);
+      ]);
+      const showUngrouped = isDefault && (draft?.parent === ungrouped || rows(ungrouped, 1).length > 0);
       return <div className="wb-tree-section" key={section.id}>
         {editingName(section.id) ?? <div className="wb-tree-row" onContextMenu={showSectionMenu} data-wb-kind="section" data-row-key={section.id}
           data-drop={drag.highlight?.id === section.id ? drag.highlight.placement : undefined}
@@ -391,8 +393,10 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
             <span>{label}</span><Glyph icon="section" />
           </button>
           <div className="wb-tree-actions">
-            <Action label={t('sectionMenu')} icon="more" run={showSectionMenu} />
+            {showSectionMenu && <Action label={t('sectionMenu')} icon="more" run={showSectionMenu} />}
             {canAdd && <Action label={t('addProject')} icon="folderAdd" run={() => begin({ kind: 'project', parent: section.id })} />}
+            {isDefault && canCreateSession && <Action label={t('newSession')} icon="new"
+              run={() => begin({ kind: 'session', parent: ungrouped, chooseProject: true })} />}
           </div>
         </div>}
         {expanded && draft?.kind === 'project' && draft.parent === section.id && nameDraft(draft)}

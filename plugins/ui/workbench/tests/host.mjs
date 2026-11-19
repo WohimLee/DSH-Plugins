@@ -84,6 +84,12 @@ try {
     ...(process.env.DSH_TEST_BROWSER_EXECUTABLE ? { executablePath: process.env.DSH_TEST_BROWSER_EXECUTABLE } : { channel: 'chrome' }),
   });
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'en-US', colorScheme: 'dark' });
+  await page.addInitScript(() => {
+    const key = 'dsh-workbench:workspace-tree:v1';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({
+      sections: [{ id: 'section:projects', title: 'Previously renamed section' }],
+    }));
+  });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') consoleErrors.push(message.text()); });
@@ -98,6 +104,12 @@ try {
   await page.locator('[data-workbench-rail]').waitFor({ state: 'visible' });
   assert.equal(await page.locator('[data-workbench-brand]').textContent(), 'DSH');
   const tree = page.locator('[data-workbench-tree]');
+  const recents = tree.locator('[data-row-key="section:projects"]');
+  const recentsLabel = recents.getByRole('button', { name: 'Recents', exact: true });
+  await recentsLabel.click({ button: 'right' });
+  assert.equal(await page.getByRole('menu', { name: 'Section menu' }).count(), 0);
+  assert.deepEqual(await recents.locator('.wb-tree-action').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label'))),
+    ['Add project', 'New session']);
   const alpha = tree.locator('[data-row-key="session:workbench-test-alpha"]');
   const beta = tree.locator('[data-row-key="session:workbench-test-beta"]');
   const project = tree.locator('[data-wb-kind="project"]').filter({ has: page.getByRole('button', { name: 'workspace', exact: true }) });
@@ -145,6 +157,9 @@ try {
   await project.hover();
   await project.getByRole('button', { name: 'Project menu', exact: true }).click();
   assert.deepEqual(await projectMenu.getByRole('menuitem').allTextContents(), menuLabels);
+  await projectMenu.getByRole('menuitem', { name: 'Move to section' }).click();
+  await projectMenu.getByRole('menuitem', { name: 'Recents', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await project.hover();
   await project.getByRole('button', { name: 'Add subproject', exact: true }).click();
@@ -236,8 +251,26 @@ try {
   await picker.waitFor();
   assert.match(await picker.getByRole('textbox', { name: 'Directory path' }).inputValue(), /[\\/]workspace$/);
   await picker.getByRole('button', { name: 'Cancel' }).click();
+  const recentsProjectPath = join(temp, 'recents-project');
+  await mkdir(recentsProjectPath);
+  await recents.hover();
+  await recents.getByRole('button', { name: 'Add project', exact: true }).click();
+  await projectName.fill('Recents fixture');
+  await projectName.press('Enter');
+  await picker.getByRole('textbox', { name: 'Directory path' }).fill(recentsProjectPath);
+  await picker.getByRole('button', { name: 'Use this directory' }).click();
+  const recentsProject = recents.locator('..').getByRole('button', { name: 'Recents fixture', exact: true });
+  await recentsProject.waitFor();
+
   await page.locator('.wb-section-session').getByRole('button', { name: 'New session', exact: true }).click();
   const standalone = tree.getByRole('textbox', { name: 'Session name' });
+  await standalone.press('Escape');
+  await standalone.waitFor({ state: 'detached' });
+  await recentsLabel.click();
+  assert.equal(await recentsLabel.getAttribute('aria-expanded'), 'false');
+  await recents.hover();
+  await recents.getByRole('button', { name: 'New session', exact: true }).click();
+  assert.equal(await recentsLabel.getAttribute('aria-expanded'), 'true');
   await standalone.fill('Standalone fixture');
   await standalone.press('Enter');
   const standaloneRow = tree.locator('[data-wb-project-children="workbench:ungrouped"]').getByRole('button', { name: 'Standalone fixture', exact: true });
@@ -255,6 +288,7 @@ try {
   await page.goto(host.url);
   await tree.waitFor();
   await dismissSignIn();
+  await recentsProject.waitFor();
   await standaloneRow.waitFor();
   await createdChat.click({ button: 'right' });
   await rowMenu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
@@ -262,6 +296,7 @@ try {
   assert.match(await picker.getByRole('textbox', { name: 'Directory path' }).inputValue(), /[\\/]workspace$/);
   await picker.getByRole('button', { name: 'Cancel' }).click();
   console.log('PASS inline naming, equivalent menus, and restart persistence for edited directories and standalone Sessions.');
+  console.log('PASS Recents ignores the old custom title, has only creation actions, and retains new projects and sessions across restart.');
   await page.locator('[data-sidebar-opener]:visible, [data-sidebar-toggle]:visible').first().click();
   await page.waitForFunction(() => !!document.querySelector('[data-sidebar-collapsed="true"]'));
   assert.ok(await page.locator('[data-workbench-rail]').isVisible());
