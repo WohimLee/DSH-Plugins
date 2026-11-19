@@ -8,6 +8,7 @@ export interface TreeState {
   projects: Orders;
   sessions: Orders;
   sessionProjects: Record<string, string>;
+  sourceFolders?: Orders;
   projectPins?: string[];
   unread?: string[];
 }
@@ -46,6 +47,7 @@ export function readTree(value: unknown): TreeState {
     projects: readOrders(value.projects),
     sessions: readOrders(value.sessions),
     projectPins: readIds(value.projectPins),
+    sourceFolders: readOrders(value.sourceFolders),
     unread: readIds(value.unread),
     sessionProjects: isRecord(value.sessionProjects)
       ? Object.fromEntries(Object.entries(value.sessionProjects).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))

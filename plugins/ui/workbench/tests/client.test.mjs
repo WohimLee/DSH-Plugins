@@ -6,6 +6,8 @@ import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
 import { panelSource } from '../lib/client/integration/panels.js';
 import { installAppearance } from '../lib/client/appearance/install.js';
 import { ActivityBar } from '../lib/client/navigation/ActivityBar.js';
+import { agentCatalog } from '../lib/client/panels/Subagents.js';
+import { observeCounts } from '../lib/client/panels/changes.js';
 import { messages } from '../lib/client/messages.js';
 
 test('navigation source follows panel registration, stable order, locale changes and removal', async () => {
@@ -130,4 +132,39 @@ test('Home is selected in the conversation and the rail has no session creation 
   assert.doesNotMatch(html, /新建会话|dsh-workbench-divider/);
   assert.match(html, /aria-label="对话"[^>]+aria-current="page"/);
   assert.ok(html.includes('data-workbench-panel="third-party"'));
+});
+
+test('agent list follows only reachable catalogs, retains direct parents, and uses live activity', () => {
+  const ready = entries => ({ state: 'ready', values: { subagentCatalog: entries } });
+  const child = (id, mode = 'continuable') => ({ id, label: id, mode, createdAt: 100 });
+  const state = {
+    byId: { first: { running: false }, nested: { projectionValues: { subagentTiming: { lastTurnCompleted: true } } } },
+    projectionsBySession: {
+      root: ready([child('first'), child('external', 'external')]),
+      first: ready([child('nested')]),
+      nested: ready([child('root')]),
+      unrelated: ready([child('outside')]),
+    },
+  };
+  const result = agentCatalog(state, 'root', new Map([['first', { running: true }]]));
+  assert.deepEqual(result.rows.map(row => [row.id, row.parent, row.group]), [
+    ['first', 'root', 'active'], ['external', 'root', 'idle'], ['nested', 'first', 'done'],
+  ]);
+  assert.deepEqual(result.pending, []);
+});
+
+test('Forge stream reports actual line totals and releases the stream when the panel closes', async () => {
+  let released = false;
+  const changes = [];
+  const panel = { follow: () => ({
+    async *[Symbol.asyncIterator]() {
+      yield { local: null };
+      yield { local: { files: [] } };
+      yield { local: { files: [{ additions: 3, deletions: 1 }, { additions: 5, deletions: 2 }] } };
+    },
+    dispose() { released = true; },
+  }) };
+  await observeCounts(panel, 'session', new AbortController().signal, counts => changes.push(counts));
+  assert.deepEqual(changes, [undefined, { added: 0, deleted: 0 }, { added: 8, deleted: 3 }]);
+  assert.equal(released, true);
 });

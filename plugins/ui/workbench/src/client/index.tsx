@@ -41,7 +41,8 @@ function assemble(ctx: Context): void {
   const sources = sessionSources(ctx);
   ctx.effect(() => ctx.locale.register('workbench', messages));
   ctx.effect(() => installAppearance());
-  registerRightPanels(ctx);
+  const tree = createTreeStore(ctx);
+  registerRightPanels(ctx, tree, workspaceCommands(ctx, lifetime.signal));
   registerZoom(ctx);
   const panels = panelSource(ctx);
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
@@ -51,7 +52,6 @@ function assemble(ctx: Context): void {
       hooks: { panels },
     }),
   }, ActivityBar));
-  const tree = createTreeStore(ctx);
   const view = registerWorkspaceView(ctx, () => ctx.slots.register({
     name: 'sidebar.workspaces', priority: -100, locale: 'workbench',
     inject: () => ({

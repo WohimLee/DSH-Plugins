@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Glyph, type Icon } from './Glyph.js';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-export type MenuEntry = { label: string; run?: () => void; children?: readonly MenuEntry[]; danger?: boolean };
+export type MenuEntry = { label: string; icon?: Icon; divider?: boolean; run?: () => void; children?: readonly MenuEntry[]; danger?: boolean };
 export interface MenuTarget { x: number; y: number; restore: HTMLElement; label: string; entries: readonly MenuEntry[] }
 
 export function RowMenu({ target, close, unavailable, back }: { target: MenuTarget; close: () => void; unavailable: string; back: string }) {
@@ -52,13 +53,13 @@ export function RowMenu({ target, close, unavailable, back }: { target: MenuTarg
       }
     }}>
     {levels.length > 0 && <button type="button" role="menuitem" aria-label={back} onClick={() => setLevels(levels.slice(0, -1))}>←</button>}
-    {entries.map(entry => <button key={entry.label} type="button" role="menuitem" disabled={!entry.run && !entry.children?.length}
+    {entries.map(entry => <Fragment key={entry.label}>{entry.divider && <hr role="separator" />}<button type="button" role="menuitem" disabled={!entry.run && !entry.children?.length}
       aria-haspopup={entry.children?.length ? 'menu' : undefined} title={!entry.run && !entry.children?.length ? unavailable : undefined}
       data-danger={entry.danger || undefined} onClick={() => {
         if (entry.children?.length) setLevels([...levels, [...entry.children]]);
         else if (entry.run) { close(); target.restore.focus(); entry.run(); }
       }}>
-      <span>{entry.label}</span>{entry.children?.length ? <span aria-hidden="true">›</span> : null}
-    </button>)}
+      {entry.icon && <Glyph icon={entry.icon} />}<span>{entry.label}</span>{entry.children ? <span aria-hidden="true">›</span> : null}
+    </button></Fragment>)}
   </div>, document.body);
 }

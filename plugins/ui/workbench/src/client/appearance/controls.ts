@@ -42,7 +42,26 @@ export const controlStyles = `
   border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 12px; box-shadow: 0 6px 22px #0004;
   -webkit-app-region: no-drag;
 }
-.wb-summary-path { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--dsw-alias-label-secondary, #aaa); }
+.wb-pinned-summary { max-height: min(70vh, 600px); overflow: auto; }
+.wb-pinned-summary section { display: grid; gap: 6px; border-top: 1px solid #8883; padding-top: 10px; }
+.wb-pinned-summary small, .wb-agent-list h3, .wb-agent-list p, .wb-agent-list small, .wb-agent-detail small { color: var(--dsw-alias-label-secondary, #aaa); font-weight: normal; }
+.wb-pinned-summary .wb-control { justify-items: start; text-align: start; overflow-wrap: anywhere; }
+.wb-pinned-summary .wb-summary-agents { gap: 9px; }
+.wb-summary-agents span span { margin-right: 4px; }
+.wb-agent-list { width: 100%; height: 100%; overflow: auto; padding: 18px; box-sizing: border-box; }
+.wb-agent-list h3, .wb-agent-list p { font-size: inherit; margin: 8px; }
+.wb-agent-list section + section { margin-top: 26px; }
+.wb-agent-list button, .wb-agent-detail header { display: flex; align-items: center; gap: 10px; }
+.wb-agent-list button { width: 100%; padding: 9px; border: 0; border-radius: 8px; color: inherit; text-align: start; background: transparent; font: inherit; }
+.wb-agent-list button:enabled:hover { cursor: pointer; background: #8882; }
+.wb-agent-list small, .wb-agent-detail small { margin-left: auto; }
+.wb-agent-detail { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
+.wb-agent-detail header, .wb-agent-detail details { padding: 10px 14px; }
+.wb-agent-detail header { border-bottom: 1px solid #8883; }
+.wb-agent-conversation { position: relative; display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: auto; }
+.wb-header-controls .wb-summary-changes { display: flex; justify-content: space-between; }
+.wb-summary-changes b { color: #49ae78; font-weight: normal; }
+.wb-summary-changes em { color: #e36565; font-style: normal; }
 .wb-guide {
   inline-size: min(420px, 100%); margin: auto; box-sizing: border-box; padding: 22px 16px;
   display: grid; gap: 16px; color: var(--dsw-alias-label-primary, #eee);

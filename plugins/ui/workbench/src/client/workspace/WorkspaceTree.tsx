@@ -1,3 +1,5 @@
+import { Glyph, type Icon } from './Glyph.js';
+import { EditProjectDialog } from './EditProjectDialog.js';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
@@ -30,22 +32,6 @@ type Actions = {
 };
 export type WorkspaceTreeProps = PropsRuntime<'sidebar.workspaces'> & PropsRenderFactories & PropsLocale<'workbench'> & InjectFace<Actions>;
 
-type Icon = 'folderAdd' | 'project' | 'section' | 'add' | 'new' | 'pin' | 'more';
-function Glyph({ icon }: { icon: Icon }) {
-  const paths: Record<Icon, string> = {
-    folderAdd: 'M2 6h7l2 2h11v11H2V6Zm10 5v5m-2.5-2.5h5',
-    project: 'M2 6h7l2 2h11v11H2V6Z',
-    section: 'm6 9 6 6 6-6',
-    add: 'M12 5v14M5 12h14',
-    new: 'M16 5H5v14h14V8m-4 6 6-6-3-3-6 6-1 4 4-1Z',
-    pin: 'm10 3 11 11-5 1-4 4-2-5-5-2 4-4 1-5Zm0 11-6 6',
-    more: 'M5 12h.01m6.99 0h.01m6.99 0h.01',
-  };
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth={icon === 'more' ? 3 : 1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d={paths[icon]} />
-  </svg>;
-}
 function Action({ label, icon, run, pinned, busy }: {
   label: string; icon: Icon; run?: (event: MouseEvent<HTMLButtonElement>) => void; pinned?: boolean; busy?: boolean;
 }) {
@@ -98,6 +84,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const closeMenu = useCallback(() => setMenu(undefined), []);
   const [directory, setDirectory] = useState<{ initial?: string; confirm: (path: string) => Promise<void>; cancel?: () => void }>();
   const [rename, setRename] = useState<{ id: string; name: string; commit: (title: string) => void }>();
+  const [editId, setEditId] = useState<string>();
   const [sessionRename, setSessionRename] = useState<{ id: SessionId; title: string }>();
   const sessions = useSessions(state => state);
   const workspaces = useWorkspaces(state => state);
@@ -114,6 +101,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const archived = useMemo(() => new Set(workspaces.archivedSessionIds), [workspaces.archivedSessionIds]);
   const pins = useMemo(() => new Set<string>(workspaces.pinnedSessionIds), [workspaces.pinnedSessionIds]);
   const projects = useMemo(() => new Map(workspaces.items.map(item => [String(item.workspaceId), item])), [workspaces.items]);
+  const editingProject = editId ? projects.get(editId) : undefined;
   const projectIds = useMemo(() => [...projects.keys()], [projects]);
   const grouped = useMemo(() => projectGroups(tree, projectIds), [tree, projectIds]);
   const chatGroups = useMemo(() => sessionGroups(tree, workspaces.items.map(item => ({
@@ -274,22 +262,30 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         }}
         toggle={() => { void togglePin(session.id); }} t={t} useSessionAccess={useSessionAccess} />);
 
+  async function removeProject(id: Parameters<WorkspaceCommands['removeProject']>[0]) {
+    await commands.removeProject(id);
+    updateTree(state => {
+      if (!state.sourceFolders?.[id]) return state;
+      const sourceFolders = { ...state.sourceFolders };
+      delete sourceFolders[id];
+      return { ...state, sourceFolders };
+    });
+  }
+
   function projectMenu(project: (typeof workspaces.items)[number], id: string, parent: string): MenuEntry[] {
     const pinned = tree.projectPins?.includes(id);
     return [
-      { label: t(pinned ? 'unpinProject' : 'pinProject'), run: () => save(state => ({ ...state,
+      { icon: 'pin', label: t(pinned ? 'unpinProject' : 'pinProject'), run: () => save(state => ({ ...state,
         projectPins: pinned ? state.projectPins?.filter(item => item !== id) : [id, ...(state.projectPins ?? [])],
       })) },
-      { label: t('edit'), run: () => setRename({ id, name: project.title, commit: title => report(async () => {
-        await commands.renameProject(project.workspaceId, title); setRename(undefined);
-      }) }) },
-      { label: t('moveSection'), children: tree.sections.filter(section => section.id !== parent).map(section => ({
+      { label: t('edit'), icon: 'edit', run: () => setEditId(id) },
+      { label: t('moveSection'), icon: 'list', divider: true, children: tree.sections.filter(section => section.id !== parent).map(section => ({
         label: sectionLabel(section), run: () => {
           save(state => moveProject(state, id, section.id, projectIds)); show(section.id);
         },
       })) },
-      { label: t('revealDirectory'), run: () => report(() => commands.reveal(project.path)) },
-      { label: t('archiveChats'), run: () => {
+      { icon: 'project', label: t(/Mac/i.test(navigator.platform) ? 'revealFinder' : 'revealDirectory'), run: () => report(() => commands.reveal(project.path)) },
+      { icon: 'archive', divider: true, label: t('archiveChats'), run: () => {
         if (!window.confirm(t('archiveConfirm'))) return;
         report(async () => {
           const results = await Promise.allSettled((chatGroups.get(id) ?? []).filter(chat => !archived.has(chat as SessionId))
@@ -297,8 +293,8 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           if (results.some(result => result.status === 'rejected')) setError('actionFailed');
         });
       } },
-      { label: t('removeProject'), danger: true, run: () => {
-        if (window.confirm(t('removeProjectConfirm'))) report(() => commands.removeProject(project.workspaceId));
+      { icon: 'close', divider: true, label: t('removeProject'), run: () => {
+        if (window.confirm(t('removeProjectConfirm'))) report(() => removeProject(project.workspaceId));
       } },
     ];
   }
@@ -310,7 +306,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     const placement = drag.highlight?.id === id ? drag.highlight.placement : undefined;
     const showProjectMenu = project ? (event: MouseEvent) => openMenu(event, t('projectMenu'), projectMenu(project, id, parent)) : undefined;
     return <Fragment key={id}>
-      {editingName(id, depth) ?? <div className="wb-tree-row" data-wb-kind="project" data-row-key={'project:' + id} data-drop={placement}
+      <div className="wb-tree-row" data-wb-kind="project" data-row-key={'project:' + id} data-drop={placement}
         onContextMenu={showProjectMenu} style={{ '--wb-depth': depth } as CSSProperties} {...drag.row({ kind: 'project', id, parent }, project !== undefined)}>
         <button type="button" className="wb-tree-label" aria-expanded={expanded} title={label} onClick={() => toggle(id)}>
           <Glyph icon="project" /><span>{label}</span>
@@ -323,7 +319,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
             commands.startSession(project.workspaceId);
           }} />}
         </div>}
-      </div>}
+      </div>
       {expanded && <ProjectChildren project={id} depth={depth + 1} sessions={rows(id, depth + 1)} showMoreLabel={t('showMore')}>
         {draft?.kind === 'project' && draft.parent === id && nameDraft(draft, depth + 1)}
         {(grouped.get(id) ?? []).map(child => projectRow(child, id, depth + 1))}
@@ -377,6 +373,28 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       unavailable={t('actionUnavailable')} back={t('back')} />}
     {directory && <DirectoryDialog initial={directory.initial} list={commands.listDirectory} pick={commands.pickDirectory}
       t={t} cancel={() => { directory.cancel?.(); setDirectory(undefined); }} confirm={directory.confirm} />}
+    {editingProject && <EditProjectDialog key={editId} t={t} initial={editingProject.title} root={editingProject.path}
+      folders={tree.sourceFolders?.[editingProject.workspaceId] ?? [editingProject.path]} commands={commands}
+      close={() => setEditId(undefined)} remove={() => removeProject(editingProject.workspaceId)}
+      save={async (title, paths) => {
+        const id = editingProject.workspaceId;
+        const previous = tree.sourceFolders?.[id];
+        const original = previous ?? [editingProject.path];
+        const changed = paths.length !== original.length || paths.some((path, index) => path !== original[index]);
+        if (changed) updateTree(state => ({ ...state, sourceFolders: { ...state.sourceFolders, [id]: paths } }));
+        try {
+          if (title !== editingProject.title) await commands.renameProject(id, title);
+        } catch (error) {
+          if (changed) updateTree(state => {
+            if (state.sourceFolders?.[id] !== paths) return state;
+            const sourceFolders = { ...state.sourceFolders };
+            if (previous) sourceFolders[id] = previous;
+            else delete sourceFolders[id];
+            return { ...state, sourceFolders };
+          });
+          throw error;
+        }
+      }} />}
     {sessionRename && <RenameSessionDialog key={sessionRename.id} initial={sessionRename.title} t={t}
       close={() => setSessionRename(undefined)} save={title => commands.renameSession(sessionRename.id, title)} />}
   </div>;

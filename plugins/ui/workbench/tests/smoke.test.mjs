@@ -26,6 +26,7 @@ test('Client factory adds navigation without replacing native slot owners; dispo
     sidebar: { kind: 'single', scope: 'root' },
     'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
+    'sidebar.right.pane.tab': { kind: 'keyed', scope: 'session' },
     'sidebar.right.tab.guide': { kind: 'chain', scope: 'session' },
     'sidebar.right.pane.tab.title': { kind: 'keyed', scope: 'session' },
   } }, NativeFrame);
@@ -57,7 +58,7 @@ test('Client factory adds navigation without replacing native slot owners; dispo
     },
     locale: { register: () => () => {}, subscribe: () => () => {} },
     layout: { selectPanel() {} },
-    sidebarRightTabs: { entries: () => [], guide: () => [], subscribe: () => () => {} },
+    sidebarRightTabs: { register: () => () => {}, entries: () => [], guide: () => [], subscribe: () => () => {} },
     uiWorkspace: { startSession() {}, openSession() {} },
     workspaces: { list },
     sessions: { list },

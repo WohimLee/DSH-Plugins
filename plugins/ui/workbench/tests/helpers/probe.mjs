@@ -29,7 +29,7 @@ export async function createProbe(temp, runtimeVersion) {
   await writeFile(join(directory, 'lib/index.js'), `
 import { readFileSync, unwatchFile, watchFile } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-export const inject = ['workspaceController', 'sessionController', 'agents'];
+export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions'];
 export async function apply(ctx, config) {
   const { workspace } = await ctx.workspaceController.create({ path: config.path });
   await ctx.workspaceController.create({ path: config.child });
@@ -43,8 +43,31 @@ export async function apply(ctx, config) {
     ]);
     await ctx.sessionController.rename({ sessionId, title: 'Workbench ' + suffix });
   }
+  const recordSubagent = async () => {
+    const result = await ctx.sessionController.resolveAgent('workbench-test-beta');
+    if ('error' in result) throw new Error('Missing fixture parent');
+    const parent = result.agent.session;
+    if (parent && !parent.ownEvents().some(event => event.type === 'subagent/catalog')) {
+      const id = 'workbench-child-record';
+      const label = 'Inspect workbench fixture';
+      const record = ctx.sessions.create(id, { meta: { parentSession: parent.id, origin: 'subagent', cwd: config.path } });
+      record.append([
+        ['subagent/descriptor', { version: 3, mode: 'one-shot', provider: 'spawn', label }],
+        ['turn/start', { turn: 1 }],
+        ['user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: 'Inspect the sample directory' }], source: { kind: 'user' } }, { surfaceOp: 'append' }],
+        ['step/start', { turn: 1, step: 1 }],
+        ['request/header', { header: { config: { provider: 'fixture', model: 'Fixture model', reasoningEffort: 'high' } }, reason: 'initial' }],
+        ['assistant/message', { turn: 1, step: 1, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
+          content: [{ type: 'text', text: '**Directory checked**' }], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
+        ['step/end', { turn: 1, step: 1 }],
+        ['turn/end', { turn: 1, reason: { kind: 'completed' } }],
+      ]);
+      parent.append('subagent/catalog', { version: 1, childId: id, childCreatedAt: Date.now(), mode: 'one-shot', label });
+    }
+  };
   const recordActivity = () => {
     const { id, text } = JSON.parse(readFileSync(config.activity, 'utf8'));
+    if (id === 'subagent-fixture') { recordSubagent(); return; }
     const session = ctx.agents.get(id)?.session;
     if (!session) return;
     const turn = (session.ownEvents().findLast(event => event.type === 'turn/start')?.data.turn ?? 0) + 1;

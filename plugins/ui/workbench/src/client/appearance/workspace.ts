@@ -106,7 +106,7 @@ export const workspaceStyles = `
 }
 .wb-inline-name input { flex: 1 1 95px; inline-size: 0; }
 .wb-inline-name .wb-control { margin-inline-start: auto; }
-.wb-row-menu, .wb-directory, .wb-rename-session {
+.wb-row-menu, .wb-edit-project, .wb-directory, .wb-rename-session {
   border: 1px solid var(--dsw-alias-border-primary, #8884);
   background: var(--dsw-specific-sidebar-fill, #27282b); color: var(--dsw-alias-label-primary, #eee);
   box-shadow: 0 6px 24px #0006; border-radius: 12px; -webkit-app-region: no-drag;
@@ -138,4 +138,27 @@ export const workspaceStyles = `
   background: var(--dsw-alias-label-primary, #eee);
   color: var(--dsw-specific-sidebar-fill, #27282b);
 }
+
+.wb-row-menu hr { border: 0; border-top: 1px solid #8884; margin: 5px 7px; }
+.wb-row-menu button span:first-of-type { flex: 1; }
+.wb-edit-project { padding: 0; width: min(500px, 92vw); }
+.wb-edit-project::backdrop { background: #0006; }
+.wb-edit-project form { padding: 20px; display: grid; gap: 13px; }
+.wb-edit-project header, .wb-edit-project footer, .wb-project-name, .wb-folder-list > * { display: flex; align-items: center; gap: 10px; }
+.wb-edit-project strong { font-size: 1.28em; flex: 1; }
+.wb-edit-project button { font: inherit; color: inherit; background: transparent; border: none; border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+.wb-edit-project button:hover { background: #8882; }
+.wb-edit-project button:disabled { opacity: .5; }
+.wb-project-name, .wb-folder-list { border: 1px solid #8884; border-radius: 9px; }
+.wb-project-name { padding: 0 12px; }
+.wb-project-name:focus-within { outline: 2px solid #4c95f6; }
+.wb-project-name input { flex: 1; min-width: 0; background: transparent; color: inherit; font: inherit; padding: 10px; border: none; border-left: 1px solid #8884; outline: none; }
+.wb-edit-project .wb-project-name input:focus-visible { outline: none; box-shadow: none; }
+.wb-folder-list { max-height: 36vh; overflow: auto; }
+.wb-folder-list > * { padding: 6px 12px; }
+.wb-folder-list > * + * { border-top: 1px solid #8883; }
+.wb-folder-list span { flex: 1; overflow-wrap: anywhere; }
+.wb-folder-list > button { width: 100%; padding: 12px; border-radius: 0; }
+.wb-edit-project .wb-remove-local { margin-right: auto; background: #dc454525; color: #ed635d; }
+.wb-edit-project .wb-save-project { color: var(--dsw-specific-sidebar-fill, #27282b); background: var(--dsw-alias-label-primary, #eee); }
 `;
