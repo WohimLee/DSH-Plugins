@@ -1,8 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { credentialKey } from '@deepseek-ai/dsh-credentials';
 import type {} from '@deepseek-ai/dsh-fs';
-import { LlmError, normalizeApiKey, resolveImageAttachmentAccess, resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
-import type { GenerateOptions, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
+import { LlmError, contentHasImage, normalizeApiKey, resolveImageAttachmentAccess, resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
+import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai';
 import type { ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
@@ -21,9 +21,13 @@ async function* safeStream(
   start: (options: GenerateOptions) => AsyncIterable<StreamChunk>,
   options: GenerateOptions,
   connection: AbortSignal,
+  acceptsImages: boolean,
 ): AsyncGenerator<StreamChunk> {
   const signal = options.signal ? AbortSignal.any([connection, options.signal]) : connection;
   signal.throwIfAborted();
+  if (!acceptsImages && options.messages.some(message => contentHasImage(message.content))) {
+    throw new LlmError('此 Grok 路由当前无法接收图片，请检查模型目录及宿主附件服务。', 'UNSUPPORTED_CONTENT');
+  }
   for await (const chunk of start({ ...options, signal })) {
     if (chunk.type === 'finish' && chunk.reason.kind === 'error') {
       const { code } = chunk.reason.failure;
@@ -37,37 +41,63 @@ async function* safeStream(
   }
 }
 
-class GrokAdapter extends PiAiAdapter {
+export class GrokAdapter extends PiAiAdapter {
+  private readonly hasAttachments: () => boolean;
   constructor(
     private readonly catalog: () => readonly GrokModel[],
     private readonly connectionSignal: () => AbortSignal,
     options: ConstructorParameters<typeof PiAiAdapter>[0],
   ) {
     super(options);
+    this.hasAttachments = () => typeof options.resolveAttachments?.()?.readImageRequest === 'function';
   }
 
-  private withDefault(model: LlmResolvedModelInfo, catalog: readonly GrokModel[]): LlmResolvedModelInfo {
-    const defaultEffort = catalog.find(entry => entry.id === model.id)?.defaultEffort;
-    return defaultEffort && model.reasoning
-      ? { ...model, reasoning: { ...model.reasoning, defaultEffort } } : model;
+  private inputInfo(model: GrokModel, attachments: boolean): Pick<LlmModelInfo, 'inputModalities' | 'description' | 'badge'> {
+    const image = attachments && model.input.includes('image');
+    const missing = model.input.includes('image') && !attachments;
+    return {
+      inputModalities: image ? ['text', 'image'] : ['text'],
+      description: model.capabilityDescription + (missing ? '。宿主附件服务不可用，当前仅接收文本' : ''),
+      badge: image ? { tone: 'info', text: { en: 'Image input', zh: '可发图片' } }
+        : { tone: 'neutral', text: { en: 'Text input', zh: '仅文本' } },
+    };
+  }
+
+  override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+    if (provider !== route) return [];
+    const attachments = this.hasAttachments();
+    return this.catalog().map(model => ({
+      provider, id: model.id, name: model.name, ...this.inputInfo(model, attachments),
+    }));
+  }
+
+  private withCapabilities(model: LlmResolvedModelInfo, catalog: readonly GrokModel[]): LlmResolvedModelInfo {
+    const entry = catalog.find(entry => entry.id === model.id);
+    if (!entry) return model;
+    const { inputModalities, description } = this.inputInfo(entry, this.hasAttachments());
+    return { ...model, inputModalities, description,
+      ...(entry.defaultEffort && model.reasoning && { reasoning: { ...model.reasoning, defaultEffort: entry.defaultEffort } }),
+    };
   }
 
   override async resolveModel(provider: string, model: string, signal?: AbortSignal) {
     const catalog = this.catalog();
-    return this.withDefault(await super.resolveModel(provider, model, signal), catalog);
+    return this.withCapabilities((await super.prepareCall(provider, model, signal)).model, catalog);
   }
 
   override stream(options: GenerateOptions) {
-    return safeStream(request => super.stream(request), options, this.connectionSignal());
+    return safeStream(request => super.stream(request), options, this.connectionSignal(), this.hasAttachments());
   }
 
   override async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall> {
     const connection = this.connectionSignal();
     const catalog = this.catalog();
     const prepared = await super.prepareCall(provider, model, signal);
+    const resolved = this.withCapabilities(prepared.model, catalog);
     return {
-      model: this.withDefault(prepared.model, catalog),
-      stream: options => safeStream(prepared.stream, options, connection),
+      model: resolved,
+      stream: options => safeStream(prepared.stream, options, connection,
+        !!resolved.inputModalities?.includes('image') && this.hasAttachments()),
     };
   }
 }
@@ -218,6 +248,11 @@ export function apply(ctx: Context): void {
     return publish({ state: 'connected', modelCount: result.models.length }, result.models, key.value);
   }
 
+  ctx.inject(['attachments'], child => {
+    const refresh = () => { if (!lifetime.signal.aborted && profiles.has(route)) ctx.emit('llm/models-updated', route); };
+    refresh();
+    child.effect(() => refresh);
+  });
   void enqueue(reload).catch(() => {});
   ctx.inject(['typert'], child => {
     new ConnectionRemote(child, refresh => enqueue(refresh ? reload : async () => state), input => enqueue(() => update(input)));

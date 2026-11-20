@@ -8,12 +8,12 @@
   ],
   "surfaces": {
     "web": {
-      "status": "unverified",
-      "evidence": "2026-11-19，macOS，DSH 0.2.2-rc.4 与 rc.5：同一 dsh-codex 0.1.3 tarball 在隔离 Web 宿主通过安装、配置组合及启动。模型请求使用合成契约测试。\n2026-11-18，macOS，DSH 0.2.2-rc.3：pnpm --filter dsh-codex test:host 通过 tarball 安装、配置组合及真实隔离 Web 启动；未发送模型请求。"
+      "status": "verified",
+      "evidence": "2026-11-20，0.1.7 在隔离 Web 的聊天框粘贴 PNG 后，真实账号 Astra 准确返回图片中的六位码。\n2026-11-19，macOS，DSH 0.2.2-rc.4 与 rc.5：同一 dsh-codex 0.1.3 tarball 在隔离 Web 宿主通过安装、配置组合及启动。模型请求使用合成契约测试。\n2026-11-18，macOS，DSH 0.2.2-rc.3：pnpm --filter dsh-codex test:host 通过 tarball 安装、配置组合及真实隔离 Web 启动；未发送模型请求。"
     },
     "desktop": {
       "status": "verified",
-      "evidence": "2026-11-20，macOS Desktop 0.2.2-rc.5，插件页安装 0.1.6 后，在原失败会话使用 GPT-6.2-Astra high 收到真实回复。原生菜单显示六个模型声明的档位，选中 high。\n2026-11-19，macOS Desktop 0.2.2-rc.5：使用内置 CLI 同名更新至 0.1.3，配置与启用选择保留。重开后插件页显示启用，模型子菜单显示 Codex 分组。真实账号推理待验收。\n2026-11-18，macOS Desktop 0.2.2-rc.3 / Node 24.21.0：使用桌面版自带 CLI 将 dsh-codex 0.1.2 安装到 desktop profile，无版本豁免。重启后插件启用，模型选择器显示 Codex 分组及 10 个本地缓存模型；真实账号推理待验收。"
+      "evidence": "2026-11-20，0.1.7 在日常 Desktop 0.2.2-rc.5 的新会话选择 GPT-6.2-Astra high，用添加文件发送 PNG 并准确返回随机码 5TT9GP。\n2026-11-20，macOS Desktop 0.2.2-rc.5，插件页安装 0.1.6 后，在原失败会话使用 GPT-6.2-Astra high 收到真实回复。原生菜单显示六个模型声明的档位，选中 high。\n2026-11-19，macOS Desktop 0.2.2-rc.5：使用内置 CLI 同名更新至 0.1.3，配置与启用选择保留。重开后插件页显示启用，模型子菜单显示 Codex 分组。真实账号推理待验收。\n2026-11-18，macOS Desktop 0.2.2-rc.3 / Node 24.21.0：使用桌面版自带 CLI 将 dsh-codex 0.1.2 安装到 desktop profile，无版本豁免。重启后插件启用，模型选择器显示 Codex 分组及 10 个本地缓存模型；真实账号推理待验收。"
     },
     "headless": {
       "status": "unverified",

@@ -63,7 +63,7 @@ records:
       issuer: ${origin}
 `, { mode: 0o600 });
   await writeFile(join(codexHome, 'models_cache.json'), JSON.stringify({ models: [
-    { slug: 'codex-fixture', display_name: 'Codex Fixture', visibility: 'list', supported_in_api: true,
+    { slug: 'codex-fixture', display_name: 'Codex Fixture', input_modalities: ['text', 'image'], visibility: 'list', supported_in_api: true,
       supported_reasoning_levels: [{ effort: 'high' }, { effort: 'low' }] },
     ...Array.from({ length: 9 }, (_, i) => ({
       slug: `codex-long-${i}`, display_name: `Codex model ${i + 2}`, visibility: 'list', supported_in_api: true,
@@ -215,7 +215,18 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await writeFile(auth, JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
   await codexConnection.getByText('Local Codex sign-in detected').waitFor();
   const connectedCodex = available.locator('summary').filter({ hasText: 'Codex' });
-  await connectedCodex.waitFor();
+  await connectedCodex.click();
+  const fixture = available.getByRole('listitem').filter({ hasText: 'Codex Fixture' });
+  await fixture.getByText('Image input', { exact: true }).waitFor();
+  // The same route can lose a capability while the management page is open.
+  const cachePath = join(codexHome, 'models_cache.json');
+  const before = await readFile(cachePath, 'utf8');
+  const updated = JSON.parse(before);
+  updated.models[0].input_modalities = ['text'];
+  await writeFile(cachePath, JSON.stringify(updated));
+  await fixture.getByText('Text input', { exact: true }).waitFor();
+  await writeFile(cachePath, before);
+  await fixture.getByText('Image input', { exact: true }).waitFor();
   await rm(auth);
   await codexConnection.getByText('Codex is not connected').waitFor();
   await connectedCodex.waitFor({ state: 'detached' });

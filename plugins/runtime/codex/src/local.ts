@@ -9,6 +9,18 @@ export interface ModelConfig {
   contextWindow?: number;
   efforts?: string[];
   defaultEffort?: string;
+  inputModalities?: string[];
+}
+export interface CatalogModel extends ModelConfig {
+  description?: string;
+  effortDescriptions?: Record<string, string>;
+  maxContextWindow?: number;
+  effectiveContextPercent?: number;
+  supportsOriginalDetail?: boolean;
+  defaultSummary?: string;
+  defaultVerbosity?: string;
+  serviceTiers?: string[];
+  modalitySource?: 'cache' | 'config';
 }
 export interface Config { codexHome?: string; codexPath?: string; models?: ModelConfig[] }
 export const codexHome = (config: Config): string => config.codexHome ?? process.env.CODEX_HOME ?? join(homedir(), '.codex');
@@ -27,23 +39,42 @@ export async function loadCredential(home: string): Promise<{ accessToken: strin
   // Never retain or write refresh/id tokens; CLI owns the login lifecycle.
   return { accessToken: tokens.access_token, accountId: tokens.account_id };
 }
-export async function loadModels(home: string, configured?: ModelConfig[]): Promise<ModelConfig[]> {
-  if (configured !== undefined) return structuredClone(configured);
+export async function loadModels(home: string, configured?: ModelConfig[]): Promise<CatalogModel[]> {
   const cache = record(await readJson(join(home, 'models_cache.json')));
-  if (!Array.isArray(cache.models)) return [];
-  const models = new Map<string, ModelConfig>();
-  for (const raw of cache.models) {
+  const models = new Map<string, CatalogModel>();
+  for (const raw of Array.isArray(cache.models) ? cache.models : []) {
     const m = record(raw);
     if (typeof m.slug !== 'string' || !m.slug.trim() || m.visibility !== 'list' || m.supported_in_api !== true) continue;
+    const descriptions: [string, string][] = [];
     const efforts = Array.isArray(m.supported_reasoning_levels) ? m.supported_reasoning_levels.flatMap(raw => {
-      const effort = record(raw).effort;
+      const { effort, description } = record(raw);
+      if (typeof effort === 'string' && typeof description === 'string') descriptions.push([effort, description]);
       return typeof effort === 'string' && effort.trim() ? [effort] : [];
     }) : [];
     models.set(m.slug, { id: m.slug, name: typeof m.display_name === 'string' ? m.display_name : m.slug,
       ...(typeof m.context_window === 'number' && Number.isFinite(m.context_window) && m.context_window > 0 ? { contextWindow: m.context_window } : {}),
       ...(typeof m.default_reasoning_level === 'string' && efforts.includes(m.default_reasoning_level)
         ? { defaultEffort: m.default_reasoning_level } : {}),
+      ...(typeof m.description === 'string' && { description: m.description }),
+      ...(descriptions.length > 0 && { effortDescriptions: Object.fromEntries(descriptions) }),
+      ...(Array.isArray(m.input_modalities) && m.input_modalities.every(value => typeof value === 'string')
+        && { inputModalities: [...new Set<string>(m.input_modalities)], modalitySource: 'cache' }),
+      ...(Number.isSafeInteger(m.max_context_window) && Number(m.max_context_window) > 0 && { maxContextWindow: Number(m.max_context_window) }),
+      ...(typeof m.effective_context_window_percent === 'number' && m.effective_context_window_percent > 0
+        && m.effective_context_window_percent <= 100 && { effectiveContextPercent: m.effective_context_window_percent }),
+      ...(m.supports_image_detail_original === true && { supportsOriginalDetail: true }),
+      ...(typeof m.default_reasoning_summary === 'string' && { defaultSummary: m.default_reasoning_summary }),
+      ...(typeof m.default_verbosity === 'string' && { defaultVerbosity: m.default_verbosity }),
+      ...(Array.isArray(m.service_tiers) && { serviceTiers: m.service_tiers.flatMap(raw => {
+        const id = record(raw).id;
+        return typeof id === 'string' ? [id] : [];
+      }) }),
       efforts: [...new Set(efforts)] });
   }
-  return [...models.values()];
+  if (configured === undefined) return [...models.values()];
+  return configured.map(model => ({
+    ...models.get(model.id),
+    ...structuredClone(model),
+    ...(model.inputModalities !== undefined && { modalitySource: 'config' as const }),
+  }));
 }

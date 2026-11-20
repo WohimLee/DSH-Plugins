@@ -1,20 +1,41 @@
-import { LlmError } from '@deepseek-ai/dsh-llm';
+import { LlmError, requestImageHandleText, offloadedImageText } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, ToolSchema } from '@deepseek-ai/dsh-llm';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import type { Options, SDKUserMessage } from '@qoder-ai/qoder-agent-sdk';
+import type { Context } from '@deepseek-ai/cordis';
+import type { ImageContentBlock, Options, SDKUserMessage } from '@qoder-ai/qoder-agent-sdk';
 
-export function buildPrompt(options: GenerateOptions) {
+export async function buildPrompt(options: GenerateOptions, imageStore?: Pick<Context['attachments'], 'readImageRequest'>) {
   if (options.temperature !== undefined || options.stop?.length) {
     throw new LlmError('Qoder SDK 不支持 temperature 或 stop 参数。', 'UNSUPPORTED_OPTION');
   }
 
   const instructions = options.system ? [options.system] : [];
   const conversation = [];
+  const images: ImageContentBlock[] = [];
   for (const message of options.messages) {
     const content = [];
     for (const block of message.content) {
       switch (block.type) {
+        case 'image': {
+          if (message.role !== 'user' && message.role !== 'tool') {
+            throw new LlmError('Qoder 仅允许用户消息和工具结果包含图片。', 'UNSUPPORTED_CONTENT');
+          }
+          if (block.offloaded) {
+            content.push({ type: 'text', text: offloadedImageText(block.attachment) });
+            break;
+          }
+          if (!imageStore) throw new LlmError('当前 Qoder 账号模型接入仅提供文本输入。', 'UNSUPPORTED_CONTENT');
+          const ref = block.attachment;
+          const version = await imageStore.readImageRequest(ref, {
+            width: ref.width, height: ref.height, maxBytes: ref.bytes,
+          }, options.signal);
+          images.push({ type: 'image', source: {
+            type: 'base64', media_type: version.mediaType, data: Buffer.from(version.data).toString('base64'),
+          } });
+          content.push({ type: 'image', index: images.length, description: requestImageHandleText(ref, version) });
+          break;
+        }
         case 'text':
         case 'tool-call':
           content.push(block);
@@ -29,7 +50,7 @@ export function buildPrompt(options: GenerateOptions) {
     }
 
     if (message.role === 'system') {
-      instructions.push(...content.flatMap(block => block.type === 'text' ? [block.text] : []));
+      instructions.push(...content.flatMap(block => block.type === 'text' && typeof block.text === 'string' ? [block.text] : []));
     } else if (message.role === 'tool') {
       conversation.push({ role: message.role, content, toolCallId: message.toolCallId, isError: message.isError });
     } else if (content.length) {
@@ -42,11 +63,13 @@ export function buildPrompt(options: GenerateOptions) {
     'Use the role fields to distinguish instruction, user, assistant and tool messages. ' +
     'Each tool message records the outcome of its matching tool call in this conversation.',
   );
+  if (images.length) instructions.push('Each image index in the transcript refers to the corresponding subsequent image block, starting at 1.');
+  const transcript = JSON.stringify(conversation);
   const input: SDKUserMessage = {
     type: 'user',
     client_composed: true,
     parent_tool_use_id: null,
-    message: { role: 'user', content: JSON.stringify(conversation) },
+    message: { role: 'user', content: images.length ? [{ type: 'text', text: transcript }, ...images] : transcript },
   };
   return { input, systemPrompt: instructions.join('\n\n') };
 }

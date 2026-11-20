@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import type { Context } from '@deepseek-ai/cordis';
 import type { KeyboardEvent } from 'react';
 import type { ModelDirectory, ModelDirectoryState } from '@deepseek-ai/dsh-client-ui-model-selection/client';
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
@@ -15,12 +16,13 @@ type Props = Pick<PropsRuntime<'conversation.input.model.options'>, 'locked' | '
   directory: ModelDirectory;
   readUsage: ReadUsage;
   language: string;
+  resolveText: Context['locale']['resolveText'];
   back: () => void;
 };
 
 const narrow = () => window.matchMedia('(max-width: 389px), (pointer: coarse)').matches;
 
-export function Picker({ directory, readUsage, language, locked, dismiss, reportFailure, back, t }: Props) {
+export function Picker({ directory, readUsage, language, locked, dismiss, reportFailure, back, t, resolveText }: Props) {
   const state = useSyncExternalStore(directory.store.subscribe, directory.store.getSnapshot);
   const legacyQoder = state.current?.provider === 'qoder';
   const groups = useMemo(() => {
@@ -204,8 +206,11 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
             {item.models.map(model => {
               const selected = state.current?.provider === item.route.id && state.current.model === model.id;
               return <button key={model.id} type="button" data-model-row="" aria-current={selected} disabled={busy}
-                onClick={() => choose(item.route, model)}>
-                <span className="picker-title">{model.name}</span>{selected && <span aria-hidden="true">✓</span>}
+                title={model.description} onClick={() => choose(item.route, model)}>
+                <span className="picker-provider-copy">
+                  <span className="picker-title">{model.name}</span>
+                  {model.badge && <span className="picker-detail">{resolveText(model.badge.text)}</span>}
+                </span>{selected && <span aria-hidden="true">✓</span>}
               </button>;
             })}
           </div>)}

@@ -20,6 +20,8 @@ DSH-Plugins 是维护 DeepSeek Harness 扩展插件的多包仓库，面向插�
 
 ## 待确认及影响
 
+- 2026-11-20，Codex、Qoder、Grok 在模型目录中发布本次接入的有效模态和限制，模型管理页和选择器共同读取。Codex Astra high、Qoder auto、smodel 和 qmodel_latest 已通过真实账号适配器识别合成随机码；Grok 图片请求通过模拟 xAI 传输验证。
+
 - dsh-codex 0.1.6 已在本机 Desktop 通过真实账号使用 GPT-6.2-Astra high 收到回复。仅设置 macOS 手动 HTTPS 代理的环境也可发起推理。
 - dsh-qoder 位于 plugins/runtime/qoder，使用官方 Qoder Agent SDK 和本机 CLI 注册账号实际可用的模型，设置中支持按需绑定账号及编辑备注，工具申请交回 DSH。0.1.6 已在 Desktop 模型管理页完成浏览器授权并自动加载 17 个模型，通过适配器使用 auto 收到真实回复。
 - dsh-grok 位于 plugins/runtime/grok，使用 xAI API Key 和 Responses API。模型管理页验证密钥后才发布该连接可用的语言模型，连接、流式聊天和断开已通过隔离 Web 验证。0.1.1 已在本机 Desktop 验证连接卡片和密钥表单的展开与收起。真实 xAI 账号推理待验收。

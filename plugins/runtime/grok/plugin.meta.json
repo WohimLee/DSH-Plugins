@@ -9,7 +9,7 @@
   "surfaces": {
     "web": {
       "status": "verified",
-      "evidence": "2026-11-20，macOS / Chrome，DSH 0.2.2-rc.5。pnpm --filter dsh-grok test:host 验证 0.1.1 的英文卡片、中文窄窗单列和独立设置入口；回环 xAI API 覆盖密钥拒绝、模型发布、流式聊天、重启恢复与断开。"
+      "evidence": "2026-11-20，0.1.2 在隔离宿主验证连接和聊天。契约测试核对刷新及 Responses 请求中的图片字节、工具与推理档位，真实账号推理仍待有效密钥。\n2026-11-20，macOS / Chrome，DSH 0.2.2-rc.5。pnpm --filter dsh-grok test:host 验证 0.1.1 的英文卡片、中文窄窗单列和独立设置入口；回环 xAI API 覆盖密钥拒绝、模型发布、流式聊天、重启恢复与断开。"
     },
     "desktop": {
       "status": "unverified",

@@ -19,7 +19,7 @@ pnpm --filter dsh-qoder pack --pack-destination /tmp
 Web 使用对应版本的 DSH CLI 安装。安装参数 `--ignore-scripts` 跳过 SDK 自带的运行时下载脚本，插件使用已安装的 Qoder CLI。
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-qoder-0.1.6.tgz --ignore-scripts
+dsh plugin --profile web add /tmp/dsh-qoder-0.1.7.tgz --ignore-scripts
 ```
 
 Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile desktop`。若从 Desktop 插件页安装，在该 profile 的 `pnpm-workspace.yaml` 现有 `allowBuilds` 下添加 `'@qoder-ai/qoder-agent-sdk': false`，即可跳过该 SDK 的下载脚本。重启宿主后，打开 **设置 → Qoder** 查看账号状态。
@@ -59,7 +59,9 @@ Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile d
 
 支持文本对话、推理和文本流、token 用量及取消。每次调用在临时目录创建独立的 Qoder 会话，把 DSH 历史及工具结果作为结构化文本交给 Qoder。DSH 持久化对话。Qoder 的原生工具和用户设置来源在 SDK 请求中关闭，DSH 工具通过进程内 MCP 提供定义，模型提出的调用交由 DSH 审批和执行。
 
-支持将输出预算和推理强度传给 Qoder CLI。当前支持文本输入，图片原生输入、temperature和 stop 暂未接入。
+每个账号分别从 SDK 目录读取默认上下文、厂商窗口档位、输入和输出上限、推理档位及说明。只有有效的默认上下文进入 DSH 的上下文预算；最大输入和输出在模型详情中单列。调用可传输出预算，插件在厂商披露上限时检查该预算。支持 DSH 函数工具与结果回放；temperature 和 stop 参数会被拒绝。
+
+插件从 CLI 登录会话的 `getAvailableModels()` 或 PAT 的 `getModels()` 读取视觉标记 `isVl`。只有所选账号模型明确声明视觉能力且宿主提供附件服务时才显示「可发图片」，包括目录中明确声明该能力的 auto 路由。未披露或关闭视觉能力时显示「仅文本」，模型说明标明原因。刷新账号后目录重新评估能力。发送时从宿主读取本次请求规格的图片，通过 Qoder SDK 原生图片块发送；已卸载的历史图片保留为文字占位。
 
 ## 验证
 
@@ -68,7 +70,7 @@ pnpm --filter dsh-qoder check
 pnpm --filter dsh-qoder test:host
 ```
 
-合成测试覆盖未绑定时隐藏模型、备注持久化、旧版绑定兼容、账号目录与凭据隔离、历史和工具定义、流式响应、取消及卸载。宿主测试检查 tarball 并在隔离 Web profile 中安装、启动。实际 Qoder 账户推理、账户可用档位及 Desktop 交互待验收。
+合成测试覆盖未绑定时隐藏模型、备注持久化、旧版绑定兼容、账号目录与凭据隔离、历史和工具定义、流式响应、取消及卸载。宿主测试检查 tarball 并在隔离 Web profile 中安装、启动。2026-11-20 本机已登录 CLI 目录的 17 个启用模型均声明视觉能力，默认上下文为 200000，均未声明最大输出。本次适配器使用合成 PNG 及真实登录，在 auto 和 smodel 两条路由分别读对随机八位码并正常结束。PAT 目录与账号切换通过合成测试。
 
 ## 源码组织评估
 

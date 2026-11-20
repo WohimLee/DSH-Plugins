@@ -75,12 +75,13 @@ export class QoderAdapter extends LlmAdapter {
     private readonly readModels = readQoderModels,
     resolveSecret = async (ref: string) => process.env[ref],
     credentials: () => CredentialProvider | undefined = () => undefined,
+    private readonly attachments: () => Pick<Context['attachments'], 'readImageRequest'> | undefined = () => undefined,
   ) {
     super();
     this.accounts = new QoderAccounts(config.accounts, resolveSecret, async auth => {
       const executable = await resolveCli(config.cliPath);
       return this.readModels(executable, auth, this.lifetime.signal);
-    }, credentials);
+    }, credentials, () => !!this.attachments());
   }
 
   get providers(): string[] {
@@ -136,9 +137,9 @@ export class QoderAdapter extends LlmAdapter {
     try {
       signal.throwIfAborted();
       signal.addEventListener('abort', abort, { once: true });
-      const { input, systemPrompt } = buildPrompt(options);
       const auth = await this.accounts.auth(options.provider);
       const model = await this.resolveAccountModel(options.provider, options.model, auth, signal);
+      const { input, systemPrompt } = await buildPrompt({ ...options, signal }, model.inputModalities?.includes('image') ? this.attachments() : undefined);
       const effort = model.reasoning && options.reasoningEffort;
       if (effort && !model.reasoning?.efforts.some(level => level.id === effort)) {
         throw new LlmError('所选 Qoder 账号的模型不支持此推理强度。', 'UNSUPPORTED_REASONING_EFFORT');
@@ -151,6 +152,9 @@ export class QoderAdapter extends LlmAdapter {
       if (options.maxTokens !== undefined) {
         if (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1) {
           throw new LlmError('maxTokens 必须为正整数。', 'INVALID_REQUEST');
+        }
+        if (model.maxOutputTokens !== undefined && options.maxTokens > model.maxOutputTokens) {
+          throw new LlmError('所请求的 maxTokens 超过该账号模型目录声明的最大输出。', 'INVALID_REQUEST');
         }
         extraArgs['max-output-tokens'] = String(options.maxTokens);
       }
@@ -257,7 +261,7 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
     async ref => {
       const credentials = ctx.get('credentials');
       return credentials ? (await credentials.resolve(credentialRef(ref)))?.value : process.env[ref];
-    }, () => ctx.get('credentials'));
+    }, () => ctx.get('credentials'), () => ctx.get('attachments'));
   let live = true;
   const login = new BrowserLogin(() => {
     adapter.accounts.invalidate('QODER_PERSONAL_ACCESS_TOKEN');

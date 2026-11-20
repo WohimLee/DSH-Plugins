@@ -49,7 +49,7 @@ test('Cordis keeps unbound accounts out of the provider registry across reloads'
   }
 });
 
-test('serializes ordered DSH history and validates unsupported inputs', () => {
+test('serializes ordered DSH history and validates unsupported inputs', async () => {
   const callBlock = { type: 'tool-call', id: 'call-1', name: tool.name, arguments: '{"name":"fixture"}' };
   const messages = [
     { role: 'system', content: [{ type: 'text', text: 'System prompt' }] },
@@ -57,7 +57,7 @@ test('serializes ordered DSH history and validates unsupported inputs', () => {
     { role: 'assistant', content: [callBlock, { type: 'reasoning', text: 'private thinking' }] },
     { role: 'tool', toolCallId: 'call-1', isError: true, content: [{ type: 'text', text: 'fixture failed' }] },
   ];
-  const { input, systemPrompt } = buildPrompt({ ...request, messages, system: 'Be brief' });
+  const { input, systemPrompt } = await buildPrompt({ ...request, messages, system: 'Be brief' });
   assert.match(systemPrompt, /^Be brief\n\nSystem prompt/);
   assert.equal(input.client_composed, true);
   const history = JSON.parse(input.message.content);
@@ -66,8 +66,8 @@ test('serializes ordered DSH history and validates unsupported inputs', () => {
   assert.deepEqual(history[1].content, [callBlock]);
   assert.equal(history[2].toolCallId, 'call-1');
   assert.equal(history[2].isError, true);
-  assert.throws(() => buildPrompt({ ...request, stop: ['stop'] }), { code: 'UNSUPPORTED_OPTION' });
-  assert.throws(() => buildPrompt({ ...request, messages: [{ role: 'user', content: [{ type: 'image' }] }] }),
+  await assert.rejects(buildPrompt({ ...request, stop: ['stop'] }), { code: 'UNSUPPORTED_OPTION' });
+  await assert.rejects(buildPrompt({ ...request, messages: [{ role: 'user', content: [{ type: 'image' }] }] }),
     { code: 'UNSUPPORTED_CONTENT' });
 });
 
@@ -226,7 +226,9 @@ test('named accounts use their actual live catalogs and cannot cross-charge', as
     async ref => credentials.get(ref));
   try {
     assert.deepEqual(adapter.providers, ['qoder', 'qoder-account-personal', 'qoder-account-work']);
-    assert.deepEqual((await adapter.listModels('qoder-account-personal')).map(model => model.id), ['personal-specific']);
+    const personalModels = await adapter.listModels('qoder-account-personal');
+    assert.deepEqual(personalModels.map(model => model.id), ['personal-specific']);
+    assert.match(personalModels[0].description, /Qoder PAT 账号目录.*未声明图片能力/);
     assert.deepEqual((await adapter.listModels('qoder-account-work')).map(model => model.id), ['lite', 'work-specific']);
     await assert.rejects(adapter.resolveModel('qoder-account-personal', 'lite'), { code: 'UNKNOWN_MODEL' });
     assert.equal((await collect(adapter.stream({ ...request, provider: 'qoder-account-work' }))).at(-1).reason.kind, 'stop');
@@ -297,4 +299,51 @@ test('account remarks survive reload and preserve legacy and managed routes', as
   } finally {
     reloaded.dispose();
   }
+});
+
+test('publishes account-specific vision and capacity and sends native images in transcript order', async () => {
+  const ref = { attachmentId: 'sha256:fixture', width: 32, height: 16, bytes: 3, mediaType: 'image/png' };
+  const messages = [{ role: 'user', content: [
+    { type: 'image', attachment: ref, offloaded: true },
+    { type: 'text', text: 'read the next image' }, { type: 'image', attachment: ref },
+  ] }];
+  const inputs = [];
+  const reads = [];
+  let vision = true;
+  const adapter = new plugin.QoderAdapter({ cliPath: process.execPath }, async (_path, input) => {
+    inputs.push(...await collect(input));
+    return { events: source([result({ result: 'ready' })]), async close() {} };
+  }, async () => [
+    { value: 'auto', isVl: vision, maxInputTokens: 1600, maxOutputTokens: 240, defaultContextWindow: 2200, availableContextWindows: [2200, 4000] },
+    { value: 'legacy' },
+  ], async () => undefined, undefined, () => ({ async readImageRequest(ref, target) {
+    reads.push({ ref, target });
+    return { mediaType: 'image/png', width: 32, height: 16, data: Uint8Array.from([1, 2, 3]) };
+  } }));
+  try {
+    const [auto, legacy] = await adapter.listModels('qoder');
+    assert.deepEqual(auto.context, { contextWindow: 2200 });
+    assert.deepEqual(auto.inputModalities, ['text', 'image']);
+    assert.equal(auto.badge.text.en, 'Image input');
+    assert.match(auto.description, /最大输入 1600/);
+    assert.match(legacy.description, /未声明图片能力/);
+    const generate = model => collect(adapter.stream({ ...request, model, messages }));
+    assert.equal((await generate('auto')).at(-1).reason.kind, 'stop');
+    const [transcript, image] = inputs[0].message.content;
+    const [omitted, text, indexed] = JSON.parse(transcript.text)[0].content;
+    assert.match(omitted.text, /omitted/i);
+    assert.equal(text.text, 'read the next image');
+    assert.equal(indexed.index, 1);
+    assert.deepEqual(image, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AQID' } });
+    assert.deepEqual(reads, [{ ref, target: { width: 32, height: 16, maxBytes: 3 } }]);
+    assert.equal((await generate('legacy')).at(-1).reason.failure.code, 'UNSUPPORTED_CONTENT');
+    assert.equal((await collect(adapter.stream({ ...request, model: 'auto', maxTokens: 241 }))).at(-1).reason.failure.code, 'INVALID_REQUEST');
+    vision = false;
+    adapter.accounts.invalidate();
+    const refreshed = await adapter.resolveModel('qoder', 'auto');
+    assert.deepEqual(refreshed.inputModalities, ['text']);
+    assert.match(refreshed.description, /仅支持文本输入/);
+    assert.equal((await generate('auto')).at(-1).reason.failure.code, 'UNSUPPORTED_CONTENT');
+    assert.equal(inputs.length, 1);
+  } finally { adapter.dispose(); }
 });

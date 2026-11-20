@@ -44,8 +44,8 @@ test('manual macOS HTTPS proxy honors excluded hosts and automatic configuration
   assert.equal(macProxyForHost(settings + '\nProxyAutoConfigEnable : 1', 'chatgpt.com'), undefined);
   assert.equal(macProxyForHost(settings.replace('7890', '65536'), 'chatgpt.com'), undefined);
 });
-test('request preserves system prompt, tool calls, tool results and optional argument schemas', () => {
-  const result = buildRequest({ ...request, system: 'one', reasoningEffort: 'high', messages: [
+test('request preserves system prompt, tool calls, tool results and optional argument schemas', async () => {
+  const result = await buildRequest({ ...request, system: 'one', reasoningEffort: 'high', messages: [
     { role: 'system', content: [{ type: 'text', text: 'two' }] },
     { role: 'assistant', content: [{ type: 'tool-call', id: 'call-1', name: 'read', arguments: '{"path":"x"}' }] },
     { role: 'tool', toolCallId: 'call-1', content: [{ type: 'text', text: 'file data' }] },
@@ -53,8 +53,8 @@ test('request preserves system prompt, tool calls, tool results and optional arg
   assert.equal(result.instructions, 'one\n\ntwo'); assert.equal(result.store, false);
   assert.deepEqual(result.input, [{ type: 'function_call', call_id: 'call-1', name: 'read', arguments: '{"path":"x"}' }, { type: 'function_call_output', call_id: 'call-1', output: 'file data' }]);
   assert.deepEqual(result.tools[0].parameters.properties, { path: {} }); assert.equal(result.tools[0].strict, false);
-  assert.throws(() => buildRequest({ ...request, tools: [{ name: 'bad', parameters: { oneOf: [] } }] }), { code: 'INVALID_REQUEST' });
-  assert.throws(() => buildRequest({ ...request, messages: [{ role: 'user', content: [{ type: 'image' }] }] }), { code: 'UNSUPPORTED_CONTENT' });
+  await assert.rejects(() => buildRequest({ ...request, tools: [{ name: 'bad', parameters: { oneOf: [] } }] }), { code: 'INVALID_REQUEST' });
+  await assert.rejects(() => buildRequest({ ...request, messages: [{ role: 'user', content: [{ type: 'image' }] }] }), { code: 'UNSUPPORTED_CONTENT' });
 });
 test('SSE survives byte fragmentation, assembles Unicode/reasoning/tools and accounts uncached tokens', async () => {
   const chunks = await collect(parseStream(body([
@@ -198,4 +198,67 @@ test('rate limits use the Codex bucket and project windows without account detai
     { remainingPercent: 62, minutes: 10080, resetsAt: 1810000000 },
   ] });
   assert.equal(projectRateLimits({ rateLimits: { primary: { usedPercent: 'unknown' } } }), null);
+});
+
+test('image declarations survive discovery, native attachment conversion and capability withdrawal', async t => {
+  const codexHome = await fixture(t);
+  const cache = join(codexHome, 'models_cache.json');
+  const model = { slug: 'test-model', description: 'Vision fixture', visibility: 'list', supported_in_api: true,
+    context_window: 1000, max_context_window: 2000, effective_context_window_percent: 95,
+    supported_reasoning_levels: [{ effort: 'high', description: 'Deeper reasoning' }], default_reasoning_level: 'high' };
+  async function modalities(values) {
+    await writeFile(cache, JSON.stringify({ models: [{ ...model, input_modalities: values }] }));
+  }
+  await modalities(['text', 'image', 'audio']);
+  const ref = { attachmentId: 'sha256:' + 'c'.repeat(64), mediaType: 'image/png', width: 3, height: 4, bytes: 3 };
+  const data = new Uint8Array([255, 0, 34]);
+  let reads = 0, wire;
+  const attachments = { async readImageRequest(actual, target, signal) {
+    assert.deepEqual(actual, ref); assert.deepEqual(target, { width: 3, height: 4, maxBytes: 3 });
+    assert.ok(signal instanceof AbortSignal); reads++;
+    return { ...ref, data };
+  } };
+  const adapter = new plugin.CodexAdapter({ codexHome }, async (_url, init) => {
+    wire = JSON.parse(init.body);
+    return new Response(body([event('response.completed')]));
+  }, () => attachments);
+  const [info] = await adapter.listModels('codex');
+  assert.deepEqual(info.inputModalities, ['text', 'image']);
+  assert.equal(info.badge.text.en, 'Image input');
+  assert.match(info.description, /audio/);
+  assert.match(info.description, /2000/); assert.match(info.description, /95%/);
+  assert.equal(info.reasoning.efforts[0].description, 'Deeper reasoning');
+  const prepared = await adapter.prepareCall('codex', model.slug);
+  const image = { type: 'image', attachment: ref };
+  const options = { ...request, reasoningEffort: 'high', messages: [
+    { role: 'user', content: [{ type: 'text', text: 'before' }, image, { type: 'text', text: 'after' }] },
+    { role: 'tool', toolCallId: 'screenshot', content: [image] },
+    { role: 'user', content: [{ ...image, offloaded: true }] },
+  ] };
+  await modalities(['text']);
+  assert.deepEqual((await adapter.listModels('codex'))[0].inputModalities, ['text']);
+  assert.equal((await collect(prepared.stream(options))).at(-1).reason.kind, 'stop');
+  assert.equal(reads, 1);
+  assert.deepEqual(wire.reasoning, { effort: 'high' });
+  const parts = wire.input[0].content;
+  assert.equal(parts[0].text, 'before'); assert.equal(parts[3].text, 'after');
+  assert.deepEqual(parts[2], { type: 'input_image', image_url: 'data:image/png;base64,/wAi' });
+  assert.deepEqual(wire.input[1].output[1], parts[2]);
+  assert.match(wire.input[2].content[0].text, /image omitted/);
+  assert.equal((await collect(adapter.stream(options))).at(-1).reason.failure.code, 'UNSUPPORTED_CONTENT');
+  assert.equal(reads, 1);
+  await modalities(['audio']);
+  assert.equal((await adapter.listModels('codex')).length, 0);
+  await modalities(undefined);
+  assert.match((await adapter.listModels('codex'))[0].description, /未披露/);
+  await modalities(['text','image']);
+  const noStore = new plugin.CodexAdapter({ codexHome });
+  assert.match((await noStore.listModels('codex'))[0].description, /附件服务不可用/);
+  assert.deepEqual(await loadModels(codexHome, []), []);
+  const inherited = await loadModels(codexHome, plugin.Config({ models: [{ id: model.slug }] }).models);
+  assert.deepEqual(inherited[0].efforts, ['high']);
+  assert.deepEqual(inherited[0].inputModalities, ['text','image']);
+  const override = await loadModels(codexHome, [{ id: model.slug, inputModalities: ['text'] }]);
+  assert.equal(override[0].modalitySource, 'config');
+  assert.deepEqual(override[0].inputModalities, ['text']);
 });

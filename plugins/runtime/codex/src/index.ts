@@ -1,7 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
 import Schema from '@deepseek-ai/schemastery';
-import { LlmAdapter, LlmError, ReasoningEffortId, attributionHeaders } from '@deepseek-ai/dsh-llm';
+import { LlmAdapter, LlmError, attributionHeaders } from '@deepseek-ai/dsh-llm';
 import type { BuiltinLlmFailureCode, GenerateOptions, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
+import { describeModel } from './catalog.js';
 import { codexHome, loadCredential, loadModels } from './local.js';
 import type { Config as PluginConfig } from './local.js';
 import { systemProxy } from './proxy.js';
@@ -19,7 +20,8 @@ export const Config: Schema<PluginConfig> = Schema.object({
   codexPath: Schema.string().description('额度查询使用的 Codex CLI 绝对路径，省略时从 PATH 查找。'),
   models: Schema.union([Schema.const(undefined), Schema.array(Schema.object({
     id: Schema.string().required(), name: Schema.string(),
-    contextWindow: Schema.number().min(1), efforts: Schema.array(Schema.string()), defaultEffort: Schema.string(),
+    inputModalities: Schema.union([Schema.const(undefined), Schema.array(Schema.string())]),
+    contextWindow: Schema.number().min(1), efforts: Schema.union([Schema.const(undefined), Schema.array(Schema.string())]), defaultEffort: Schema.string(),
   }))]).description('显式模型列表；省略时读取 Codex models_cache.json'),
 });
 export const RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
@@ -27,7 +29,8 @@ export class CodexAdapter extends LlmAdapter {
   private readonly home: string;
   private readonly config: PluginConfig;
   private readonly lifetime = new AbortController();
-  constructor(config: PluginConfig = {}, private readonly fetchImpl: typeof fetch = fetch) {
+  constructor(config: PluginConfig = {}, private readonly fetchImpl: typeof fetch = fetch,
+    private readonly attachments: () => Context['attachments'] | undefined = () => undefined) {
     super(); this.config = structuredClone(config); this.home = codexHome(this.config);
     if (config.codexPath && !isAbsolute(config.codexPath)) {
       throw new LlmError('Codex CLI 路径必须为绝对路径。', 'INVALID_CONFIG');
@@ -51,11 +54,11 @@ export class CodexAdapter extends LlmAdapter {
     return await this.connected() ? this.modelCatalog(provider) : [];
   }
   private async modelCatalog(provider: string): Promise<LlmResolvedModelInfo[]> {
-    return (await loadModels(this.home, this.config.models)).map(m => ({ provider, id: m.id, name: m.name ?? m.id,
-      inputModalities: ['text'], ...(m.contextWindow ? { context: { contextWindow: m.contextWindow } } : {}),
-      ...(m.efforts?.length ? { reasoning: {
-        ...(m.defaultEffort && m.efforts.includes(m.defaultEffort) ? { defaultEffort: ReasoningEffortId(m.defaultEffort) } : {}),
-        efforts: m.efforts.map(e => ({ id: ReasoningEffortId(e), name: e })) } } : {}) }));
+    const models = await loadModels(this.home, this.config.models);
+    const hasAttachments = !!this.attachments();
+    return models
+      .filter(model => model.inputModalities === undefined || model.inputModalities.includes('text'))
+      .map(model => describeModel(provider, model, hasAttachments));
   }
   override async resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo> {
     signal?.throwIfAborted();
@@ -81,7 +84,12 @@ export class CodexAdapter extends LlmAdapter {
       if (options.reasoningEffort && !model.reasoning?.efforts.some(e => e.id === options.reasoningEffort)) {
         throw new LlmError('所选模型未声明该推理强度。', 'UNSUPPORTED_OPTION');
       }
-      const body = buildRequest(options);
+      const attachments = this.attachments();
+      const readImage = model.inputModalities?.includes('image') && attachments
+        ? (ref: Parameters<typeof attachments.readImageRequest>[0]) => attachments.readImageRequest(
+          ref, this.imageRequestTarget(options.provider, options.model, ref), signal,
+        ) : undefined;
+      const body = await buildRequest(options, readImage);
       const credential = await loadCredential(this.home);
       signal.throwIfAborted();
       if (this.fetchImpl === fetch) dispatcher = await systemProxy(new URL(RESPONSES_URL).hostname, signal);
@@ -107,7 +115,7 @@ export class CodexAdapter extends LlmAdapter {
   }
 }
 export function apply(ctx: Context, config: PluginConfig = {}): void {
-  const adapter = new CodexAdapter(config);
+  const adapter = new CodexAdapter(config, fetch, () => ctx.get('attachments'));
   ctx.effect(() => () => adapter.dispose());
   ctx.llm.registerAdapter(['codex'], adapter);
   ctx.provide('dshCodexAccountUsage', {

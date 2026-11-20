@@ -8,11 +8,11 @@
   "surfaces": {
     "web": {
       "status": "verified",
-      "evidence": "2026-11-19，macOS / Chrome 157.0.8103.79，DSH 0.2.2-rc.5。pnpm --filter dsh-model-picker test:host 验证 0.1.6 的应用图标、宽屏双列与窄屏单列、键盘展开、刷新、合成 Codex 登录和 Qoder 绑定与解绑，以及模型选择器与热启停。"
+      "evidence": "2026-11-20，0.1.7 在隔离 Web 验证模型目录刷新后图片标记自动撤回与恢复，原生 DeepSeek 兼容测试通过。\n2026-11-19，macOS / Chrome 157.0.8103.79，DSH 0.2.2-rc.5。pnpm --filter dsh-model-picker test:host 验证 0.1.6 的应用图标、宽屏双列与窄屏单列、键盘展开、刷新、合成 Codex 登录和 Qoder 绑定与解绑，以及模型选择器与热启停。"
     },
     "desktop": {
       "status": "verified",
-      "evidence": "2026-11-20，macOS Desktop 0.2.2-rc.5，通过插件页安装 0.1.6，管理页显示 Codex 登录与可用模型。在 GPT-6.2-Astra 会话的原生 Effort 菜单核对六个实际档位及当前 high。隔离 Web 验证跨模型切换时隐藏无档位模型的菜单并清除旧值。\n2026-11-19，macOS Desktop 0.2.2-rc.5，使用桌面 CLI 同名更新至 0.1.6，搭配 dsh-qoder 0.1.5。实测线缆入口、两个应用图标、点击切换详情及刷新，检测到本机 Codex 登录与 Qoder CLI 缺失。"
+      "evidence": "2026-11-20，0.1.7 已在日常 Desktop 验证管理页和输入框显示 Astra 的图片能力。\n2026-11-20，macOS Desktop 0.2.2-rc.5，通过插件页安装 0.1.6，管理页显示 Codex 登录与可用模型。在 GPT-6.2-Astra 会话的原生 Effort 菜单核对六个实际档位及当前 high。隔离 Web 验证跨模型切换时隐藏无档位模型的菜单并清除旧值。\n2026-11-19，macOS Desktop 0.2.2-rc.5，使用桌面 CLI 同名更新至 0.1.6，搭配 dsh-qoder 0.1.5。实测线缆入口、两个应用图标、点击切换详情及刷新，检测到本机 Codex 登录与 Qoder CLI 缺失。"
     },
     "headless": {
       "status": "unsupported"

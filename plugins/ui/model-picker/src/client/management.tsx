@@ -8,8 +8,8 @@ import { ManagementIcon } from './icons.js';
 
 type Props = PropsLocale<'modelPicker'> & PropsRenderSlots<'modelPicker.connections'> & { ctx: Context };
 type Groups = ReturnType<typeof groupProviders>;
-type Snapshot = { groups: Groups; codex: boolean | null; catalogError: boolean; connectionError: boolean };
-const empty: Snapshot = { groups: [], codex: null, catalogError: false, connectionError: false };
+type Snapshot = { groups: Groups; failures: readonly { id: string; name: string; message: string }[]; codex: boolean | null; catalogError: boolean; connectionError: boolean };
+const empty: Snapshot = { groups: [], failures: [], codex: null, catalogError: false, connectionError: false };
 
 export function ModelManagement({ ctx, t, renderSlot }: Props) {
   const [snapshot, setSnapshot] = useState(empty);
@@ -32,6 +32,7 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
       const response = connection.status === 'fulfilled' ? connection.value : null;
       setSnapshot({
         groups: value ? groupProviders(value.groups.filter(group => group.models.length > 0)) : [],
+        failures: value?.failures ?? [],
         codex: response?.ok ? response.value : null,
         catalogError: value === null,
         connectionError: !response?.ok,
@@ -97,7 +98,8 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
       <section className="dsh-model-management-section" aria-label={t('availableCatalog')}>
         <h2>{t('availableCatalog')}</h2>
         {snapshot.catalogError && <p role="alert">{t('catalogFailed')}</p>}
-        {!snapshot.catalogError && !checking && snapshot.groups.length === 0 && <p>{t('empty')}</p>}
+        {snapshot.failures.map(failure => <p role="status" key={failure.id}>{failure.name} · {failure.message}</p>)}
+        {!snapshot.catalogError && !checking && snapshot.groups.length === 0 && snapshot.failures.length === 0 && <p>{t('empty')}</p>}
         {snapshot.groups.length > 0 && <div className="dsh-model-management-catalog">
           {snapshot.groups.map(group => <details key={group.id}>
             <summary>
@@ -108,7 +110,12 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
             </summary>
             {group.routes.map(route => <div key={route.id} className="dsh-model-management-route">
               {group.routes.length > 1 && <h3>{route.name}</h3>}
-              <ul>{route.models.map(model => <li key={model.id}>{model.name}</li>)}</ul>
+              <ul>{route.models.map(model => <li key={model.id}>
+                <strong>{model.name}</strong>
+                {model.badge && <span className="dsh-model-input-label">{ctx.locale.resolveText(model.badge.text)}</span>}
+                {model.description && <p>{model.description}</p>}
+                {model.reasoning && <p>{t('effortLevels', { levels: model.reasoning.efforts.map(e => e.name).join(' · ') })}</p>}
+              </li>)}</ul>
             </div>)}
           </details>)}
         </div>}

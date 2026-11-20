@@ -2,7 +2,7 @@
 
 通过本机 Codex CLI 的 OAuth 登录，将 Codex 模型作为 `codex` 提供者接入 DSH 原生循环。DSH 继续负责工具执行和审批，插件向 Codex Responses 端点发送模型请求。
 
-首版提供文本与推理流、工具调用和结果回放、token 用量、推理强度选择、请求取消及卸载清理。仅声明文本输入；不支持图片、文件原生上传、temperature、stop 和内置登录页面。Codex 后端管理输出预算，DSH 的 maxTokens 不转换为请求字段。
+提供文本与推理流、工具调用和结果回放、token 用量、推理强度选择、请求取消及卸载清理。模型声明图片输入且宿主提供附件服务时，可以直接发送截图。插件读取 DSH 规范化后的图片，按消息中的顺序发送文字与图片。音频、原生文件上传、temperature 和 stop 暂未接入。Codex 后端管理输出预算，DSH 的 maxTokens 不转换为请求字段。
 
 ## 前提与安装
 
@@ -19,7 +19,7 @@ pnpm --filter dsh-codex pack --pack-destination /tmp
 在目标 DSH 环境运行（替换 tarball 路径）：
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-codex-0.1.6.tgz
+dsh plugin --profile web add /tmp/dsh-codex-0.1.7.tgz
 ```
 
 重启后在模型选择器选择 **Codex** 下的模型。Desktop 应在桌面应用的插件页安装该 tarball；桌面版为插件兼容基线，随实际桌面版升级验证，不通过版本豁免安装。包保持 private，未发布 npm。
@@ -30,7 +30,7 @@ dsh plugin --profile web add /tmp/dsh-codex-0.1.6.tgz
 
 默认目录取 `CODEX_HOME`，未设置时取 `~/.codex`。只读 `auth.json` 的 OAuth access token 和 account ID，每次请求重新读取；不保存副本、不读取 refresh token、不改写登录文件。401/403 提示重新执行 `codex login`，刷新由 Codex CLI 管理。远程宿主读取的是宿主机器的目录。
 
-默认从 `models_cache.json` 读取可见且 `supported_in_api=true` 的模型、上下文、支持的推理强度与模型声明的默认档位。缓存不存在时模型列表为空，不猜测账号可用模型。先运行 Codex 更新缓存并重启 DSH，或在插件配置中显式填写账号可用的模型：
+默认从 `models_cache.json` 读取可见且 `supported_in_api=true` 的对话模型。目录刷新时重新核对输入模态、模型说明、上下文、推理档位、档位说明及默认值。能力说明标注目录中的最大上下文、有效比例、默认摘要、详略、服务档位和接入限制。请求采用模型的默认摘要策略。未披露输入模态的模型保留文本对话入口。缓存不存在时模型列表为空。也可在插件配置中显式填写账号可用的模型。
 
 ```yaml
 - insert:
@@ -41,12 +41,13 @@ dsh plugin --profile web add /tmp/dsh-codex-0.1.6.tgz
         models:
           - id: <账号可用的模型ID>
             name: Codex Model
-            # contextWindow 和 efforts 可选，按实际模型能力填写
+            # 按实际能力覆盖同 ID 缓存中的模态、contextWindow、efforts 和 defaultEffort
+            inputModalities: [text, image]
 ```
 
 macOS 上，DSH 已配置的代理环境变量优先。若没有这些变量，推理请求读取系统手动 HTTPS 代理并使用 CONNECT 连接到 Codex。支持主机例外名单；使用 PAC 或自动发现的网络可通过宿主的 HTTPS_PROXY 配置代理。
 
-此片段用于修改安装后已有行，不要再添加同 ID 的第二行。`models` 显式配置优先于缓存，空数组表示不提供模型。不要将 token 写入 patch、日志或源码。
+此片段用于修改安装后已有行。`models` 决定可选模型和顺序，显式字段覆盖同 ID 缓存中的字段，空数组表示不提供模型。凭据由 Codex CLI 管理。
 
 ## 验证与边界
 

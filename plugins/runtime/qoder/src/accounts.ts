@@ -11,7 +11,51 @@ import type { AccountChange, AccountView } from './remote.js';
 interface CatalogEntry {
   key: string;
   expires: number;
-  models: Promise<LlmResolvedModelInfo[]>;
+  models: Promise<QoderModel[]>;
+}
+
+interface QoderModel extends LlmResolvedModelInfo {
+  maxOutputTokens?: number;
+}
+
+function positive(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function resolveCatalogModel(id: string, provider: string, model: ModelInfo, auth: AuthOptions['type'], hasAttachments: boolean): QoderModel {
+  const efforts = Array.isArray(model.efforts)
+    ? [...new Set(model.efforts.flatMap(level => typeof level === 'string' && level.trim() ? [level.trim()] : []))]
+    : [];
+  const defaultEffort = model.defaultEffort?.trim();
+  const acceptsImages = model.isVl === true && hasAttachments;
+  const catalog = auth === 'qodercli' ? 'Qoder CLI 登录目录' : 'Qoder PAT 账号目录';
+  const vision = model.isVl === true
+    ? (hasAttachments ? '支持图片输入' : '支持图片输入，当前宿主缺少附件服务')
+    : model.isVl === false ? '仅支持文本输入' : '未声明图片能力，当前接入仅提供文本输入';
+  const context = model.defaultContextWindow;
+  const tiers = Array.isArray(model.availableContextWindows) ? model.availableContextWindows.filter(positive) : [];
+  const hasWindow = positive(context) && (!tiers.length || tiers.includes(context));
+  const details = [model.description?.trim(), catalog + ' · ' + vision,
+    hasWindow && '默认上下文 ' + context,
+    tiers.length && '厂商上下文档位 ' + tiers.join(' / '),
+    positive(model.maxInputTokens) && '最大输入 ' + model.maxInputTokens,
+    positive(model.maxOutputTokens) && '最大输出 ' + model.maxOutputTokens];
+  return {
+    provider, id, name: model.displayName?.trim() || id,
+    ...(efforts.length > 0 && { reasoning: {
+      efforts: efforts.map(name => {
+        const description = model.thinking_config?.enabled?.efforts?.[name]?.description;
+        return { id: ReasoningEffortId(name), name, ...(description && { description }) };
+      }),
+      ...(defaultEffort && efforts.includes(defaultEffort) && { defaultEffort: ReasoningEffortId(defaultEffort) }),
+    } }),
+    inputModalities: acceptsImages ? ['text', 'image'] : ['text'],
+    badge: acceptsImages ? { tone: 'info', text: { en: 'Image input', zh: '可发图片' } }
+      : { tone: 'neutral', text: { en: 'Text input', zh: '仅文本' } },
+    description: details.filter(Boolean).join(' · '),
+    ...(hasWindow && { context: { contextWindow: context } }),
+    ...(positive(model.maxOutputTokens) && { maxOutputTokens: model.maxOutputTokens }),
+  };
 }
 
 export class QoderAccounts {
@@ -24,6 +68,7 @@ export class QoderAccounts {
     private readonly resolveSecret: (ref: string) => Promise<string | undefined>,
     private readonly readCatalog: (auth: AuthOptions) => Promise<ModelInfo[]>,
     credentials: () => CredentialProvider | undefined,
+    private readonly hasAttachments: () => boolean,
   ) {
     this.store = new AccountStore(accounts, credentials, resolveSecret);
     for (const account of this.store.initial()) this.accounts.set(accountRoute(account.id), account);
@@ -62,9 +107,10 @@ export class QoderAccounts {
     throw new LlmError('请在 DSH 设置 → Qoder 账号中绑定所选账号。', 'MISSING_CREDENTIAL');
   }
 
-  async listModels(provider: string, auth: AuthOptions): Promise<LlmResolvedModelInfo[]> {
+  async listModels(provider: string, auth: AuthOptions): Promise<QoderModel[]> {
     const token = auth.type === 'accessToken' && typeof auth.accessToken === 'string' ? auth.accessToken : undefined;
-    const key = token ? createHash('sha256').update(token).digest('hex') : 'cli';
+    const hasAttachments = this.hasAttachments();
+    const key = (token ? createHash('sha256').update(token).digest('hex') : 'cli') + (hasAttachments ? ':image' : ':text');
     const current = this.cache.get(provider);
     if (current?.key === key && current.expires > Date.now()) return current.models;
     const enabled = this.accounts.get(provider)?.models;
@@ -73,20 +119,11 @@ export class QoderAccounts {
       expires: Infinity,
       models: this.readCatalog(auth).then(catalog => {
         entry.expires = Date.now() + (catalog.length ? 60_000 : 5_000);
-        const models = new Map<string, LlmResolvedModelInfo>();
+        const models = new Map<string, QoderModel>();
         for (const model of catalog) {
           const id = model.value?.trim();
           if (!id || model.isEnabled === false || (enabled && !enabled.includes(id))) continue;
-          const efforts = [...new Set((model.efforts ?? []).map(level => level.trim()).filter(Boolean))];
-          const defaultEffort = model.defaultEffort?.trim();
-          models.set(id, {
-            provider, id, name: model.displayName?.trim() || id,
-            ...(efforts.length > 0 && { reasoning: {
-              efforts: efforts.map(name => ({ id: ReasoningEffortId(name), name })),
-              ...(defaultEffort && efforts.includes(defaultEffort) && { defaultEffort: ReasoningEffortId(defaultEffort) }),
-            } }),
-            inputModalities: ['text'], description: model.description?.trim() || undefined,
-          });
+          models.set(id, resolveCatalogModel(id, provider, model, auth.type, hasAttachments));
         }
         return [...models.values()];
       }).catch(error => {

@@ -9,6 +9,8 @@
 - **Qoder** 按所选账号展示套餐、额外购买和组织 Credits。连接卡片需 [dsh-qoder 0.1.5](../../runtime/qoder/README.md)。
 - 未返回额度或余额时，显示「用量暂不可用」。选模型照常工作。
 
+模型列表和输入框选择器显示当前路由提供的能力标签。展开管理页的厂商可以查看每个模型的说明、接入限制与推理档位。账号与模型目录变化后，页面重新读取宿主目录。
+
 ## 安装与验证
 
 需要 DSH `0.2.2-rc.5`、Node.js >=24.9.0。该插件可以与 Workbench 独立安装。
@@ -16,7 +18,7 @@
 ```sh
 pnpm --filter dsh-model-picker check
 pnpm --filter dsh-model-picker pack --pack-destination /tmp
-dsh plugin --profile web add /tmp/dsh-model-picker-0.1.6.tgz
+dsh plugin --profile web add /tmp/dsh-model-picker-0.1.7.tgz
 ```
 
 Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filter dsh-model-picker test:host`，需要本机 Chrome 或 `DSH_TEST_BROWSER_EXECUTABLE`。测试使用合成输入和临时 profile。
