@@ -38,8 +38,5 @@ export function ActivityBar({ usePanels, usePanelInfo, selectPanel, renderFactor
         setUnpinned={(id, pinned) => setUnpinned(current => pinned ? current.filter(entry => entry !== id) : [...new Set([...current, id])])}
         t={t} />}
     </div>
-    <div className="dsh-workbench-rail-foot">
-      <span className="dsh-workbench-monogram" aria-hidden="true">DSH</span>
-    </div>
   </nav>;
 }
