@@ -115,6 +115,20 @@ try {
   const beta = tree.locator('[data-row-key="session:workbench-test-beta"]');
   const project = tree.locator('[data-wb-kind="project"]').filter({ has: page.getByRole('button', { name: 'workspace', exact: true }) });
   const child = tree.locator('[data-wb-kind="project"]').filter({ has: page.getByRole('button', { name: 'child-project', exact: true }) });
+  const header = page.locator('[data-window-drag]').filter({ has: page.locator('[data-workbench-brand]') });
+  await header.getByRole('button', { name: 'View activity' }).waitFor();
+  await header.getByRole('button', { name: 'New section', exact: true }).waitFor();
+  await page.mouse.move(1200, 400);
+  const titleBounds = row => row.locator('.wb-tree-label > span').first().boundingBox();
+  const projectTitleBounds = await titleBounds(project);
+  const chatTitleBounds = await titleBounds(alpha);
+  assert.ok(Math.abs(projectTitleBounds.x - chatTitleBounds.x) <= 1, 'project and child chat share a text column');
+  const treeWidths = await tree.evaluate(el => ({ content: el.scrollWidth, viewport: el.clientWidth }));
+  assert.equal(treeWidths.content, treeWidths.viewport, 'idle row actions must not add a horizontal scrollbar');
+  const restWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
+  await alpha.hover();
+  const hoverWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
+  assert.ok(restWidth > hoverWidth, 'inactive rows give trailing action space back to the title');
   const children = row => row.locator('xpath=following-sibling::*[1][@data-wb-project-children]');
   const projectChildren = children(project);
   const ownRows = container => container.locator(':scope > [data-wb-kind="session"]');
@@ -254,7 +268,18 @@ try {
   await children(child).locator('[data-row-key="session:workbench-test-beta"]').waitFor();
   assert.equal(await beta.count(), 1);
   console.log('PASS project sections, nested projects, 10-row limit, pin/unpin, cross-project drag and restart persistence.');
-  await page.getByRole('button', { name: 'Use native workspace list' }).click();
+  const accountMenu = page.locator('[data-slot="settings.launcher"] button[aria-haspopup="menu"]');
+  const toggleView = page.getByRole('button', { name: 'Use native workspace list' });
+  const railBounds = await page.locator('[data-workbench-rail]').boundingBox();
+  for (const control of [toggleView, accountMenu]) {
+    const bounds = await control.boundingBox();
+    assert.ok(Math.abs(bounds.x + bounds.width / 2 - railBounds.x - railBounds.width / 2) < 2,
+      'wide layout centers both footer actions on the activity rail');
+  }
+  await accountMenu.click();
+  await page.getByRole('menuitem', { name: /Settings/ }).waitFor();
+  await page.keyboard.press('Escape');
+  await toggleView.click();
   await tree.waitFor({ state: 'detached' });
   await page.getByRole('button', { name: 'Search sessions' }).waitFor();
   await page.getByRole('button', { name: 'Use workbench project list' }).click();
@@ -262,6 +287,9 @@ try {
   await alpha.getByRole('button', { name: 'Workbench alpha', exact: true }).click();
   console.log('PASS native session alpha is selectable.');
   await alpha.locator('[aria-current="true"]').waitFor();
+  const tabs = page.locator('[data-conversation-tabs]');
+  await tabs.getByRole('tab', { name: 'Trajectory' }).click();
+  await tabs.getByRole('tab', { name: 'Chat', exact: true }).click();
   await beta.getByRole('button', { name: 'Workbench beta', exact: true }).click();
   await beta.locator('[aria-current="true"]').waitFor();
   console.log('PASS switching to native session beta.');
@@ -414,7 +442,10 @@ try {
   await page.locator('[data-sidebar-opener]:visible, [data-sidebar-toggle]:visible').first().click();
   await page.waitForFunction(() => !!document.querySelector('[data-sidebar-collapsed="true"]'));
   assert.ok(await page.locator('[data-workbench-rail]').isVisible());
-  await page.locator('[data-sidebar-opener]:visible, [data-sidebar-toggle]:visible').first().click();
+  await accountMenu.click({ trial: true });
+  await toggleView.click();
+  await page.getByRole('button', { name: 'Search sessions' }).waitFor();
+  await page.getByRole('button', { name: 'Use workbench project list' }).click();
 
   const rail = page.locator('[data-workbench-rail]');
   const homeButton = rail.getByRole('button', { name: 'Conversation', exact: true });
@@ -428,6 +459,7 @@ try {
     assert.ok(await globalPanel.evaluate(panel => Math.abs(panel.getBoundingClientRect().left -
       panel.closest('[data-slot="root"] > div').getBoundingClientRect().left) < 2));
     assert.ok(await rail.isVisible());
+    await accountMenu.click({ trial: true });
   };
   assert.equal(await rail.getByRole('button', { name: 'New session', exact: true }).count(), 0);
   assert.equal(await rail.locator('.dsh-workbench-divider').count(), 0);

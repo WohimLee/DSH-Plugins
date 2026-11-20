@@ -43,7 +43,7 @@ function FolderRows({ folder, t, open }: {
   const name = folder.path.split(/[/\\]/).filter(Boolean).at(-1) || folder.path || t('unknownDirectory');
   return <Branch title={name} detail={folder.path} depth={1} kind="workspace">
     {folder.sessions.slice(0, visible).map(item => <div key={item.id} className="wb-tree-row" data-external-session={item.id}
-      style={{ '--wb-depth': 2 } as CSSProperties}>
+      style={{ '--wb-depth': 1 } as CSSProperties}>
       <button type="button" className="wb-tree-label" title={item.title} onClick={() => { void open(item.id); }}>
         <span>{item.title}</span>{item.archived && <small>{t('externalArchived')}</small>}
       </button>

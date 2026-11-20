@@ -46,6 +46,10 @@ export const workspaceStyles = `
   text-align: start;
   padding: 3px 6px 3px calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px));
 }
+.wb-tree-row:is([data-wb-kind="session"], [data-external-session]) > .wb-tree-label {
+  padding-inline-start: calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px) + 16px + 7px);
+}
+[data-external-branch] > .wb-tree-row .wb-tree-label [aria-hidden] { flex: 0 0 16px; text-align: center; }
 .wb-tree-label span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-archived-title { cursor: default; }
 .wb-tree-label svg { flex: none; }
@@ -84,9 +88,13 @@ export const workspaceStyles = `
 }
 @media (hover: hover) {
   .wb-tree-row:not(:hover):not(:focus-within) .wb-tree-actions .wb-tree-action:not([data-pinned]) {
+    inline-size: 0;
+    overflow: clip;
     opacity: 0;
     pointer-events: none;
   }
+  .wb-tree-row:not(:hover):not(:focus-within) .wb-tree-actions { gap: 0; }
+  .wb-tree-row:not(:hover):not(:focus-within) .wb-tree-actions:not(:has([data-pinned])) { margin-inline-end: 0; }
 }
 .wb-tree-show-more {
   margin-inline-start: calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px));

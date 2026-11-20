@@ -1,4 +1,7 @@
+import { conversationStyles } from './conversation.js';
+
 export const controlStyles = `
+${conversationStyles}
 .wb-control {
   appearance: none; border: 1px solid transparent; border-radius: 7px; padding: 5px 8px;
   font: inherit; color: inherit; background: var(--dsw-alias-background-hover, #8882);
@@ -7,10 +10,20 @@ export const controlStyles = `
 .wb-control:hover, .wb-control[aria-pressed="true"] { background: var(--dsw-alias-background-active, #8883); }
 .wb-control:disabled { opacity: .45; cursor: default; }
 .wb-control:focus-visible { outline: 2px solid var(--dsw-alias-accent-primary, #4c95f6); }
-.wb-section-action { display: flex; align-items: stretch; gap: 6px; inline-size: 100%; }
-.wb-section-session { flex: 1; min-inline-size: 0; }
-.wb-section-session button { inline-size: 100%; }
-.wb-section-trigger { display: grid; place-items: center; flex: none; }
+.wb-section-session { display: flex; inline-size: 100%; min-inline-size: 0; }
+/* Style the native session trigger and preserve its shortcut hint and event handling. */
+html[data-dsh-workbench] .wb-section-session button:has(> span > span > svg) {
+  width: 100%; height: 32px; justify-content: flex-start; padding: 4px 6px; border: 0;
+  background: transparent; font-weight: 400;
+}
+html[data-dsh-workbench] .wb-section-session button > span > span:has(> svg) { justify-content: flex-start; gap: 8px; }
+html[data-dsh-workbench] .wb-section-session button:has(> span > span > svg):hover {
+  background: var(--dsw-alias-background-hover, #8882);
+}
+.wb-section-action { display: flex; align-items: center; gap: 2px; flex: none; }
+.wb-section-trigger { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; background: transparent; color: var(--dsw-alias-label-secondary, #999); }
+html[data-dsh-workbench] [data-window-drag]:has([data-workbench-brand]) { height: 48px; gap: 4px; }
+html[data-dsh-workbench] [data-slot="sidebar.brand.name"] [data-workbench-brand] { font-size: 18px; }
 .wb-inline-name input, .wb-directory input, .wb-rename-session input, .wb-guide input {
   border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 7px; color: inherit;
   background: var(--dsw-alias-background-hover, #8882); padding: 7px 9px; font: inherit; min-inline-size: 0;

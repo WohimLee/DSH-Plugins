@@ -325,7 +325,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           }} />}
         </div>}
       </div>
-      {expanded && <ProjectChildren project={id} depth={depth + 1} sessions={rows(id, depth + 1)} showMoreLabel={t('showMore')}>
+      {expanded && <ProjectChildren project={id} depth={depth + 1} sessions={rows(id, depth)} showMoreLabel={t('showMore')}>
         {draft?.kind === 'project' && draft.parent === id && nameDraft(draft, depth + 1)}
         {(grouped.get(id) ?? []).map(child => projectRow(child, id, depth + 1))}
       </ProjectChildren>}
