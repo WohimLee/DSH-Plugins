@@ -2,6 +2,14 @@
 
 本文件叠加根 AGENTS。先查 [分类](../docs/plugin-categories.md)、[兼容](../docs/compatibility.md)和[测试](../docs/testing.md)。
 
+## 按改动安排岗位
+
+立项或接手改动时，列出受影响的插件，逐个读取已有的局部 `AGENTS.md`。按用户流程和技术边界从[团队分工](../docs/team.md)选择岗位，确定各岗位何时参与、向谁交付什么。没有局部文件时，直接按本次改动判断。新增专业需求可在本次安排，反复出现且为该插件特有时再写入局部约定。
+
+跨插件任务共用一名交付负责人，各参与者约定接口与分工，由负责人跟进完整用户流程。现有例子见 [Workbench](ui/workbench/AGENTS.md) 与 [Model Picker](ui/model-picker/AGENTS.md)。
+
+## 开发与交付
+
 - 开发每个新插件前，先完成 [源码组织评估](../docs/architecture.md#新插件源码组织评估)；创建后在插件 README 记录 workspace 或 Git submodule 的选择、事实依据和重新评估条件，不要求每个插件单建设计笔记。
 - 开发前运行 `pnpm check:dsh-version` 核对仓库基线；采用新 Desktop 作为开发基线时，通过 `--require-desktop` 或 `--desktop-version <实际版本>` 核对。发布包的 `engines.dsh` 根据宿主契约和跨版本验证声明。Desktop 落在该范围内且原产物验证通过时，继续使用原包。
 - 插件路径固定为 `<category>/<slug>`，包名为 `dsh-<slug>`；一个插件只放一个类别。
