@@ -40,7 +40,10 @@ export async function loadCredential(home: string): Promise<{ accessToken: strin
   return { accessToken: tokens.access_token, accountId: tokens.account_id };
 }
 export async function loadModels(home: string, configured?: ModelConfig[]): Promise<CatalogModel[]> {
-  const cache = record(await readJson(join(home, 'models_cache.json')));
+  return modelsFromCache(await readJson(join(home, 'models_cache.json')), configured);
+}
+export function modelsFromCache(value: unknown, configured?: ModelConfig[]): CatalogModel[] {
+  const cache = record(value);
   const models = new Map<string, CatalogModel>();
   for (const raw of Array.isArray(cache.models) ? cache.models : []) {
     const m = record(raw);

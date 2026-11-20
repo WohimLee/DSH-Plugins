@@ -156,6 +156,38 @@ test('prepared calls retain catalog capabilities when the CLI cache changes', as
   assert.equal((await collect(prepared.stream({ ...request, reasoningEffort: 'high' }))).at(-1).reason.kind, 'stop');
   assert.equal((await collect(adapter.stream(request))).at(-1).reason.failure.code, 'UNKNOWN_MODEL');
 });
+
+test('an older CLI cannot remove models from the newer catalog, including after restart', async t => {
+  const home = await fixture(t);
+  const path = join(home, 'models_cache.json');
+  const model = (slug, visibility = 'list') => ({ slug, visibility, supported_in_api: true,
+    input_modalities: ['text', 'image'], supported_reasoning_levels: [{ effort: 'high' }], base_instructions: 'not catalog metadata' });
+  const write = (version, minute, models) => writeFile(path, JSON.stringify({
+    client_version: version, fetched_at: `2026-11-20T07:${minute}:00Z`, models,
+  }));
+  const fallback = model('older-model');
+  const target = model(request.model);
+  const snapshotRoot = join(home, 'dsh-cache');
+  const makeAdapter = (config = {}) => new plugin.CodexAdapter({ codexHome: home, ...config },
+    async (_url, init) => {
+      assert.equal(JSON.parse(init.body).reasoning.effort, 'high');
+      return new Response(body([event('response.completed')]));
+    }, () => undefined, snapshotRoot);
+  const adapter = makeAdapter();
+  await write('0.169.0', '01', [target, fallback]);
+  assert.deepEqual((await adapter.listModels('codex')).map(model => model.id), [target.slug, fallback.slug]);
+  await write('0.164.0', '02', [fallback]);
+  assert.deepEqual((await adapter.listModels('codex')).map(model => model.id), [target.slug, fallback.slug]);
+  assert.equal((await collect(makeAdapter().stream({ ...request, reasoningEffort: 'high' }))).at(-1).reason.kind, 'stop');
+  assert.deepEqual(await makeAdapter({ models: [] }).listModels('codex'), []);
+
+  await write('0.169.0', '03', [model(target.slug, 'hide'), fallback]);
+  await assert.rejects(adapter.prepareCall('codex', target.slug), { code: 'UNKNOWN_MODEL' });
+  await write('0.164.0', '04', [target, fallback]);
+  await assert.rejects(makeAdapter().prepareCall('codex', target.slug), { code: 'UNKNOWN_MODEL' });
+  await writeFile(join(home, 'auth.json'), JSON.stringify({ tokens: { access_token: 'another-token', account_id: 'other-account' } }));
+  assert.deepEqual((await adapter.listModels('codex')).map(model => model.id), [target.slug, fallback.slug]);
+});
 test('stream cancellation and early consumer return release the response reader', async t => {
   const home = await fixture(t);
   let cancelled = false;

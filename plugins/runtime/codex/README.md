@@ -19,7 +19,7 @@ pnpm --filter dsh-codex pack --pack-destination /tmp
 在目标 DSH 环境运行（替换 tarball 路径）：
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-codex-0.1.8.tgz
+dsh plugin --profile web add /tmp/dsh-codex-0.1.9.tgz
 ```
 
 重启后在模型选择器选择 **Codex** 下的模型。Desktop 应在桌面应用的插件页安装该 tarball；桌面版为插件兼容基线，随实际桌面版升级验证，不通过版本豁免安装。包保持 private，未发布 npm。
@@ -30,7 +30,9 @@ dsh plugin --profile web add /tmp/dsh-codex-0.1.8.tgz
 
 默认目录取 `CODEX_HOME`，未设置时取 `~/.codex`。只读 `auth.json` 的 OAuth access token 和 account ID，每次请求重新读取；不保存副本、不读取 refresh token、不改写登录文件。401/403 提示重新执行 `codex login`，刷新由 Codex CLI 管理。远程宿主读取的是宿主机器的目录。
 
-默认从 `models_cache.json` 读取可见且 `supported_in_api=true` 的对话模型。目录刷新时重新核对输入模态、模型说明、上下文、推理档位、档位说明及默认值。能力说明标注目录中的最大上下文、有效比例、默认摘要、详略、服务档位和接入限制。请求采用模型的默认摘要策略。未披露输入模态的模型保留文本对话入口。缓存不存在时模型列表为空。也可在插件配置中显式填写账号可用的模型。
+默认从 `models_cache.json` 读取可见且 `supported_in_api=true` 的对话模型。目录刷新时重新核对输入模态、模型说明、上下文、推理档位、档位说明及默认值。能力说明标注目录中的最大上下文、有效比例、默认摘要、详略、服务档位和接入限制。请求采用模型的默认摘要策略。未披露输入模态的模型保留文本对话入口。也可在插件配置中显式填写账号可用的模型。
+
+当多个版本的 Codex 共用登录目录时，DSH 按账号和 Codex 配置目录在 `$DSH_HOME/cache/dsh-codex`（默认 `~/.dsh/cache/dsh-codex`）保存带版本与时间的模型元数据。较旧客户端覆盖共享缓存时，DSH 继续使用已取得的较新目录。同版本后续刷新或更高版本可更新目录，显式 `models` 配置继续决定可选模型及顺序。若有意降级 Codex，可在关闭 DSH 后清除上述 DSH 模型缓存目录以重新建档。
 
 ```yaml
 - insert:

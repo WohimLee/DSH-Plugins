@@ -3,14 +3,16 @@ import Schema from '@deepseek-ai/schemastery';
 import { LlmAdapter, LlmError, attributionHeaders } from '@deepseek-ai/dsh-llm';
 import type { BuiltinLlmFailureCode, GenerateOptions, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { describeModel } from './catalog.js';
-import { codexHome, loadCredential, loadModels } from './local.js';
+import { codexHome, loadCredential, modelsFromCache } from './local.js';
 import type { Config as PluginConfig } from './local.js';
+import { ModelCache } from './model-cache.js';
 import { systemProxy } from './proxy.js';
 import { fetch as proxyFetch, type ProxyAgent } from 'undici';
 import { buildRequest } from './request.js';
 import { parseStream } from './stream.js';
 import { readCodexUsage } from './usage.js';
 import { unwatchFile, watchFile } from 'node:fs';
+import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 export type { Config as PluginConfig } from './local.js';
 export const name = 'dsh-codex';
@@ -28,10 +30,13 @@ export const RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
 export class CodexAdapter extends LlmAdapter {
   private readonly home: string;
   private readonly config: PluginConfig;
+  private readonly cache: ModelCache;
   private readonly lifetime = new AbortController();
   constructor(config: PluginConfig = {}, private readonly fetchImpl: typeof fetch = fetch,
-    private readonly attachments: () => Context['attachments'] | undefined = () => undefined) {
+    private readonly attachments: () => Context['attachments'] | undefined = () => undefined,
+    snapshotRoot?: string) {
     super(); this.config = structuredClone(config); this.home = codexHome(this.config);
+    this.cache = new ModelCache(this.home, snapshotRoot);
     if (config.codexPath && !isAbsolute(config.codexPath)) {
       throw new LlmError('Codex CLI 路径必须为绝对路径。', 'INVALID_CONFIG');
     }
@@ -51,10 +56,11 @@ export class CodexAdapter extends LlmAdapter {
   dispose(): void { this.lifetime.abort(); }
   override providerInfo(provider: string) { return { id: provider, name: 'Codex' }; }
   override async listModels(provider: string): Promise<LlmResolvedModelInfo[]> {
-    return await this.connected() ? this.modelCatalog(provider) : [];
+    const credential = await loadCredential(this.home).catch(() => undefined);
+    return credential ? this.modelCatalog(provider, credential.accountId) : [];
   }
-  private async modelCatalog(provider: string): Promise<LlmResolvedModelInfo[]> {
-    const models = await loadModels(this.home, this.config.models);
+  private async modelCatalog(provider: string, accountId: string): Promise<LlmResolvedModelInfo[]> {
+    const models = modelsFromCache(await this.cache.read(accountId), this.config.models);
     const hasAttachments = !!this.attachments();
     return models
       .filter(model => model.inputModalities === undefined || model.inputModalities.includes('text'))
@@ -62,8 +68,8 @@ export class CodexAdapter extends LlmAdapter {
   }
   override async resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo> {
     signal?.throwIfAborted();
-    await loadCredential(this.home);
-    const info = (await this.modelCatalog(provider)).find(m => m.id === model);
+    const { accountId } = await loadCredential(this.home);
+    const info = (await this.modelCatalog(provider, accountId)).find(m => m.id === model);
     signal?.throwIfAborted();
     if (!info) throw new LlmError('Codex 模型不在本地目录中，请更新 Codex 模型缓存或配置 models。', 'UNKNOWN_MODEL');
     return info;
@@ -115,7 +121,8 @@ export class CodexAdapter extends LlmAdapter {
   }
 }
 export function apply(ctx: Context, config: PluginConfig = {}): void {
-  const adapter = new CodexAdapter(config, fetch, () => ctx.get('attachments'));
+  const snapshotRoot = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'cache', 'dsh-codex');
+  const adapter = new CodexAdapter(config, fetch, () => ctx.get('attachments'), snapshotRoot);
   ctx.effect(() => () => adapter.dispose());
   ctx.llm.registerAdapter(['codex'], adapter);
   ctx.provide('dshCodexAccountUsage', {
@@ -123,9 +130,18 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
     connected: () => adapter.connected(),
   });
   const files = ['auth.json', 'models_cache.json'].map(file => join(codexHome(config), file));
-  const refresh = () => { ctx.emit('llm/models-updated', 'codex'); };
   ctx.effect(() => {
+    let active = true;
+    const refresh = () => {
+      void adapter.listModels('codex').catch(() => undefined).then(() => {
+        if (active) ctx.emit('llm/models-updated', 'codex');
+      });
+    };
     for (const path of files) watchFile(path, { persistent: false, interval: 1000 }, refresh);
-    return () => { for (const path of files) unwatchFile(path, refresh); };
+    refresh();
+    return () => {
+      active = false;
+      for (const path of files) unwatchFile(path, refresh);
+    };
   });
 }
