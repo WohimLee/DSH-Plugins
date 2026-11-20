@@ -10,11 +10,16 @@ function value<T>(result: RemoteResult<T>): T {
 }
 
 export function workspaceCommands(ctx: Context, signal: AbortSignal) {
+  // The local Desktop renderer exposes the same window-owned chooser used by DSH.
+  const desktopPicker = (globalThis as typeof globalThis & {
+    __DSH_DIRECTORY_PICKER__?: { pick(): Promise<string | null> };
+  }).__DSH_DIRECTORY_PICKER__;
   const renameSession = async (id: SessionId, name: string) => {
     value(await ctx.remote.session.rename({ sessionId: id, title: name }));
     await ctx.sessions.refresh();
   };
   return {
+    desktopPicker,
     async listDirectory(path: string | undefined, request: AbortSignal) {
       const result = await ctx.remote.directoryPicker.list(path, AbortSignal.any([signal, request]));
       if (!result.ok && result.error.code === 'directory-picker/unavailable') {

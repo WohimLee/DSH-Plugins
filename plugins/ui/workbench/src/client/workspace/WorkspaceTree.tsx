@@ -90,6 +90,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const workspaces = useWorkspaces(state => state);
   const onConversation = usePanelInfo(info => info.activePanelId === null);
   useEffect(() => { if (!onConversation) closeMenu(); }, [onConversation, closeMenu]);
+  const canPickDirectory = useRemoteAccess('directoryPicker/pick');
   const canAdd = useRemoteAccess('workspace/create');
   const canCreateSession = useRemoteAccess('session/create');
   const { bindScrollerRef } = useSectionScroller();
@@ -374,7 +375,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     {directory && <DirectoryDialog initial={directory.initial} list={commands.listDirectory} pick={commands.pickDirectory}
       t={t} cancel={() => { directory.cancel?.(); setDirectory(undefined); }} confirm={directory.confirm} />}
     {editingProject && <EditProjectDialog key={editId} t={t} initial={editingProject.title} root={editingProject.path}
-      folders={tree.sourceFolders?.[editingProject.workspaceId] ?? [editingProject.path]} commands={commands}
+      canPickDirectory={canPickDirectory} folders={tree.sourceFolders?.[editingProject.workspaceId] ?? [editingProject.path]} commands={commands}
       close={() => setEditId(undefined)} remove={() => removeProject(editingProject.workspaceId)}
       save={async (title, paths) => {
         const id = editingProject.workspaceId;

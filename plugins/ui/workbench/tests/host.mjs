@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -166,6 +166,13 @@ try {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await projectEditor.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'edit-project.png') });
   }
+  const folderRow = projectEditor.locator('.wb-folder-row').first();
+  await folderRow.hover();
+  const tooltip = folderRow.getByRole('tooltip');
+  await tooltip.waitFor();
+  assert.equal(await tooltip.textContent(), await realpath(join(temp, 'workspace')));
+  await projectTitle.hover();
+  await tooltip.waitFor({ state: 'hidden' });
   await projectTitle.fill('Discard me');
   await projectEditor.getByRole('button', { name: /^Remove folder/ }).click();
   await page.mouse.click(5, 5);

@@ -4,8 +4,8 @@ import type { WorkspaceCommands } from './commands.js';
 import { DirectoryDialog } from './DirectoryDialog.js';
 import { Glyph } from './Glyph.js';
 
-export function EditProjectDialog({ initial, folders, root, commands, close, save, remove, t }: PropsLocale<'workbench'> & {
-  initial: string; folders: readonly string[]; root: string; commands: WorkspaceCommands;
+export function EditProjectDialog({ initial, folders, root, commands, canPickDirectory, close, save, remove, t }: PropsLocale<'workbench'> & {
+  initial: string; folders: readonly string[]; root: string; commands: WorkspaceCommands; canPickDirectory: boolean;
   close: () => void; save: (name: string, folders: string[]) => Promise<void>; remove: () => Promise<void>;
 }) {
   const modal = useRef<HTMLDialogElement>(null);
@@ -28,6 +28,20 @@ export function EditProjectDialog({ initial, folders, root, commands, close, sav
     try { await action(); close(); }
     catch { setError(true); setBusy(false); }
   };
+  const addPath = (path: string) => setPaths(current => current.includes(path) ? current : [...current, path]);
+  const addFolder = async () => {
+    if (!commands.desktopPicker) {
+      setPicking(true);
+      return;
+    }
+    setBusy(true);
+    setError(false);
+    try {
+      const selected = await commands.desktopPicker.pick();
+      if (selected) addPath(selected);
+    } catch { setError(true); }
+    finally { setBusy(false); }
+  };
   return <>
     <dialog ref={modal} className="wb-edit-project" aria-label={t('editProject')}
       onCancel={event => { event.preventDefault(); if (!busy) close(); }}
@@ -38,10 +52,11 @@ export function EditProjectDialog({ initial, folders, root, commands, close, sav
           value={name} onChange={event => setName(event.target.value)} /></label>
         <div>{t('sourceFolders')}</div>
         <div className="wb-folder-list">
-          {paths.map(path => <div key={path}><Glyph icon="project" /><span title={path}>{path.split(/[\\/]/).filter(Boolean).at(-1) || path}</span>
+          {paths.map(path => <div key={path} className="wb-folder-row"><Glyph icon="project" /><span>{path.split(/[\\/]/).filter(Boolean).at(-1) || path}</span>
+            <span className="wb-folder-tooltip" role="tooltip">{path}</span>
             <button type="button" aria-label={t('removeFolder') + ' ' + path} disabled={busy}
               onClick={() => setPaths(paths.filter(item => item !== path))}>×</button></div>)}
-          <button type="button" disabled={busy} onClick={() => setPicking(true)}><Glyph icon="folderAdd" />{t('addFolder')}</button>
+          <button type="button" disabled={busy || (!!commands.desktopPicker && !canPickDirectory)} onClick={() => void addFolder()}><Glyph icon="folderAdd" />{t('addFolder')}</button>
         </div>
         {error && <div role="alert">{t('actionFailed')}</div>}
         <footer><button className="wb-remove-local" type="button" disabled={busy}
@@ -52,7 +67,7 @@ export function EditProjectDialog({ initial, folders, root, commands, close, sav
     </dialog>
     {picking && <DirectoryDialog initial={root} list={commands.listDirectory} pick={commands.pickDirectory} t={t}
       cancel={() => setPicking(false)} confirm={async path => {
-        setPaths(current => current.includes(path) ? current : [...current, path]);
+        addPath(path);
         setPicking(false);
       }} />}
   </>;

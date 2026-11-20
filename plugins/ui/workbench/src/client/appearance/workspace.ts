@@ -158,6 +158,14 @@ export const workspaceStyles = `
 .wb-folder-list > * { padding: 6px 12px; }
 .wb-folder-list > * + * { border-top: 1px solid #8883; }
 .wb-folder-list span { flex: 1; overflow-wrap: anywhere; }
+.wb-folder-row { anchor-name: --wb-folder; anchor-scope: --wb-folder; }
+.wb-folder-tooltip {
+  display: none; position: fixed; position-anchor: --wb-folder; left: anchor(center); bottom: anchor(top);
+  transform: translateX(-50%); z-index: 1; pointer-events: none; width: max-content; max-width: min(32em, 76vw);
+  padding: 6px 12px; border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 9px;
+  background: var(--dsw-specific-sidebar-fill, #27282b); box-shadow: 0 4px 12px #0003; text-align: center;
+}
+.wb-folder-row:is(:hover, :focus-within) > .wb-folder-tooltip { display: block; }
 .wb-folder-list > button { width: 100%; padding: 12px; border-radius: 0; }
 .wb-edit-project .wb-remove-local { margin-right: auto; background: #dc454525; color: #ed635d; }
 .wb-edit-project .wb-save-project { color: var(--dsw-specific-sidebar-fill, #27282b); background: var(--dsw-alias-label-primary, #eee); }
