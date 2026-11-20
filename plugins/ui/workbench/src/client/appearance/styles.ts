@@ -11,7 +11,7 @@ const settingsSeat = '[data-slot="sidebar.settings"]';
 const launcher = '[data-slot="settings.launcher"]';
 
 export const stylesheet = `
-html[data-dsh-workbench] { --dsh-workbench-rail: 44.5px; }
+html[data-dsh-workbench] { --dsh-workbench-rail: 52px; }
 html[data-dsh-workbench] [data-slot="root"] > div {
   margin-inline-start: var(--dsh-workbench-rail);
   width: calc(100% - var(--dsh-workbench-rail));
@@ -22,9 +22,9 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
   display: none !important;
 }
 @media (min-width: 824px) {
-  /* The host owns the 280px default track and the drag delta. Add the
-     measured 11px to the rendered sidebar, main inset, and handle together. */
-  ${expandedHome} { --wb-sidebar-inset: 11px; }
+  /* Keep the 335.5px total with a 52px rail and the host's 280px default
+     track. Apply the remaining inset to the sidebar, main and handle alike. */
+  ${expandedHome} { --wb-sidebar-inset: 3.5px; }
   ${expandedHome} > ${sidebarColumn} {
     box-sizing: border-box; inline-size: calc(100% + var(--wb-sidebar-inset));
   }

@@ -133,13 +133,13 @@ try {
     const handle = column.parentElement.querySelector('[data-side="sidebar"]').getBoundingClientRect();
     return [rail.width, sidebar.width, main.x, handle.x];
   });
-  assert.deepEqual(await sidebarGeometry(), [44.5, 291, 335.5, 335.5], 'default expanded sidebar and drag handle at 100%');
+  assert.deepEqual(await sidebarGeometry(), [52, 283.5, 335.5, 335.5], 'default expanded sidebar and drag handle at 100%');
   await page.mouse.move(339.5, 200);
   await page.mouse.down();
   await page.mouse.move(359.5, 200, { steps: 5 });
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '300px');
-  assert.deepEqual(await sidebarGeometry(), [44.5, 311, 355.5, 355.5], 'drag moves the sidebar and separator by the same amount');
+  assert.deepEqual(await sidebarGeometry(), [52, 303.5, 355.5, 355.5], 'drag moves the sidebar and separator by the same amount');
   await page.mouse.move(359.5, 200);
   await page.mouse.down();
   await page.mouse.move(339.5, 200, { steps: 5 });
