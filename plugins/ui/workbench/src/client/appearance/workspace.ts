@@ -89,6 +89,7 @@ export const workspaceStyles = `
 @media (hover: hover) {
   .wb-tree-row:not(:hover):not(:focus-within) .wb-tree-actions .wb-tree-action:not([data-pinned]) {
     inline-size: 0;
+    overflow: clip;
     opacity: 0;
     pointer-events: none;
   }

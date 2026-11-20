@@ -123,6 +123,8 @@ try {
   const projectTitleBounds = await titleBounds(project);
   const chatTitleBounds = await titleBounds(alpha);
   assert.ok(Math.abs(projectTitleBounds.x - chatTitleBounds.x) <= 1, 'project and child chat share a text column');
+  const treeWidths = await tree.evaluate(el => ({ content: el.scrollWidth, viewport: el.clientWidth }));
+  assert.equal(treeWidths.content, treeWidths.viewport, 'idle row actions must not add a horizontal scrollbar');
   const restWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
   await alpha.hover();
   const hoverWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
