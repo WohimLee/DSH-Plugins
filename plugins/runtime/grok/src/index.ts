@@ -52,14 +52,12 @@ export class GrokAdapter extends PiAiAdapter {
     this.hasAttachments = () => typeof options.resolveAttachments?.()?.readImageRequest === 'function';
   }
 
-  private inputInfo(model: GrokModel, attachments: boolean): Pick<LlmModelInfo, 'inputModalities' | 'description' | 'badge'> {
+  private inputInfo(model: GrokModel, attachments: boolean): Pick<LlmModelInfo, 'inputModalities' | 'description'> {
     const image = attachments && model.input.includes('image');
     const missing = model.input.includes('image') && !attachments;
     return {
       inputModalities: image ? ['text', 'image'] : ['text'],
       description: model.capabilityDescription + (missing ? '。宿主附件服务不可用，当前仅接收文本' : ''),
-      badge: image ? { tone: 'info', text: { en: 'Image input', zh: '可发图片' } }
-        : { tone: 'neutral', text: { en: 'Text input', zh: '仅文本' } },
     };
   }
 

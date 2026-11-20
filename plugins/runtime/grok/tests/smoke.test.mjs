@@ -73,7 +73,7 @@ test('refreshes route capabilities from the account and sends image bytes throug
   });
   const [entry] = await adapter.listModels('grok');
   assert.deepEqual(entry.inputModalities, ['text', 'image']);
-  assert.equal(entry.badge.text.en, 'Image input');
+  assert.equal(entry.badge, undefined);
   assert.match(entry.description, /audio/);
   assert.match(entry.description, /128000（xAI models）/);
   assert.match(entry.description, /16384（插件回退值）/);
@@ -109,7 +109,7 @@ test('refreshes route capabilities from the account and sends image bytes throug
   attachmentsAvailable = false;
   const [missing] = await adapter.listModels('grok');
   assert.deepEqual(missing.inputModalities, ['text']);
-  assert.equal(missing.badge.text.en, 'Text input');
+  assert.equal(missing.badge, undefined);
   assert.match(missing.description, /宿主附件服务不可用/);
   assert.deepEqual((await adapter.resolveModel('grok', entry.id)).inputModalities, ['text']);
   const withoutStore = await adapter.prepareCall('grok', entry.id);
@@ -118,14 +118,14 @@ test('refreshes route capabilities from the account and sends image bytes throug
   await assert.rejects(Array.fromAsync(adapter.stream(options)), { code: 'UNSUPPORTED_CONTENT' });
   attachmentsAvailable = true;
   await assert.rejects(Array.fromAsync(withoutStore.stream(options)), { code: 'UNSUPPORTED_CONTENT' });
-  assert.equal((await adapter.listModels('grok'))[0].badge.text.en, 'Image input');
+  assert.equal((await adapter.listModels('grok'))[0].badge, undefined);
   declaredInputs = undefined;
   catalog = await load();
   profiles = buildProfiles();
   const [refreshed] = await adapter.listModels('grok');
   assert.deepEqual(refreshed.inputModalities, ['text']);
   assert.match(refreshed.description, /未披露输入模态/);
-  assert.equal(refreshed.badge.text.en, 'Text input');
+  assert.equal(refreshed.badge, undefined);
   await assert.rejects(Array.fromAsync(adapter.stream(options)), { code: 'UNSUPPORTED_CONTENT' });
   assert.equal(wire.length, 1);
 });

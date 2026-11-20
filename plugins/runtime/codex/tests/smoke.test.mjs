@@ -224,7 +224,7 @@ test('image declarations survive discovery, native attachment conversion and cap
   }, () => attachments);
   const [info] = await adapter.listModels('codex');
   assert.deepEqual(info.inputModalities, ['text', 'image']);
-  assert.equal(info.badge.text.en, 'Image input');
+  assert.equal(info.badge, undefined);
   assert.match(info.description, /audio/);
   assert.match(info.description, /2000/); assert.match(info.description, /95%/);
   assert.equal(info.reasoning.efforts[0].description, 'Deeper reasoning');

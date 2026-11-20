@@ -90,12 +90,12 @@ function register(ctx: Context): void {
     inject: sessionId => ({ directory: ctx.sessions.subagentAddress(sessionId) === undefined
       ? ctx.modelDirectories.directoryFor(sessionId) : undefined, readUsage }),
   }, ({ directory, ...props }) => directory
-    ? <ModelsOption {...props} directory={directory} resolveText={text => ctx.locale.resolveText(text)} language={ctx.locale.getSnapshot().active} />
+    ? <ModelsOption {...props} directory={directory} language={ctx.locale.getSnapshot().active} />
     : null));
 }
 
 type OptionsProps = Pick<PropsRuntime<'conversation.input.model.options'>, 'locked' | 'dismiss' | 'reportFailure'>
-  & PropsLocale<'modelPicker'> & { directory: ModelDirectory; language: string; resolveText: Context['locale']['resolveText']; readUsage: ReadUsage };
+  & PropsLocale<'modelPicker'> & { directory: ModelDirectory; language: string; readUsage: ReadUsage };
 
 function ModelsOption({ directory, t, ...props }: OptionsProps) {
   const [open, setOpen] = useState(false);

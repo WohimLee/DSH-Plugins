@@ -7,6 +7,7 @@ import { LlmRuntime } from '@deepseek-ai/dsh-llm';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import * as plugin from '../lib/index.js';
+import { QoderAccounts } from '../lib/accounts.js';
 import { advertiseTools, buildPrompt } from '../lib/request.js';
 import { readResponse } from '../lib/stream.js';
 
@@ -324,7 +325,7 @@ test('publishes account-specific vision and capacity and sends native images in 
     const [auto, legacy] = await adapter.listModels('qoder');
     assert.deepEqual(auto.context, { contextWindow: 2200 });
     assert.deepEqual(auto.inputModalities, ['text', 'image']);
-    assert.equal(auto.badge.text.en, 'Image input');
+    assert.equal(auto.badge, undefined);
     assert.match(auto.description, /最大输入 1600/);
     assert.match(legacy.description, /未声明图片能力/);
     const generate = model => collect(adapter.stream({ ...request, model, messages }));
@@ -346,4 +347,31 @@ test('publishes account-specific vision and capacity and sends native images in 
     assert.equal((await generate('auto')).at(-1).reason.failure.code, 'UNSUPPORTED_CONTENT');
     assert.equal(inputs.length, 1);
   } finally { adapter.dispose(); }
+});
+
+test('manual refresh joins live account discovery while identity changes invalidate it', async () => {
+  const calls = [];
+  const accounts = new QoderAccounts([], async () => undefined, () => {
+    const pending = Promise.withResolvers();
+    calls.push(pending);
+    return pending.promise;
+  }, () => undefined, () => false);
+  const read = () => accounts.listModels('qoder', { type: 'qodercli' });
+  const first = read();
+  accounts.refreshCatalogs();
+  const joined = read();
+  assert.equal(calls.length, 1);
+  calls[0].resolve([{ value: 'first' }]);
+  assert.deepEqual(await joined, await first);
+
+  accounts.refreshCatalogs();
+  const previous = read();
+  accounts.invalidate('QODER_PERSONAL_ACCESS_TOKEN');
+  const next = read();
+  assert.equal(calls.length, 3);
+  calls[2].resolve([{ value: 'new' }]);
+  calls[1].resolve([{ value: 'old' }]);
+  assert.equal((await previous)[0].id, 'old');
+  assert.equal((await next)[0].id, 'new');
+  assert.equal((await read())[0].id, 'new');
 });

@@ -50,8 +50,6 @@ function resolveCatalogModel(id: string, provider: string, model: ModelInfo, aut
       ...(defaultEffort && efforts.includes(defaultEffort) && { defaultEffort: ReasoningEffortId(defaultEffort) }),
     } }),
     inputModalities: acceptsImages ? ['text', 'image'] : ['text'],
-    badge: acceptsImages ? { tone: 'info', text: { en: 'Image input', zh: '可发图片' } }
-      : { tone: 'neutral', text: { en: 'Text input', zh: '仅文本' } },
     description: details.filter(Boolean).join(' · '),
     ...(hasWindow && { context: { contextWindow: context } }),
     ...(positive(model.maxOutputTokens) && { maxOutputTokens: model.maxOutputTokens }),
@@ -133,6 +131,14 @@ export class QoderAccounts {
     };
     this.cache.set(provider, entry);
     return entry.models;
+  }
+
+  refreshCatalogs(): void {
+    // A concurrent selection or refresh may already be fetching this same
+    // authenticated catalog. Credential changes always invalidate below.
+    for (const [provider, entry] of this.cache) {
+      if (entry.expires !== Infinity) this.cache.delete(provider);
+    }
   }
 
   invalidate(ref?: string): string[] {

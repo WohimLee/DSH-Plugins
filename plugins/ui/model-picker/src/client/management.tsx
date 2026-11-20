@@ -112,7 +112,6 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
               {group.routes.length > 1 && <h3>{route.name}</h3>}
               <ul>{route.models.map(model => <li key={model.id}>
                 <strong>{model.name}</strong>
-                {model.badge && <span className="dsh-model-input-label">{ctx.locale.resolveText(model.badge.text)}</span>}
                 {model.description && <p>{model.description}</p>}
                 {model.reasoning && <p>{t('effortLevels', { levels: model.reasoning.efforts.map(e => e.name).join(' · ') })}</p>}
               </li>)}</ul>

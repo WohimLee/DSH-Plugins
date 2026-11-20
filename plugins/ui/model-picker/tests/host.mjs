@@ -217,16 +217,16 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   const connectedCodex = available.locator('summary').filter({ hasText: 'Codex' });
   await connectedCodex.click();
   const fixture = available.getByRole('listitem').filter({ hasText: 'Codex Fixture' });
-  await fixture.getByText('Image input', { exact: true }).waitFor();
+  await fixture.getByText(/声明输入：text、image。/).waitFor();
   // The same route can lose a capability while the management page is open.
   const cachePath = join(codexHome, 'models_cache.json');
   const before = await readFile(cachePath, 'utf8');
   const updated = JSON.parse(before);
   updated.models[0].input_modalities = ['text'];
   await writeFile(cachePath, JSON.stringify(updated));
-  await fixture.getByText('Text input', { exact: true }).waitFor();
+  await fixture.getByText(/声明输入：text。/).waitFor();
   await writeFile(cachePath, before);
-  await fixture.getByText('Image input', { exact: true }).waitFor();
+  await fixture.getByText(/声明输入：text、image。/).waitFor();
   await rm(auth);
   await codexConnection.getByText('Codex is not connected').waitFor();
   await connectedCodex.waitFor({ state: 'detached' });
@@ -478,7 +478,10 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   assert.equal(await effort.count(), 0, 'Qoder fixture advertises no effort levels');
   await browse.hover();
   await provider('Codex').hover();
+  const fixtureRow = picker.locator('[data-model-row]').filter({ hasText: 'Codex Fixture' });
+  assert.equal((await fixtureRow.innerText()).trim(), 'Codex Fixture');
   await model('Codex Fixture').click();
+  assert.doesNotMatch(await selectedTrigger.innerText(), /Image input|Text input|可发图片|仅文本/);
   await selectedTrigger.filter({ hasText: 'Codex Fixture' }).click();
   await effort.click();
   const levels = page.getByRole('menuitemradio');

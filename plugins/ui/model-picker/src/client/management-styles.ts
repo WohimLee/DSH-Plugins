@@ -80,7 +80,6 @@ export const managementStyles = `
 .dsh-model-management-route ul { margin: 4px 0 0; padding-inline-start: 18px; }
 .dsh-model-management-route li { padding-block: 5px; overflow-wrap: anywhere; }
 .dsh-model-management-route li p { margin-top: 3px; white-space: pre-line; color: var(--connection-muted); }
-.dsh-model-input-label { margin-inline-start: 8px; color: var(--connection-muted); }
 @container (max-width: 560px) {
   .dsh-connection-grid { grid-template-columns: minmax(0, 1fr); }
 }

@@ -317,7 +317,7 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
       if (available.delete(provider)) changed = true;
     }
     if (changed) publish();
-    if (refresh) adapter.accounts.invalidate();
+    if (refresh) adapter.accounts.refreshCatalogs();
     return Promise.all([...providers].map(provider => check(provider, refresh)));
   }
 

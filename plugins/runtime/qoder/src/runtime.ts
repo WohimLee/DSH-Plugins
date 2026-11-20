@@ -42,13 +42,13 @@ export async function openQoderSession(
 type WaitForResponse = <T>(operation: Promise<T>) => Promise<T>;
 
 async function readAccount<T>(
-  cliPath: string, auth: AuthOptions, signal: AbortSignal,
+  cliPath: string, auth: AuthOptions, signal: AbortSignal, timeoutMs: number,
   read: (daemon: Daemon, wait: WaitForResponse) => Promise<T>,
 ): Promise<T> {
-  const timeout = AbortSignal.any([signal, AbortSignal.timeout(8000)]);
+  const timeout = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
   timeout.throwIfAborted();
   const daemon = await withDaemonStdinGuard(cliPath, () => startDaemon({
-    pathToQoderCLIExecutable: cliPath, auth, launchMode: 'process', initializeTimeoutMs: 5000,
+    pathToQoderCLIExecutable: cliPath, auth, launchMode: 'process', initializeTimeoutMs: Math.min(10_000, timeoutMs),
   }));
   try {
     timeout.throwIfAborted();
@@ -77,7 +77,8 @@ async function readAccount<T>(
 }
 
 export function readQoderModels(cliPath: string, auth: AuthOptions, signal: AbortSignal) {
-  return readAccount(cliPath, auth, signal, async (daemon, wait) => {
+  // CLI login opens an authenticated session before it can query the catalog.
+  return readAccount(cliPath, auth, signal, 30_000, async (daemon, wait) => {
     if (auth.type !== 'qodercli') return wait(daemon.getModels({ fetchStrategy: 'live' }));
     // The daemon account plane requires a supplied credential on Qoder CLI 1.1.83.
     // A session can reuse CLI login and query the authenticated catalog without inference.
@@ -89,7 +90,7 @@ export function readQoderModels(cliPath: string, auth: AuthOptions, signal: Abor
     });
     try {
       await wait(session.initializationResult());
-      return await wait(session.getAvailableModels());
+      return await wait(session.getAvailableModels({ fetchStrategy: 'live' }));
     } finally {
       try {
         await session.close();
@@ -101,7 +102,7 @@ export function readQoderModels(cliPath: string, auth: AuthOptions, signal: Abor
 }
 
 export async function readQoderUsage(cliPath: string, auth: AuthOptions, signal: AbortSignal) {
-  const result = await readAccount(cliPath, auth, signal, (daemon, wait) => wait(daemon.getUsageInfo()));
+  const result = await readAccount(cliPath, auth, signal, 8_000, (daemon, wait) => wait(daemon.getUsageInfo()));
   if (!result) return null;
   const plan = quota(result.userQuota?.remaining, result.userQuota?.total);
   const addOn = quota(result.addOnQuota?.remaining, result.addOnQuota?.total);

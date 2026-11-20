@@ -30,9 +30,6 @@ export function describeModel(provider: string, model: CatalogModel, hasAttachme
   return {
     provider, id: model.id, name: model.name ?? model.id,
     description: notes.join(' '),
-    badge: image
-      ? { tone: 'info', text: { en: 'Image input', zh: '可发图片' } }
-      : { tone: 'neutral', text: { en: 'Text input', zh: '仅文本' } },
     inputModalities: image ? ['text', 'image'] : ['text'],
     ...(model.contextWindow && { context: { contextWindow: model.contextWindow } }),
     ...(model.efforts?.length && { reasoning: {

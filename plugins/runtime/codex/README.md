@@ -19,7 +19,7 @@ pnpm --filter dsh-codex pack --pack-destination /tmp
 在目标 DSH 环境运行（替换 tarball 路径）：
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-codex-0.1.7.tgz
+dsh plugin --profile web add /tmp/dsh-codex-0.1.8.tgz
 ```
 
 重启后在模型选择器选择 **Codex** 下的模型。Desktop 应在桌面应用的插件页安装该 tarball；桌面版为插件兼容基线，随实际桌面版升级验证，不通过版本豁免安装。包保持 private，未发布 npm。

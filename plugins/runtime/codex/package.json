@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "将本机 Codex 登录可用的模型接入 DSH 原生模型循环。",
   "type": "module",

@@ -19,7 +19,7 @@ pnpm --filter dsh-qoder pack --pack-destination /tmp
 Web 使用对应版本的 DSH CLI 安装。安装参数 `--ignore-scripts` 跳过 SDK 自带的运行时下载脚本，插件使用已安装的 Qoder CLI。
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-qoder-0.1.8.tgz --ignore-scripts
+dsh plugin --profile web add /tmp/dsh-qoder-0.1.9.tgz --ignore-scripts
 ```
 
 Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile desktop`。若从 Desktop 插件页安装，在该 profile 的 `pnpm-workspace.yaml` 现有 `allowBuilds` 下添加 `'@qoder-ai/qoder-agent-sdk': false`，即可跳过该 SDK 的下载脚本。重启宿主后，打开 **设置 → Qoder** 查看账号状态。
@@ -61,7 +61,7 @@ Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile d
 
 每个账号分别从 SDK 目录读取默认上下文、厂商窗口档位、输入和输出上限、推理档位及说明。只有有效的默认上下文进入 DSH 的上下文预算；最大输入和输出在模型详情中单列。调用可传输出预算，插件在厂商披露上限时检查该预算。支持 DSH 函数工具与结果回放；temperature 和 stop 参数会被拒绝。
 
-插件从 CLI 登录会话的 `getAvailableModels()` 或 PAT 的 `getModels()` 读取视觉标记 `isVl`。只有所选账号模型明确声明视觉能力且宿主提供附件服务时才显示「可发图片」，包括目录中明确声明该能力的 auto 路由。未披露或关闭视觉能力时显示「仅文本」，模型说明标明原因。刷新账号后目录重新评估能力。发送时从宿主读取本次请求规格的图片，通过 Qoder SDK 原生图片块发送；已卸载的历史图片保留为文字占位。
+插件从 CLI 登录会话的 `getAvailableModels()` 或 PAT 的 `getModels()` 读取视觉标记 `isVl`。只有所选账号模型明确声明视觉能力且宿主提供附件服务时才接收图片，包括目录中明确声明该能力的 auto 路由。未披露或关闭视觉能力时仅接收文本，模型说明标明原因。刷新账号后目录重新评估能力。发送时从宿主读取本次请求规格的图片，通过 Qoder SDK 原生图片块发送；已卸载的历史图片保留为文字占位。
 
 ## 验证
 
