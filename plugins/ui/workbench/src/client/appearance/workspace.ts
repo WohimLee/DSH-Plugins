@@ -43,6 +43,8 @@ export const workspaceStyles = `
   gap: 7px;
   min-inline-size: 0;
   min-block-size: 31px;
+  font-size: 14px;
+  line-height: 20px;
   text-align: start;
   padding: 3px 6px 3px calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px));
 }
@@ -139,11 +141,12 @@ export const workspaceStyles = `
 }
 .wb-row-menu {
   position: fixed; z-index: 80; inset: 0 auto auto 0; min-inline-size: 185px;
-  max-inline-size: min(300px, 90vw); max-block-size: 80vh; overflow: auto; padding: 5px;
+  max-inline-size: min(300px, 90vw); max-block-size: 80vh; overflow: auto; padding: 4px 5px;
+  font-size: 13px; line-height: 16px;
 }
 .wb-row-menu button {
   display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  inline-size: 100%; padding: 6px 9px; border: 0; border-radius: 6px;
+  inline-size: 100%; min-block-size: 24px; padding: 4px 9px; border: 0; border-radius: 6px;
   color: inherit; background: transparent; font: inherit; text-align: start; cursor: pointer;
 }
 .wb-row-menu button:is(:hover, :focus-visible):not(:disabled) { background: var(--dsw-alias-background-hover, #8882); }

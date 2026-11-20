@@ -125,6 +125,32 @@ try {
   assert.ok(Math.abs(projectTitleBounds.x - chatTitleBounds.x) <= 1, 'project and child chat share a text column');
   const treeWidths = await tree.evaluate(el => ({ content: el.scrollWidth, viewport: el.clientWidth }));
   assert.equal(treeWidths.content, treeWidths.viewport, 'idle row actions must not add a horizontal scrollbar');
+  const sidebarGeometry = () => tree.evaluate(el => {
+    const column = el.closest('[data-slot="sidebar"]').parentElement;
+    const rail = document.querySelector('[data-workbench-rail]').getBoundingClientRect();
+    const sidebar = column.getBoundingClientRect();
+    const main = column.nextElementSibling.getBoundingClientRect();
+    const handle = column.parentElement.querySelector('[data-side="sidebar"]').getBoundingClientRect();
+    return [rail.width, sidebar.width, main.x, handle.x];
+  });
+  assert.deepEqual(await sidebarGeometry(), [44.5, 291, 335.5, 335.5], 'default expanded sidebar and drag handle at 100%');
+  await page.mouse.move(339.5, 200);
+  await page.mouse.down();
+  await page.mouse.move(359.5, 200, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '300px');
+  assert.deepEqual(await sidebarGeometry(), [44.5, 311, 355.5, 355.5], 'drag moves the sidebar and separator by the same amount');
+  await page.mouse.move(359.5, 200);
+  await page.mouse.down();
+  await page.mouse.move(339.5, 200, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '280px');
+  for (const row of [project, alpha]) {
+    assert.deepEqual(await row.locator('.wb-tree-label').evaluate(label => {
+      const style = getComputedStyle(label);
+      return [style.fontSize, style.lineHeight, label.getBoundingClientRect().height];
+    }), ['14px', '20px', 31]);
+  }
   const restWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
   await alpha.hover();
   const hoverWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
@@ -142,11 +168,38 @@ try {
   assert.equal(await ownRows(projectChildren).count(), 10);
   await projectChildren.getByRole('button', { name: 'Show more', exact: true }).click();
   const archive = tree.locator('[data-workbench-archived]');
+  async function checkMenuDensity(name, groups) {
+    const menu = page.getByRole('menu', { name: name + ' menu', exact: true });
+    await menu.waitFor();
+    const density = await menu.evaluate(element => {
+      const buttons = [...element.querySelectorAll('button')];
+      const first = getComputedStyle(buttons[0]);
+      const area = element.getBoundingClientRect();
+      const bounds = buttons.map(button => button.getBoundingClientRect());
+      return {
+        fontSize: first.fontSize,
+        lineHeight: first.lineHeight,
+        rowHeights: [...new Set(bounds.map(rect => rect.height))],
+        rowSteps: [...new Set(bounds.slice(1).map((rect, index) => rect.y - bounds[index].y))].sort((a, b) => a - b),
+        outerInsets: [bounds[0].top - area.top, area.bottom - bounds.at(-1).bottom],
+        groups: element.querySelectorAll('hr').length,
+      };
+    });
+    assert.deepEqual(density, {
+      fontSize: '13px', lineHeight: '16px', rowHeights: [24], rowSteps: [24, 35],
+      outerInsets: [5, 5], groups,
+    }, name + ' menu density at 100%');
+    if (process.env.DSH_TEST_ARTIFACTS) {
+      await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
+      await menu.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, name.toLowerCase() + '-menu.png') });
+    }
+  }
   const archiveLabel = archive.getByRole('button', { name: 'Archived', exact: true });
   assert.equal(await recents.locator('..').locator('xpath=following-sibling::*[1]').getAttribute('data-workbench-archived'), 'true');
   await archiveLabel.click({ button: 'right' });
   assert.equal(await page.getByRole('menu', { name: 'Section menu' }).count(), 0);
   await alpha.click({ button: 'right' });
+  await checkMenuDensity('Session', 4);
   await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
   const archivedAlpha = archive.locator('[data-row-key="archived:workbench-test-alpha"]');
   await archivedAlpha.waitFor();
@@ -200,6 +253,7 @@ try {
   await engineering.getByRole('button', { name: 'workspace', exact: true }).waitFor();
   const projectMenu = page.getByRole('menu', { name: 'Project menu', exact: true });
   await project.getByRole('button', { name: 'workspace', exact: true }).click({ button: 'right' });
+  await checkMenuDensity('Project', 3);
   const menuLabels = await projectMenu.getByRole('menuitem').allTextContents();
   await page.keyboard.press('Escape');
   await project.hover();
@@ -287,6 +341,13 @@ try {
   await alpha.getByRole('button', { name: 'Workbench alpha', exact: true }).click();
   console.log('PASS native session alpha is selectable.');
   await alpha.locator('[aria-current="true"]').waitFor();
+  const sessionHeader = page.locator('[data-slot="conversation.session.header"] nav').getByText('Workbench alpha', { exact: true });
+  assert.equal(await sessionHeader.evaluate(title => getComputedStyle(title).fontSize), '13px');
+  const paragraph = page.locator('[data-conversation-content]').getByText('Activity preview fixture', { exact: true });
+  assert.deepEqual(await paragraph.evaluate(text => {
+    const style = getComputedStyle(text);
+    return [style.fontSize, style.lineHeight];
+  }), ['13px', '22px']);
   const tabs = page.locator('[data-conversation-tabs]');
   await tabs.getByRole('tab', { name: 'Trajectory' }).click();
   await tabs.getByRole('tab', { name: 'Chat', exact: true }).click();

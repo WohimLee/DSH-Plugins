@@ -5,11 +5,13 @@ import { controlStyles } from './controls.js';
 const toolFrame = 'html[data-dsh-workbench] [data-slot="root"] > div:has(> div > [data-global-panel])';
 
 const desktopFrame = 'html[data-dsh-workbench] [data-slot="root"] > div:not([data-sidebar-drawer])';
+const expandedHome = `${desktopFrame}:has(> [data-side="sidebar"]):not(:has(> div > [data-global-panel]))`;
+const sidebarColumn = 'div:has(> [data-slot="sidebar"])';
 const settingsSeat = '[data-slot="sidebar.settings"]';
 const launcher = '[data-slot="settings.launcher"]';
 
 export const stylesheet = `
-html[data-dsh-workbench] { --dsh-workbench-rail: 50px; }
+html[data-dsh-workbench] { --dsh-workbench-rail: 44.5px; }
 html[data-dsh-workbench] [data-slot="root"] > div {
   margin-inline-start: var(--dsh-workbench-rail);
   width: calc(100% - var(--dsh-workbench-rail));
@@ -20,6 +22,19 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
   display: none !important;
 }
 @media (min-width: 824px) {
+  /* The host owns the 280px default track and the drag delta. Add the
+     measured 11px to the rendered sidebar, main inset, and handle together. */
+  ${expandedHome} { --wb-sidebar-inset: 11px; }
+  ${expandedHome} > ${sidebarColumn} {
+    box-sizing: border-box; inline-size: calc(100% + var(--wb-sidebar-inset));
+  }
+  ${expandedHome} > ${sidebarColumn} > [data-slot="sidebar"] > div {
+    inline-size: 100% !important;
+  }
+  ${expandedHome} > ${sidebarColumn} + div,
+  ${expandedHome} > [data-side="sidebar"] {
+    margin-inline-start: var(--wb-sidebar-inset);
+  }
   ${toolFrame}:not([data-sidebar-drawer]) {
     --dsh-windows-sidebar-width: 0px !important;
   }

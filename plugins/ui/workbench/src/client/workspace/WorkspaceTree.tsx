@@ -258,18 +258,18 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       { label: t('moveChat'), children: destination.filter(item => item.id !== parent).map(item => ({ label: item.label, run: () => {
         save(state => moveSession(state, id, item.id, chatGroups.get(item.id) ?? [], pins)); show(item.id);
       } })) },
-      { label: t('fork'), run: session.blank ? undefined : () => report(async () => {
+      { label: t('fork'), divider: true, run: session.blank ? undefined : () => report(async () => {
         const child = await commands.forkSession(id);
         save(state => moveSession(state, child, parent, chatGroups.get(parent) ?? [], pins));
         openSession(child);
       }) },
-      { label: t('share') },
+      { label: t('share'), divider: true },
       { label: t('copy'), children: [
         { label: t('copyTitle'), run: () => report(() => navigator.clipboard.writeText(session.displayTitle)) },
         { label: t('copyId'), run: () => report(() => navigator.clipboard.writeText(id)) },
       ] },
-      { label: t('newWindow') },
-      { label: t('archiveChat'), run: () => report(() => commands.archiveSession(id)) },
+      { label: t('newWindow'), divider: true },
+      { label: t('archiveChat'), divider: true, run: () => report(() => commands.archiveSession(id)) },
       deleteEntry(session),
     ];
     return entries;

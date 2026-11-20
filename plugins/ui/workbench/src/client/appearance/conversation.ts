@@ -6,6 +6,15 @@ html[data-dsh-workbench] [data-conversation-content] {
 }
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] {
   --dsw-font-markdown-base: var(--wb-message-size) / var(--wb-message-leading) var(--dsw-font-family);
+  --dsw-font-markdown-h1: 600 calc(var(--wb-message-size) + 5px) / 1.4 var(--dsw-font-family);
+  --dsw-font-markdown-h2: 600 calc(var(--wb-message-size) + 3px) / 1.4 var(--dsw-font-family);
+  --dsw-font-markdown-h3: 600 calc(var(--wb-message-size) + 1px) / 1.4 var(--dsw-font-family);
+  --dsw-font-markdown-h4: 600 var(--wb-message-size) / var(--wb-message-leading) var(--dsw-font-family);
+  --dsw-font-markdown-base-strong: var(--dsw-font-markdown-h4);
+  --wb-table-size: max(11px, calc(var(--wb-message-size) - 1px));
+  --wb-table-leading: calc(var(--wb-message-leading) + 1px);
+  --dsw-font-markdown-table: var(--wb-table-size) / var(--wb-table-leading) var(--dsw-font-family);
+  --dsw-font-markdown-table-head: 600 var(--wb-table-size) / var(--wb-table-leading) var(--dsw-font-family);
 }
 [data-conversation-content] [data-message-bubble] {
   font-size: var(--wb-message-size);
@@ -16,6 +25,11 @@ html[data-dsh-workbench] [data-conversation-content] {
 }
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] p + p:not([data-markdown-variant="compact"] p) {
   margin-block-start: 0.85em;
+}
+
+[data-slot="conversation.session.header"] nav :is(button, span) {
+  font-size: 13px;
+  line-height: 18px;
 }
 
 /* Only a populated header has view tabs. Preserve blank-session and drawer geometry. */
