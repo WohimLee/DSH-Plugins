@@ -52,6 +52,30 @@ pnpm test:host
 
 手工调试真实插件时先 build 与 pack，在单独的 DSH_HOME 内通过 `pnpm exec dsh plugin --profile web add <tarball绝对路径>` 安装；如需依赖下载须联网。随后 `pnpm exec dsh web --no-open`。该 shell 必须设置隔离 DSH_HOME，不能把测试安装落入个人默认 home。临时测试通常由 test:host 自动完成，无需手工准备。
 
+## 本机桌面交付
+
+新增桌面插件或修改其运行产物时，由执行实现任务的 Agent 完成本机安装。包括界面、Host 功能、语言资源、依赖和 bundle 配置的变化。仅涉及文档、测试、脚手架或明确仅支持其他宿主的任务可跳过。普通检查、Git 钩子和 CI 继续在工作区或隔离环境运行。
+
+1. 确认本次涉及的插件、实际 Desktop 版本与包的 `engines.dsh`，运行目标包检查和相关测试。只打包本次要交付的插件，核实包内运行文件属于本次交付。每次构建使用独立的产物目录，同版本更新也能区分新旧包。下面以 Workbench 为例。
+
+   ```sh
+   mkdir -p "$HOME/.dsh-plugin-artifacts"
+   artifact_dir=$(mktemp -d "$HOME/.dsh-plugin-artifacts/workbench.XXXXXX")
+   pnpm --filter dsh-workbench pack --pack-destination "$artifact_dir"
+   ```
+
+2. **Desktop 已打开**时，Agent 在实际窗口进入 Plugins → Add plugin → Install a third-party plugin，输入上一步生成的 `.tgz` 绝对路径，安装完成后按需点击 Enable now。已安装同版本时也使用本次的新包。此路径支持应用内更新，可保留正在使用的窗口。
+3. **Desktop 已完全退出**且已初始化日常 profile 时，可使用该应用内置的 CLI。macOS 默认路径见下例。其他安装路径使用实际应用附带的命令。在日常环境执行，注意隔离测试用的 `DSH_HOME`。成功后启动 Desktop。
+
+   ```sh
+   desktop_cli="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"
+   "$desktop_cli" plugin --profile desktop add "$artifact_dir"/*.tgz
+   "$desktop_cli" plugin --profile desktop list
+   ```
+
+4. 在桌面插件页核对启用状态，再走一次本次改动的实际入口。例如项目编辑改动，应在项目菜单点 Edit，看到新版弹窗，再点空白处确认关闭。使用同版本号时，以新行为或已安装文件与本次 tarball 的比对辨别构建；仅在磁盘上比对文件仍需另行验证运行行为。
+5. 在交付说明中写明实际安装的插件、Desktop 版本、验证操作和结果。安装失败时诊断并重试适用路径；本机没有 Desktop、版本不兼容或交互仍无法验证时，分别列出已完成步骤与具体阻塞。用户要求暂缓安装、只交付代码或使用指定环境时，遵循该次要求。
+
 ## 提交与推送
 
 当前集成分支为 `main`。实现任务完成后默认随任务交付提交和推送。讨论、审查、试验性改动以及用户指定留在本地的任务按相应范围处理。
