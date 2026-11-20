@@ -21,7 +21,7 @@ DSH-Plugins 是维护 DeepSeek Harness 扩展插件的多包仓库，面向插�
 ## 待确认及影响
 
 - dsh-codex 0.1.6 已在本机 Desktop 通过真实账号使用 GPT-6.2-Astra high 收到回复。仅设置 macOS 手动 HTTPS 代理的环境也可发起推理。
-- dsh-qoder 位于 plugins/runtime/qoder，使用官方 Qoder Agent SDK 和本机 CLI 注册账号实际可用的模型，设置中支持按需绑定账号及编辑备注，工具申请交回 DSH。真实账户推理与 Desktop 交互待验收。
+- dsh-qoder 位于 plugins/runtime/qoder，使用官方 Qoder Agent SDK 和本机 CLI 注册账号实际可用的模型，设置中支持按需绑定账号及编辑备注，工具申请交回 DSH。0.1.6 已在 Desktop 模型管理页完成浏览器授权并自动加载 17 个模型，通过适配器使用 auto 收到真实回复。
 - dsh-grok 位于 plugins/runtime/grok，使用 xAI API Key 和 Responses API。模型管理页验证密钥后才发布该连接可用的语言模型，连接、流式聊天和断开已通过隔离 Web 验证。真实 xAI 账号与 Desktop 交互待验收。
 - dsh-workbench 0.5.1 将项目与会话侧栏限定在 Home，移除功能栏的新建会话入口和分隔线。本机 Desktop 与隔离 Web 已验证页面切换。
 - dsh-workbench 0.5.0 固定 DSH 0.2.2-rc.5，增加行内命名、侧栏菜单、无项目会话和工作目录编辑。隔离 Web 已验收目录重启恢复。本机 Desktop 已升级至 0.5.0，实测会话行右键和省略号菜单。

@@ -12,8 +12,8 @@
       "evidence": "2026-11-19，macOS / DSH 0.2.2-rc.5：0.1.3 在隔离 Web 验证无预设账号、添加账号、可选备注、改名保留模型路由和解绑移除入口。真实账户推理待验收。 0.1.5 用 dsh-model-picker test:host 在隔离 Web 验证连接卡片和账号绑定、解绑。"
     },
     "desktop": {
-      "status": "unverified",
-      "evidence": "2026-11-20，macOS Desktop 0.2.2-rc.5，安装 Qoder CLI 1.1.83 后管理页识别 CLI 并提供账号绑定入口。CLI 当前未登录，真实回复待验。 2026-11-19，macOS Desktop 0.2.2-rc.5，0.1.5 在模型管理卡片显示 CLI 缺失，能展开账号表单。真实账号接入待验收。"
+      "status": "verified",
+      "evidence": "2026-11-20，macOS Desktop 0.2.2-rc.5 和 Qoder CLI 1.1.83。0.1.6 已在模型管理页验证开始浏览器授权、取消、重试、打开 Qoder 官方账号页，以及授权后自动显示 17 个可用模型。同一构建的适配器使用该账号的 auto 模型收到完整流式回复。"
     },
     "headless": {
       "status": "unverified",

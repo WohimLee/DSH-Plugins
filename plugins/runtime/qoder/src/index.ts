@@ -14,6 +14,8 @@ import { ControlRequestError } from '@qoder-ai/qoder-agent-sdk';
 import type { SDKUserMessage } from '@qoder-ai/qoder-agent-sdk';
 import { advertiseTools, buildPrompt } from './request.js';
 import { openQoderSession, readQoderModels, readQoderUsage } from './runtime.js';
+import { BrowserLogin } from './login.js';
+import type { LoginAction, LoginView } from './remote.js';
 import { QoderAccounts } from './accounts.js';
 import { isQoderAccountRecord } from './account-store.js';
 import type { AccountConfig } from './account-store.js';
@@ -217,6 +219,7 @@ class QoderAccountSettings extends TypertRemoteService {
   constructor(
     ctx: Context,
     private readonly readAccounts: (refresh: boolean) => Promise<AccountView[]>,
+    private readonly browserLogin: (action: LoginAction) => Promise<LoginView>,
     private readonly changeAccount: (change: AccountChange) => Promise<boolean>,
   ) {
     super(ctx, accountService);
@@ -224,6 +227,12 @@ class QoderAccountSettings extends TypertRemoteService {
       package: name, face: 'host', schemas: [], invocations: contribution.descriptors,
       model: { services: [], events: [], objects: [] },
     }));
+  }
+
+  @Remote
+  async login(action: LoginAction): Promise<LoginView> {
+    if (this.ctx.invocation?.peer.principal.kind !== 'owner') return { state: 'failed' };
+    return this.browserLogin(action);
   }
 
   @Remote
@@ -250,12 +259,17 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
       return credentials ? (await credentials.resolve(credentialRef(ref)))?.value : process.env[ref];
     }, () => ctx.get('credentials'));
   let live = true;
+  const login = new BrowserLogin(() => {
+    adapter.accounts.invalidate('QODER_PERSONAL_ACCESS_TOKEN');
+    void check('qoder', true).catch(() => {});
+  });
   const available = new Map<string, string>();
   const checks = new Map<string, object>();
   let registration: ReturnType<Context['llm']['registerAdapter']> | undefined;
   let directory = Promise.resolve();
   ctx.effect(() => () => {
     live = false;
+    login.cancel();
     adapter.dispose();
   });
 
@@ -326,7 +340,16 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
   ctx.on('credentials/record-updated', key => {
     if (isQoderAccountRecord(key)) refreshDirectory();
   });
-  ctx.inject(['typert'], child => { new QoderAccountSettings(child, readAccounts, changeAccount); });
+  ctx.inject(['typert'], child => { new QoderAccountSettings(child, readAccounts, async action => {
+    if (action === 'status') return login.view;
+    if (action === 'cancel') return login.cancel();
+    try {
+      const path = await resolveCli(config.cliPath);
+      const auth = await adapter.accounts.auth('qoder');
+      if (live && auth.type === 'qodercli') return login.start(path);
+    } catch { /* Report a recoverable failure without exposing CLI output. */ }
+    return { state: 'failed' };
+  }, changeAccount); });
   ctx.inject(['credentials'], refreshDirectory);
   refreshDirectory();
 }

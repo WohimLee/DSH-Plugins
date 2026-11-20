@@ -108,17 +108,19 @@ export class QoderAccounts {
   async statusOf(provider: string): Promise<AccountView> {
     const config = this.accounts.get(provider);
     const account = { provider, name: config ? accountLabel(config) : 'Qoder CLI', remark: config?.remark };
+    let browserLogin = false;
     try {
       const auth = await this.auth(provider);
+      browserLogin = auth.type === 'qodercli';
       const models = await this.listModels(provider, auth);
-      return { ...account, state: models.length ? 'connected' : 'noModels', modelCount: models.length };
+      return { ...account, browserLogin, state: models.length ? 'connected' : 'noModels', modelCount: models.length };
     } catch (error) {
       const code = error instanceof LlmError ? error.failure.code : undefined;
       const state = code === 'MISSING_CREDENTIAL' ? 'unbound'
         : code === 'INVALID_CONFIG' ? 'cliMissing'
         : code === 'AUTH' ? 'authFailed'
         : 'unavailable';
-      return { ...account, state, modelCount: 0 };
+      return { ...account, browserLogin, state, modelCount: 0 };
     }
   }
 }

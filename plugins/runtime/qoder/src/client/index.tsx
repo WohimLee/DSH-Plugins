@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 import type { ModelPickerConnectionsOwner, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { contribution } from '../remote.js';
-import type { AccountChange, AccountView } from '../remote.js';
+import type { AccountChange, AccountView, LoginAction, LoginView } from '../remote.js';
 
 const messages = {
   en: {
@@ -18,7 +18,10 @@ const messages = {
     noModels: 'Qoder returned no selectable models.', unavailable: 'Could not load the model catalog. Check the connection and try again.',
     unbound: 'Account not bound', cliMissing: 'Qoder CLI is missing. Install it or set cliPath in the plugin configuration.',
     authFailed: 'Qoder rejected this account’s PAT. Check or replace its token.',
-    cliAuthFailed: 'Run qodercli login in a terminal, then refresh. If using a default PAT, check its validity.',
+    cliAuthFailed: 'Connect your Qoder account to load its models.',
+    login: 'Connect Qoder', preparing: 'Preparing your sign-in link…', waiting: 'Confirm your account in the browser. Models will refresh automatically.',
+    openLogin: 'Open Qoder sign-in', cancel: 'Cancel sign-in', expired: 'The sign-in link expired. Start again to get a new link.',
+    loginFailed: 'Could not complete sign-in. Check your connection and try again.', authorized: 'Browser authorization completed.',
     connected: 'Connected', model: 'available model', models: 'available models', token: 'Personal access token', save: 'Bind account',
     replace: 'Replace token', remove: 'Unbind', failed: 'Could not save the account change.',
     cannotBind: 'Account settings are unavailable in this session.', add: 'Add account', remark: 'Remark', optionalRemark: 'Remark (optional)', saveRemark: 'Save remark',
@@ -31,7 +34,10 @@ const messages = {
     noModels: 'Qoder 暂未返回可选模型。', unavailable: '未能读取模型目录，请检查连接后重试。',
     unbound: '账号尚未绑定', cliMissing: '未找到 Qoder CLI，请安装后重试，或在插件配置中填写 cliPath。',
     authFailed: 'Qoder 拒绝了这个账号的 PAT，请检查或替换令牌。',
-    cliAuthFailed: '在终端运行 qodercli login，完成授权后刷新。如果使用了默认 PAT，请检查令牌是否有效。',
+    cliAuthFailed: '连接 Qoder 账号即可加载可用模型。',
+    login: '连接 Qoder', preparing: '正在准备授权链接…', waiting: '请在浏览器中确认账号。完成后，这里会自动刷新模型。',
+    openLogin: '前往 Qoder 授权', cancel: '取消授权', expired: '授权链接已过期，请重新连接。',
+    loginFailed: '未能完成授权，请检查连接后重试。', authorized: '浏览器授权已完成。',
     connected: '已连接', model: '个可用模型', models: '个可用模型', token: '个人访问令牌', save: '绑定账号',
     replace: '更换令牌', remove: '解绑', failed: '未能保存账号修改。',
     cannotBind: '当前会话无法使用 Qoder 账号设置。', add: '添加账号', remark: '备注', optionalRemark: '备注（可选）', saveRemark: '保存备注',
@@ -86,7 +92,7 @@ function register(ctx: Context): void {
 type Translate = PropsLocale<'qoderAccounts'>['t'];
 
 function accountStatus(account: AccountView, t: Translate) {
-  return t(account.state === 'authFailed' && account.provider === 'qoder' ? 'cliAuthFailed' : account.state);
+  return t(account.state === 'authFailed' && account.browserLogin ? 'cliAuthFailed' : account.state);
 }
 
 function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
@@ -138,12 +144,16 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
 
   const details = <section aria-label={t('title')} style={{ padding: 16, display: 'grid', gap: 12 }}>
     <h2>{t('title')}</h2>
-    <p>{t('intro')} <a href="https://qoder.com/account/integrations" target="_blank" rel="noreferrer">{t('create')}</a></p>
+    <p>{t('intro')}</p>
     {!renderCard && <div>
       <button type="button" disabled={busy} onClick={() => { void reload(true); }}>{t('refresh')}</button>
     </div>}
     {busy && <p role="status">{t('loading')}</p>}
     {error && <p role="alert">{t('cannotBind')}</p>}
+    {accounts.some(account => account.browserLogin && account.state !== 'cliMissing' && account.state !== 'connected') &&
+      <LoginGuide ctx={ctx} t={t} reload={reload} />}
+    {accounts.some(account => account.state === 'cliMissing') && <a href="https://docs.qoder.com/cli/installation"
+      target="_blank" rel="noreferrer">Qoder CLI ↗</a>}
     {!error && <AddAccount {...{ busy, t, update }} />}
     {accounts.map(account => <AccountCard key={account.provider} {...{ account, busy, t, update }} />)}
   </section>;
@@ -158,9 +168,49 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
   return renderCard({
     id: 'qoder', name: 'Qoder', status: t(status), tone: status === 'loading' ? 'neutral' : connected && !error ? 'ready' : 'warning',
     description, footer: connected && !error
-      ? t(connectedCount === 1 ? 'connectedAccountsOne' : 'connectedAccounts', { count: connectedCount }) : t('token'),
+      ? t(connectedCount === 1 ? 'connectedAccountsOne' : 'connectedAccounts', { count: connectedCount }) : undefined,
     action: connected ? t('manage') : t('setup'), details,
   });
+}
+
+function LoginGuide({ ctx, t, reload }: {
+  ctx: Context; t: Translate; reload: (refresh: boolean) => Promise<void>;
+}) {
+  const [view, setView] = useState<LoginView>({ state: 'idle' });
+  const [busy, setBusy] = useState(false);
+  const revision = useRef(0);
+  const request = useCallback(async (action: LoginAction) => {
+    const id = ++revision.current;
+    if (action !== 'status') setBusy(true);
+    try {
+      const result = await ctx.remote.dshQoderAccounts.login(action);
+      if (id !== revision.current) return;
+      const next: LoginView = result.ok ? result.value : { state: 'failed' };
+      setView(next);
+      if (next.state === 'authorized') await reload(false);
+    } catch {
+      if (id === revision.current) setView({ state: 'failed' });
+    } finally {
+      if (id === revision.current) setBusy(false);
+    }
+  }, [ctx, reload]);
+  useEffect(() => {
+    void request('status');
+    return () => { revision.current++; };
+  }, [request]);
+  const active = view.state === 'preparing' || view.state === 'waiting';
+  useEffect(() => {
+    if (!active || busy) return;
+    const timer = setTimeout(() => { void request('status'); }, 800);
+    return () => clearTimeout(timer);
+  }, [view, active, busy, request]);
+  return <div>
+    {view.state !== 'idle' && <p role="status">{t(view.state === 'failed' ? 'loginFailed' : view.state)}</p>}
+    {view.state === 'waiting' && view.url && <p><a href={view.url} target="_blank" rel="noreferrer">{t('openLogin')} ↗</a></p>}
+    <button type="button" disabled={busy} onClick={() => { void request(active ? 'cancel' : 'start'); }}>
+      {t(active ? 'cancel' : 'login')}
+    </button>
+  </div>;
 }
 
 type AccountActions = {
@@ -189,6 +239,7 @@ function AddAccount({ busy, update, t }: AccountActions) {
           setRemark('');
         }
       }}>
+      <a href="https://qoder.com/account/integrations" target="_blank" rel="noreferrer">{t('create')}</a>
       <label>{t('token')} <input type="password" autoComplete="off" maxLength={8192} value={token}
         disabled={busy} onChange={event => setToken(event.currentTarget.value)} /></label>
       <label>{t('optionalRemark')} <input value={remark} disabled={busy} maxLength={80}

@@ -2,11 +2,20 @@ import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-ty
 import { z } from 'zod';
 
 export const accountService = 'dshQoderAccounts';
+const loginAction = z.enum(['start', 'status', 'cancel']);
+const loginView = z.object({
+  state: z.enum(['idle', 'preparing', 'waiting', 'authorized', 'failed', 'expired']),
+  url: z.string().optional(),
+});
+export type LoginAction = z.infer<typeof loginAction>;
+export type LoginView = z.infer<typeof loginView>;
+
 const accountView = z.object({
   provider: z.string(),
   name: z.string(),
   remark: z.string().optional(),
   state: z.enum(['connected', 'unbound', 'cliMissing', 'authFailed', 'noModels', 'unavailable']),
+  browserLogin: z.boolean().optional(),
   modelCount: z.number().int().nonnegative(),
 });
 
@@ -28,6 +37,7 @@ export type AccountView = z.infer<typeof accountView>;
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespaceMap {
     dshQoderAccounts: {
+      login(action: LoginAction): Promise<RemoteResult<LoginView>>;
       list(refresh: boolean): Promise<RemoteResult<AccountView[]>>;
       change(change: AccountChange): Promise<RemoteResult<boolean>>;
     };
@@ -37,6 +47,12 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 export const contribution: TypertRemoteContribution = {
   package: 'dsh-qoder',
   descriptors: [{
+    id: 'dsh-qoder#dshQoderAccounts/login', service: accountService, namespace: accountService, method: 'login',
+    invocation: { kind: 'direct' },
+    parameters: [{ name: 'action', wire: 'action', source: 'json',
+      codec: { mode: 'strict', typeSymbol: 'LoginAction', create: () => loginAction } }],
+    result: { mode: 'strict', typeSymbol: 'LoginView', create: () => loginView },
+  }, {
     id: 'dsh-qoder#dshQoderAccounts/list', service: accountService, namespace: accountService, method: 'list',
     invocation: { kind: 'direct' },
     parameters: [{ name: 'refresh', wire: 'refresh', source: 'json',
