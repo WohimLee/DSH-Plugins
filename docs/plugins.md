@@ -41,7 +41,7 @@
 | --- | --- | --- | --- | --- |
 | [dsh-codex](../plugins/runtime/codex/README.md) | 0.1.7 | 将本机 Codex 登录可用的模型接入 DSH 原生模型循环。 | >=0.2.2-rc.4 <0.2.3-0 | verified / verified / unverified |
 | [dsh-grok](../plugins/runtime/grok/README.md) | 0.1.2 | 使用 xAI API Key 将 Grok 语言模型接入 DSH 模型选择器。 | 0.2.2-rc.5 | verified / unverified / unverified |
-| [dsh-qoder](../plugins/runtime/qoder/README.md) | 0.1.7 | 通过 Qoder Agent SDK 将 Qoder 模型接入 DSH 原生模型循环。 | 0.2.2-rc.5 | verified / verified / unverified |
+| [dsh-qoder](../plugins/runtime/qoder/README.md) | 0.1.8 | 通过 Qoder Agent SDK 将 Qoder 模型接入 DSH 原生模型循环。 | 0.2.2-rc.5 | verified / verified / unverified |
 
 ## 安全与治理（security）
 
