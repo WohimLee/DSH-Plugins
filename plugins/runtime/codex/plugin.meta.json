@@ -13,7 +13,7 @@
     },
     "desktop": {
       "status": "verified",
-      "evidence": "2026-11-20，0.1.7 在日常 Desktop 0.2.2-rc.5 的新会话选择 GPT-6.2-Astra high，用添加文件发送 PNG 并准确返回随机码 5TT9GP。\n2026-11-20，macOS Desktop 0.2.2-rc.5，插件页安装 0.1.6 后，在原失败会话使用 GPT-6.2-Astra high 收到真实回复。原生菜单显示六个模型声明的档位，选中 high。\n2026-11-19，macOS Desktop 0.2.2-rc.5：使用内置 CLI 同名更新至 0.1.3，配置与启用选择保留。重开后插件页显示启用，模型子菜单显示 Codex 分组。真实账号推理待验收。\n2026-11-18，macOS Desktop 0.2.2-rc.3 / Node 24.21.0：使用桌面版自带 CLI 将 dsh-codex 0.1.2 安装到 desktop profile，无版本豁免。重启后插件启用，模型选择器显示 Codex 分组及 10 个本地缓存模型；真实账号推理待验收。"
+      "evidence": "2026-11-20，日常 macOS Desktop 0.2.2-rc.5 通过插件页更新并启用 0.1.9（codex-catalog.UDSiiY，tarball SHA-256 前缀 3f9388d64d3d）。在独立测试仓库的新 Worktree 会话选择 GPT-6.2-Sol high，真实账号返回 OK。旧版目录覆盖与适配器重启由隔离测试验证。\n2026-11-20，0.1.7 在日常 Desktop 0.2.2-rc.5 的新会话选择 GPT-6.2-Astra high，用添加文件发送 PNG 并准确返回随机码 5TT9GP。\n2026-11-20，macOS Desktop 0.2.2-rc.5，插件页安装 0.1.6 后，在原失败会话使用 GPT-6.2-Astra high 收到真实回复。原生菜单显示六个模型声明的档位，选中 high。\n2026-11-19，macOS Desktop 0.2.2-rc.5：使用内置 CLI 同名更新至 0.1.3，配置与启用选择保留。重开后插件页显示启用，模型子菜单显示 Codex 分组。真实账号推理待验收。\n2026-11-18，macOS Desktop 0.2.2-rc.3 / Node 24.21.0：使用桌面版自带 CLI 将 dsh-codex 0.1.2 安装到 desktop profile，无版本豁免。重启后插件启用，模型选择器显示 Codex 分组及 10 个本地缓存模型；真实账号推理待验收。"
     },
     "headless": {
       "status": "unverified",
