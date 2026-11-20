@@ -87,15 +87,15 @@ async function stopHost() {
   current = undefined;
 }
 
-async function openApp(url) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'en-US', colorScheme: 'dark' });
+async function openApp(url, locale = 'en-US') {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale, colorScheme: 'dark' });
   await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
   await page.goto(url.href);
-  const proceed = page.getByRole('button', { name: 'Continue', exact: true });
+  const proceed = page.getByRole('button', { name: /^(Continue|继续)$/ });
   if (await proceed.waitFor({ timeout: 3000 }).then(() => true, () => false)) await proceed.click();
-  const dialog = page.getByRole('dialog').filter({ hasText: 'Get started' });
+  const dialog = page.getByRole('dialog').filter({ hasText: /Get started|开始使用/ });
   if (await dialog.waitFor({ timeout: 2500 }).then(() => true, () => false)) {
-    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await dialog.getByRole('button', { name: /^(Close|关闭)$/ }).click();
   }
   return page;
 }
@@ -104,6 +104,7 @@ async function management(page) {
   await page.getByRole('button', { name: 'Model management', exact: true }).click();
   const panel = page.getByRole('main', { name: 'Model management' });
   return {
+    details: panel.getByRole('region', { name: 'Grok connection details' }),
     connection: panel.getByRole('region', { name: 'Grok', exact: true }),
     group: panel.getByRole('region', { name: 'Available models' }).locator('summary').filter({ hasText: 'Grok' }),
   };
@@ -144,18 +145,21 @@ globalThis.fetch = (input, options) => {
   browser = await chromium.launch(process.env.DSH_TEST_BROWSER_EXECUTABLE
     ? { executablePath: process.env.DSH_TEST_BROWSER_EXECUTABLE } : { channel: 'chrome' });
   const page = await openApp(url);
-  const { connection, group } = await management(page);
+  const { connection, details, group } = await management(page);
   await connection.getByText('Grok is not connected').waitFor();
   assert.equal(await group.count(), 0);
 
-  const keyInput = connection.getByLabel('xAI API Key', { exact: true });
+  const setup = connection.getByRole('button', { name: 'Set up Grok' });
+  assert.equal(await setup.getAttribute('aria-expanded'), 'false');
+  await setup.click();
+  const keyInput = details.getByLabel('xAI API Key', { exact: true });
   await keyInput.fill('invalid');
-  await connection.getByRole('button', { name: 'Connect', exact: true }).click();
-  await connection.getByRole('alert').filter({ hasText: 'xAI rejected' }).waitFor();
+  await details.getByRole('button', { name: 'Connect', exact: true }).click();
+  await details.getByRole('alert').filter({ hasText: 'xAI rejected' }).waitFor();
   assert.equal(await group.count(), 0);
 
   await keyInput.fill('fixture-grok-key');
-  await connection.getByRole('button', { name: 'Connect', exact: true }).click();
+  await details.getByRole('button', { name: 'Connect', exact: true }).click();
   await connection.getByText('Connected with an xAI API Key').waitFor();
   await group.waitFor();
   await group.click();
@@ -163,8 +167,8 @@ globalThis.fetch = (input, options) => {
   assert.equal(await keyInput.inputValue(), '');
 
   await keyInput.fill('invalid');
-  await connection.getByRole('button', { name: 'Replace key', exact: true }).click();
-  await connection.getByRole('alert').filter({ hasText: 'xAI rejected' }).waitFor();
+  await details.getByRole('button', { name: 'Replace key', exact: true }).click();
+  await details.getByRole('alert').filter({ hasText: 'xAI rejected' }).waitFor();
   assert.equal(await group.count(), 1);
 
   await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
@@ -185,16 +189,36 @@ globalThis.fetch = (input, options) => {
     assert.equal(inference.headers[key], value);
   }
 
+  await page.getByRole('button', { name: 'Account menu', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Settings/ }).click();
+  const settings = page.getByRole('dialog').filter({ hasText: 'Settings' });
+  await settings.getByRole('button', { name: 'Grok', exact: true }).click();
+  await settings.getByLabel('xAI API Key', { exact: true }).waitFor();
+  await settings.getByRole('button', { name: 'Replace key' }).waitFor();
   await page.close();
   await stopHost();
-  const restarted = await openApp(await launch(preload));
+  const restartUrl = await launch(preload);
+  const restarted = await openApp(restartUrl);
   const saved = await management(restarted);
   await saved.connection.getByText('Connected with an xAI API Key').waitFor();
   await saved.group.waitFor();
-  await saved.connection.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await saved.connection.getByText('1 model', { exact: true }).waitFor();
+  await saved.connection.getByRole('button', { name: 'View connection' }).click();
+  await saved.details.getByRole('button', { name: 'Disconnect', exact: true }).click();
   await saved.connection.getByText('Grok is not connected').waitFor();
   await saved.group.waitFor({ state: 'hidden' });
   assert.ok(!(await readFile(join(home, '.credentials.yaml'), 'utf8')).includes('fixture-grok-key'));
+  const chinese = await openApp(restartUrl, 'zh-CN');
+  await chinese.getByRole('button', { name: '模型管理', exact: true }).click();
+  await chinese.setViewportSize({ width: 560, height: 900 });
+  const grok = chinese.getByRole('region', { name: 'Grok', exact: true });
+  const codex = chinese.getByRole('region', { name: 'Codex', exact: true });
+  await grok.getByText('Grok 尚未连接').waitFor();
+  const [first, second] = await Promise.all([codex.boundingBox(), grok.boundingBox()]);
+  assert.equal(first.x, second.x);
+  assert.ok(second.y >= first.y + first.height);
+  await grok.getByRole('button', { name: '设置 Grok' }).click();
+  await chinese.getByRole('region', { name: 'Grok 连接详情' }).getByRole('button', { name: '连接', exact: true }).waitFor();
   console.log('PASS isolated Web Grok connection, key validation, catalog, Responses streaming, restart and disconnect.');
 } catch (error) {
   if (current?.log) console.error(publicLog(current.log));

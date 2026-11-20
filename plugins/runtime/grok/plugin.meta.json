@@ -9,11 +9,11 @@
   "surfaces": {
     "web": {
       "status": "verified",
-      "evidence": "2026-11-19，macOS 26.7 / Chrome 157.0.8103.79，DSH 0.2.2-rc.5。pnpm --filter dsh-grok test:host 在隔离 Web 安装 tarball，使用回环 xAI API 验证连接、拒绝无效密钥、目录发布、流式聊天、重启恢复和断开。"
+      "evidence": "2026-11-20，macOS / Chrome，DSH 0.2.2-rc.5。pnpm --filter dsh-grok test:host 验证 0.1.1 的英文卡片、中文窄窗单列和独立设置入口；回环 xAI API 覆盖密钥拒绝、模型发布、流式聊天、重启恢复与断开。"
     },
     "desktop": {
       "status": "unverified",
-      "evidence": "2026-11-20，macOS Desktop 0.2.2-rc.5，安装并启用 0.1.0，模型管理页显示 Grok 未连接和 xAI API Key 入口。代理更新已在 Desktop 内置 Node 验证能到达真实 xAI 端点。真实推理待有效密钥。"
+      "evidence": "2026-11-20，在本机 macOS Desktop 0.2.2-rc.5 安装并启用 0.1.1，从模型管理验证 Grok 卡片的未连接状态、展开密钥表单和收起。真实 xAI 推理待有效密钥。"
     },
     "headless": {
       "status": "unverified"
