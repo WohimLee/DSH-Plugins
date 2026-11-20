@@ -9,7 +9,7 @@ await rm(new URL('./lib', import.meta.url), { recursive: true, force: true });
 execFileSync(process.execPath, [resolve(dirname(require.resolve('typescript/package.json')), 'bin/tsc'), '-p', 'tsconfig.json'], { stdio: 'inherit' });
 if (pkg.dsh.client) {
   await build({ entryPoints: ['src/client/index.tsx'], outfile: 'lib/client.js', bundle: true,
-    format: 'cjs', platform: 'browser', target: 'es2022', external: ['react', 'react-dom', 'react/jsx-runtime'],
+    format: 'cjs', platform: 'browser', target: 'es2022', loader: { '.png': 'dataurl' }, external: ['react', 'react-dom', 'react/jsx-runtime'],
     banner: { js: `window.__ModuleLoader__.load({id:${JSON.stringify(pkg.name)},factory:(require)=>{var module={exports:{}};var exports=module.exports;` },
     footer: { js: 'return module.exports;}});' } });
 }

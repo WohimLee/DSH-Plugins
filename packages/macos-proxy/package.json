@@ -1,0 +1,13 @@
+{
+  "name": "@dsh-plugins/macos-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./proxy.js": "./proxy.js",
+    "./proxy.d.ts": "./proxy.d.ts"
+  },
+  "peerDependencies": {
+    "undici": "8.11.2"
+  }
+}

@@ -69,6 +69,26 @@ export function createTreeStore(ctx: Context): TreeStore {
     });
   }
 
+  const statuses = ctx.uiSession.sessionStatus;
+  let priorStatus = statuses.getSnapshot();
+  ctx.effect(() => statuses.subscribe(() => {
+    const current = statuses.getSnapshot();
+    const previous = priorStatus;
+    priorStatus = current;
+    const unread = new Set(state.unread);
+    let changed = false;
+    for (const [id, status] of current) {
+      const before = previous.get(id);
+      if (status.completionUnread && !before?.completionUnread && !unread.has(id)) {
+        unread.add(id);
+        changed = true;
+      } else if (!status.completionUnread && (before?.completionUnread || status.running) && unread.delete(id)) {
+        changed = true;
+      }
+    }
+    if (changed) store.update(current => ({ ...current, unread: [...unread] }));
+  }));
+
   let previous = source.getSnapshot();
   ctx.effect(() => source.subscribe(() => {
     const snapshot = source.getSnapshot();

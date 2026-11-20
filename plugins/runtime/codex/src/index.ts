@@ -4,6 +4,8 @@ import { LlmAdapter, LlmError, ReasoningEffortId, attributionHeaders } from '@de
 import type { BuiltinLlmFailureCode, GenerateOptions, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { codexHome, loadCredential, loadModels } from './local.js';
 import type { Config as PluginConfig } from './local.js';
+import { systemProxy } from './proxy.js';
+import { fetch as proxyFetch, type ProxyAgent } from 'undici';
 import { buildRequest } from './request.js';
 import { parseStream } from './stream.js';
 import { readCodexUsage } from './usage.js';
@@ -17,7 +19,7 @@ export const Config: Schema<PluginConfig> = Schema.object({
   codexPath: Schema.string().description('额度查询使用的 Codex CLI 绝对路径，省略时从 PATH 查找。'),
   models: Schema.union([Schema.const(undefined), Schema.array(Schema.object({
     id: Schema.string().required(), name: Schema.string(),
-    contextWindow: Schema.number().min(1), efforts: Schema.array(Schema.string()),
+    contextWindow: Schema.number().min(1), efforts: Schema.array(Schema.string()), defaultEffort: Schema.string(),
   }))]).description('显式模型列表；省略时读取 Codex models_cache.json'),
 });
 export const RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
@@ -51,7 +53,9 @@ export class CodexAdapter extends LlmAdapter {
   private async modelCatalog(provider: string): Promise<LlmResolvedModelInfo[]> {
     return (await loadModels(this.home, this.config.models)).map(m => ({ provider, id: m.id, name: m.name ?? m.id,
       inputModalities: ['text'], ...(m.contextWindow ? { context: { contextWindow: m.contextWindow } } : {}),
-      ...(m.efforts?.length ? { reasoning: { efforts: m.efforts.map(e => ({ id: ReasoningEffortId(e), name: e })) } } : {}) }));
+      ...(m.efforts?.length ? { reasoning: {
+        ...(m.defaultEffort && m.efforts.includes(m.defaultEffort) ? { defaultEffort: ReasoningEffortId(m.defaultEffort) } : {}),
+        efforts: m.efforts.map(e => ({ id: ReasoningEffortId(e), name: e })) } } : {}) }));
   }
   override async resolveModel(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo> {
     signal?.throwIfAborted();
@@ -70,19 +74,22 @@ export class CodexAdapter extends LlmAdapter {
   }
   private async *streamResolved(options: GenerateOptions, prepared?: LlmResolvedModelInfo): AsyncGenerator<StreamChunk> {
     const signal = AbortSignal.any([this.lifetime.signal, ...(options.signal ? [options.signal] : [])]);
+    let dispatcher: ProxyAgent | undefined;
     try {
       signal.throwIfAborted();
       const model = prepared ?? await this.resolveModel(options.provider, options.model, signal);
-      if (options.reasoningEffort && model.reasoning && !model.reasoning.efforts.some(e => e.id === options.reasoningEffort)) {
+      if (options.reasoningEffort && !model.reasoning?.efforts.some(e => e.id === options.reasoningEffort)) {
         throw new LlmError('所选模型未声明该推理强度。', 'UNSUPPORTED_OPTION');
       }
       const body = buildRequest(options);
       const credential = await loadCredential(this.home);
       signal.throwIfAborted();
-      const response = await this.fetchImpl(RESPONSES_URL, { method: 'POST', signal,
+      if (this.fetchImpl === fetch) dispatcher = await systemProxy(new URL(RESPONSES_URL).hostname, signal);
+      const init = { method: 'POST', signal,
         headers: { authorization: `Bearer ${credential.accessToken}`, 'chatgpt-account-id': credential.accountId,
           originator: 'codex_cli_rs', 'content-type': 'application/json', accept: 'text/event-stream', ...attributionHeaders() },
-        body: JSON.stringify(body), redirect: 'error' });
+        body: JSON.stringify(body), redirect: 'error' as const };
+      const response = dispatcher ? await proxyFetch(RESPONSES_URL, { ...init, dispatcher }) : await this.fetchImpl(RESPONSES_URL, init);
       if (!response.ok) {
         await response.body?.cancel();
         const code: BuiltinLlmFailureCode = response.status === 401 || response.status === 403 ? 'AUTH' : response.status === 429 ? 'RATE_LIMIT' : response.status >= 500 ? 'SERVER' : `HTTP_${response.status}`;
@@ -94,6 +101,8 @@ export class CodexAdapter extends LlmAdapter {
       const aborted = signal.aborted;
       const failure = error instanceof LlmError ? error.failure : { code: 'TRANSPORT', message: 'Codex 网络请求失败，请检查连接。' };
       yield { type: 'finish', reason: { kind: aborted ? 'aborted' : 'error', failure: aborted ? { code: 'ABORTED', message: 'Codex 请求已取消。' } : failure } };
+    } finally {
+      await dispatcher?.destroy();
     }
   }
 }

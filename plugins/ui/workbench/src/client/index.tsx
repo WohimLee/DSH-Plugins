@@ -19,9 +19,9 @@ import { workspaceCommands } from './workspace/commands.js';
 import { SectionAction } from './workspace/SectionAction.js';
 import { WorkspaceTree } from './workspace/WorkspaceTree.js';
 import { createTreeStore } from './workspace/store.js';
-import { registerWorkspaceView } from './workspace/view.js';
+import { createViewToggle, registerWorkspaceView } from './workspace/view.js';
 
-export const inject = ['slots', 'layout', 'uiWorkspace', 'locale', 'remoteAccess', 'sessions', 'workspaces', 'sidebarRight', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles', 'remote.session', 'remote.directoryPicker'];
+export const inject = ['slots', 'layout', 'uiSession', 'uiWorkspace', 'locale', 'remoteAccess', 'sessions', 'workspaces', 'sidebarRight', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles', 'remote.session', 'remote.directoryPicker'];
 
 export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const unmount = await ctx.remote.$mount(contribution);
@@ -42,6 +42,7 @@ function assemble(ctx: Context): void {
   ctx.effect(() => ctx.locale.register('workbench', messages));
   ctx.effect(() => installAppearance());
   const tree = createTreeStore(ctx);
+  const activity = createViewToggle();
   registerRightPanels(ctx, tree, workspaceCommands(ctx, lifetime.signal));
   registerZoom(ctx);
   const panels = panelSource(ctx);
@@ -64,7 +65,7 @@ function assemble(ctx: Context): void {
         else await ctx.workspaces.unpinSession(id);
         tree.promote(id);
       },
-      hooks: { tree, sources, draft: drafts },
+      hooks: { tree, sources, activity, draft: drafts },
     }),
   }, ({ useSources, ...props }) => {
     const state = useSources(current => current);
@@ -73,12 +74,19 @@ function assemble(ctx: Context): void {
   ctx.slots.inject('sidebar.session.action', () => ctx.slots.register({
     name: 'sidebar.session.action', id: 'dsh-workbench:new-section', locale: 'workbench',
     inject: () => ({
-      newSection: () => drafts.begin({ kind: 'section', parent: '' }), hooks: { sources, nativeView: view.native },
+      newSection: () => { activity.set(false); drafts.begin({ kind: 'section', parent: '' }); },
+      toggleActivity: () => activity.set(!activity.getSnapshot()),
+      hooks: { sources, nativeView: view.native, activity, tree },
     }),
-  }, ({ useSources, useNativeView, ...props }) => {
+  }, ({ useSources, useNativeView, useTree, useActivity, ...props }) => {
+    const activityOpen = useActivity(current => current);
+    const unread = useTree(current => current.unread);
+    const archived = props.useWorkspaces(current => current.archivedSessionIds);
+    const sessions = props.useSessions(current => current);
+    const pending = sessions.ids.some(id => unread?.includes(id) && !archived.includes(id) && sessions.byId[id].origin !== 'subagent');
     const source = useSources(state => state.selected);
     const native = useNativeView(current => current);
-    return source === 'dsh' ? <SectionAction {...props} inline={!native} /> : null;
+    return source === 'dsh' ? <SectionAction {...props} activityOpen={activityOpen} pending={pending} inline={!native} /> : null;
   }));
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({
     name: 'sidebar.brand.name', priority: -100, locale: 'workbench',

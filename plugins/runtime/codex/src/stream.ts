@@ -2,8 +2,10 @@ import { LlmError, ToolCallId } from '@deepseek-ai/dsh-llm';
 import type { StreamChunk, ContentBlock } from '@deepseek-ai/dsh-llm';
 import { record } from './local.js';
 
+type ByteStream = ReadableStream<Uint8Array> | import('node:stream/web').ReadableStream<Uint8Array>;
+
 // Bound one SSE frame so a malformed remote stream cannot grow memory indefinitely.
-async function* frames(body: ReadableStream<Uint8Array>): AsyncGenerator<Record<string, unknown>> {
+async function* frames(body: ByteStream): AsyncGenerator<Record<string, unknown>> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -32,7 +34,7 @@ async function* frames(body: ReadableStream<Uint8Array>): AsyncGenerator<Record<
     reader.releaseLock();
   }
 }
-export async function* parseStream(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamChunk> {
+export async function* parseStream(body: ByteStream): AsyncGenerator<StreamChunk> {
   let nextIndex = 0, sawTool = false;
   let active: { index: number; type: 'text' | 'reasoning'; text: string } | undefined;
   function* close(): Generator<StreamChunk> {

@@ -8,11 +8,11 @@
   "surfaces": {
     "web": {
       "status": "verified",
-      "evidence": "2026-11-19，macOS / Chrome 157.0.8103.79，DSH 0.2.2-rc.5。pnpm --filter dsh-model-picker test:host 验证 0.1.4 三个厂商恰占三行，添加第四行仅增加一行高度，切换短长模型列表时双列尺寸及位置稳定。另覆盖窄屏贴边、缩放、切换、独立滚动、搜索、原生控件及热启停。"
+      "evidence": "2026-11-19，macOS / Chrome 157.0.8103.79，DSH 0.2.2-rc.5。pnpm --filter dsh-model-picker test:host 验证 0.1.6 的应用图标、宽屏双列与窄屏单列、键盘展开、刷新、合成 Codex 登录和 Qoder 绑定与解绑，以及模型选择器与热启停。"
     },
     "desktop": {
       "status": "verified",
-      "evidence": "2026-11-19，macOS Desktop 0.2.2-rc.5，通过内置 CLI 同名更新至 0.1.4。实际桌面打开 Models，从 DeepSeek 切到长 Codex 列表后，厂商栏保持三行，模型区在相同高度内显示。"
+      "evidence": "2026-11-20，macOS Desktop 0.2.2-rc.5，通过插件页安装 0.1.6，管理页显示 Codex 登录与可用模型。在 GPT-6.2-Astra 会话的原生 Effort 菜单核对六个实际档位及当前 high。隔离 Web 验证跨模型切换时隐藏无档位模型的菜单并清除旧值。\n2026-11-19，macOS Desktop 0.2.2-rc.5，使用桌面 CLI 同名更新至 0.1.6，搭配 dsh-qoder 0.1.5。实测线缆入口、两个应用图标、点击切换详情及刷新，检测到本机 Codex 登录与 Qoder CLI 缺失。"
     },
     "headless": {
       "status": "unsupported"

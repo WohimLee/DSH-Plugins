@@ -1,0 +1,72 @@
+import { useEffect, useRef, useState } from 'react';
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client';
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client';
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
+import type { SessionId, WorkspaceCommands } from './commands.js';
+
+type Translator = PropsLocale<'workbench'>['t'];
+type Chat = SessionListState['byId'][SessionId];
+
+export function StatusMark({ running, unread, t }: { running: boolean; unread: boolean; t: Translator }) {
+  if (!running && !unread) return null;
+  return <span role="img" className={running ? 'wb-status-running' : 'wb-status-unread'}
+    aria-label={t(running ? 'running' : 'unread')} />;
+}
+
+function ActivityRow({ chat, project, running, unread, active, preview, open, t }: {
+  chat: Chat; project?: string; running: boolean; unread: boolean; active: boolean;
+  preview: WorkspaceCommands['replyPreview']; open: (id: SessionId) => void; t: Translator;
+}) {
+  const row = useRef<HTMLButtonElement>(null);
+  const [text, setText] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      void preview(chat.id, controller.signal).then(result => {
+        if (!controller.signal.aborted) setText(result);
+      }).catch(() => {});
+    });
+    if (row.current) observer.observe(row.current);
+    return () => { controller.abort(); observer.disconnect(); };
+  }, [chat.id, chat.updatedAt, running, preview]);
+  return <button ref={row} className="wb-activity-row" aria-current={active || undefined} onClick={() => open(chat.id)}>
+    <span className="wb-activity-line"><span title={chat.displayTitle}>{chat.displayTitle}</span>
+      <small title={project}>{project}</small><StatusMark running={running} unread={unread} t={t} />
+    </span>
+    {text && <span className="wb-activity-preview">{text}</span>}
+  </button>;
+}
+
+export function ActivityList({ sessions, statuses, archived, unread, active, projects, open, preview, t }: {
+  sessions: SessionListState; statuses: SessionStatusSnapshot; archived: ReadonlySet<SessionId>;
+  unread: readonly string[]; active?: SessionId; projects: ReadonlyMap<string, string>;
+  open: (id: SessionId) => void; preview: WorkspaceCommands['replyPreview']; t: Translator;
+}) {
+  const groups = new Map<string, Chat[]>();
+  const priority: Chat[] = [];
+  const today = new Date().toDateString();
+  for (const chat of sessions.ids.map(id => sessions.byId[id]).sort((a, b) => b.updatedAt - a.updatedAt)) {
+    if (archived.has(chat.id) || chat.origin === 'subagent' || (chat.blank && !chat.title)) continue;
+    if (unread.includes(chat.id) || (statuses.get(chat.id)?.running ?? chat.running)) priority.push(chat);
+    else {
+      const date = new Date(chat.updatedAt);
+      const label = date.toDateString() === today ? t('today') : date.toLocaleDateString();
+      const rows = groups.get(label);
+      if (rows) rows.push(chat);
+      else groups.set(label, [chat]);
+    }
+  }
+  const sections: [string, Chat[]][] = [...groups];
+  if (priority.length) sections.unshift([t('priority'), priority]);
+  return <div className="wb-tree" data-workbench-activity-list aria-label={t('viewActivity')}>
+    {!sections.length && <p className="wb-tree-error">{t('noActivity')}</p>}
+    {sections.map(([label, chats]) => <section key={label} className="wb-tree-section">
+      <h3>{label}</h3>
+      {chats.map(chat => <ActivityRow key={chat.id} chat={chat} project={projects.get(chat.id) ?? t('ungrouped')}
+        running={statuses.get(chat.id)?.running ?? chat.running} unread={unread.includes(chat.id)}
+        active={chat.id === active} open={open} preview={preview} t={t} />)}
+    </section>)}
+  </div>;
+}

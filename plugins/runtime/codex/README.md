@@ -19,10 +19,10 @@ pnpm --filter dsh-codex pack --pack-destination /tmp
 在目标 DSH 环境运行（替换 tarball 路径）：
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-codex-0.1.5.tgz
+dsh plugin --profile web add /tmp/dsh-codex-0.1.6.tgz
 ```
 
-重启后在模型选择器选择 **Codex** 下的模型。Desktop 应在桌面应用的插件页安装该 tarball；桌面版为插件兼容基线，随实际桌面版升级验证，不通过版本豁免安装。实际账号推理待验收。包保持 private，未发布 npm。
+重启后在模型选择器选择 **Codex** 下的模型。Desktop 应在桌面应用的插件页安装该 tarball；桌面版为插件兼容基线，随实际桌面版升级验证，不通过版本豁免安装。包保持 private，未发布 npm。
 
 ## 模型与登录配置
 
@@ -30,7 +30,7 @@ dsh plugin --profile web add /tmp/dsh-codex-0.1.5.tgz
 
 默认目录取 `CODEX_HOME`，未设置时取 `~/.codex`。只读 `auth.json` 的 OAuth access token 和 account ID，每次请求重新读取；不保存副本、不读取 refresh token、不改写登录文件。401/403 提示重新执行 `codex login`，刷新由 Codex CLI 管理。远程宿主读取的是宿主机器的目录。
 
-默认从 `models_cache.json` 读取可见且 `supported_in_api=true` 的模型、上下文和推理强度。缓存不存在时模型列表为空，不猜测账号可用模型。先运行 Codex 更新缓存并重启 DSH，或在插件配置中显式填写账号可用的模型：
+默认从 `models_cache.json` 读取可见且 `supported_in_api=true` 的模型、上下文、支持的推理强度与模型声明的默认档位。缓存不存在时模型列表为空，不猜测账号可用模型。先运行 Codex 更新缓存并重启 DSH，或在插件配置中显式填写账号可用的模型：
 
 ```yaml
 - insert:
@@ -44,6 +44,8 @@ dsh plugin --profile web add /tmp/dsh-codex-0.1.5.tgz
             # contextWindow 和 efforts 可选，按实际模型能力填写
 ```
 
+macOS 上，DSH 已配置的代理环境变量优先。若没有这些变量，推理请求读取系统手动 HTTPS 代理并使用 CONNECT 连接到 Codex。支持主机例外名单；使用 PAC 或自动发现的网络可通过宿主的 HTTPS_PROXY 配置代理。
+
 此片段用于修改安装后已有行，不要再添加同 ID 的第二行。`models` 显式配置优先于缓存，空数组表示不提供模型。不要将 token 写入 patch、日志或源码。
 
 ## 验证与边界
@@ -55,7 +57,7 @@ pnpm --filter dsh-codex check
 pnpm --filter dsh-codex test:host
 ```
 
-单元和契约测试使用合成凭据、临时目录和模拟响应，包含真实 Cordis/LLM 服务的注册、prepareCall、卸载与重载。`test:host` 构建 tarball，检查发布文件，然后用临时 DSH_HOME 安装并启动真实 Web 宿主，不读取日常 DSH home，不发送模型请求。2026-11-18 已在 macOS Desktop 0.2.2-rc.3 安装并启用 0.1.2，模型选择器显示 Codex 分组及 10 个本地缓存模型。实际账号推理仍需单独验收。
+单元和契约测试使用合成凭据、临时目录和模拟响应，包含真实 Cordis/LLM 服务的注册、prepareCall、卸载与重载。`test:host` 构建 tarball，检查发布文件，然后用临时 DSH_HOME 安装并启动真实 Web 宿主，不读取日常 DSH home，不发送模型请求。2026-11-18 已在 macOS Desktop 0.2.2-rc.3 安装并启用 0.1.2，模型选择器显示 Codex 分组及 10 个本地缓存模型。2026-11-20 使用 Desktop 内置 Node 24.21.0 调用 0.1.6 适配器，在当前 macOS 手动 HTTPS 代理下使用真实账号发送简短提示，GPT-6.2-Astra high 返回文本与正常结束帧。
 
 网络端点固定为 `https://chatgpt.com/backend-api/codex/responses`，禁止自动跟随重定向。上游错误正文不进入日志和终端失败信息；HTTP 状态保留为安全诊断。网络或流中断交给宿主重试策略，插件不另建重试循环。该端点和 Codex 本地文件格式可能变化，当前实现不代表 OpenAI 对第三方接入的稳定性承诺。
 

@@ -44,7 +44,17 @@ test('live user activity advances only the affected chat within its pin group an
   const disposers = [];
   const project = { id: 'group', sessionIds: ids };
   const pins = new Set(['p1', 'p2']);
+  const statusListeners = new Set();
+  let status = new Map();
+  const changeStatus = (id, running, completionUnread) => {
+    status = new Map(status).set(id, { running, completionUnread });
+    for (const listener of statusListeners) listener();
+  };
   const ctx = {
+    uiSession: { sessionStatus: { getSnapshot: () => status, subscribe: fn => {
+      statusListeners.add(fn);
+      return () => statusListeners.delete(fn);
+    } } },
     sessions: { list: { getSnapshot: () => ({ ids, byId }),
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); } } },
     workspaces: { list: { getSnapshot: () => ({ items: [{ workspaceId: project.id, sessionIds: ids }], pinnedSessionIds: [...pins] }) } },
@@ -60,6 +70,13 @@ test('live user activity advances only the affected chat within its pin group an
     store.update(state => ({ ...state, sessions: { group: ['p1', 'p2', 'a', 'b', 'c'] } }));
     update('c', { retainedBy: { mainView: 1 }, title: 'Retained and renamed' });
     assert.deepEqual(order(store), ['p1', 'p2', 'a', 'b', 'c']);
+    changeStatus('b', false, false);
+    assert.deepEqual(store.getSnapshot().unread ?? [], []);
+    changeStatus('b', true, false);
+    changeStatus('b', false, true);
+    assert.deepEqual(store.getSnapshot().unread, ['b']);
+    changeStatus('b', false, false);
+    assert.deepEqual(store.getSnapshot().unread, []);
     update('c', { updatedAt: 20 });
     assert.deepEqual(order(store), ['p1', 'p2', 'c', 'a', 'b']);
     update('p2', { updatedAt: 21 });

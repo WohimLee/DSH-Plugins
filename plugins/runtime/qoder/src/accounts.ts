@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { LlmError } from '@deepseek-ai/dsh-llm';
+import { LlmError, ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import type { LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm';
 import { accessToken, qodercliAuth } from '@qoder-ai/qoder-agent-sdk';
 import type { AuthOptions, ModelInfo } from '@qoder-ai/qoder-agent-sdk';
@@ -77,8 +77,14 @@ export class QoderAccounts {
         for (const model of catalog) {
           const id = model.value?.trim();
           if (!id || model.isEnabled === false || (enabled && !enabled.includes(id))) continue;
+          const efforts = [...new Set((model.efforts ?? []).map(level => level.trim()).filter(Boolean))];
+          const defaultEffort = model.defaultEffort?.trim();
           models.set(id, {
             provider, id, name: model.displayName?.trim() || id,
+            ...(efforts.length > 0 && { reasoning: {
+              efforts: efforts.map(name => ({ id: ReasoningEffortId(name), name })),
+              ...(defaultEffort && efforts.includes(defaultEffort) && { defaultEffort: ReasoningEffortId(defaultEffort) }),
+            } }),
             inputModalities: ['text'], description: model.description?.trim() || undefined,
           });
         }

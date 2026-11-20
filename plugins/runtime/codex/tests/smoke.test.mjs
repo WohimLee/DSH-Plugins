@@ -7,6 +7,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { LlmRuntime, BlockAssembler, attributionHeaders } from '@deepseek-ai/dsh-llm';
 import * as plugin from '../lib/index.js';
 import { buildRequest } from '../lib/request.js';
+import { macProxyForHost } from '../lib/proxy.js';
 import { loadModels, loadCredential } from '../lib/local.js';
 import { parseStream } from '../lib/stream.js';
 const collect = async source => { const result = []; for await (const item of source) result.push(item); return result; };
@@ -30,9 +31,18 @@ test('credential and cache boundaries tolerate malformed files and only advertis
     await writeFile(join(home, 'auth.json'), JSON.stringify(value)); await assert.rejects(loadCredential(home), { code: 'AUTH' });
   }
   await writeFile(join(home, 'models_cache.json'), JSON.stringify({ models: [null, { slug: 'hidden', visibility: 'hide', supported_in_api: true },
-    { slug: 'available', display_name: 'Available', visibility: 'list', supported_in_api: true, context_window: 20000, supported_reasoning_levels: [null, { effort: 'high' }] }] }));
-  assert.deepEqual(await loadModels(home), [{ id: 'available', name: 'Available', contextWindow: 20000, efforts: ['high'] }]);
+    { slug: 'available', display_name: 'Available', visibility: 'list', supported_in_api: true, context_window: 20000, default_reasoning_level: 'high', supported_reasoning_levels: [null, { effort: 'high' }] }] }));
+  assert.deepEqual(await loadModels(home), [{ id: 'available', name: 'Available', contextWindow: 20000, defaultEffort: 'high', efforts: ['high'] }]);
   assert.deepEqual(await loadModels(home, models), models);
+});
+test('manual macOS HTTPS proxy honors excluded hosts and automatic configurations', () => {
+  const settings = 'HTTPSEnable : 1\nHTTPSProxy : 127.0.0.1\nHTTPSPort : 7890';
+  assert.equal(macProxyForHost(settings, 'chatgpt.com'), 'http://127.0.0.1:7890');
+  for (const excluded of ['chatgpt.com', '*.com']) {
+    assert.equal(macProxyForHost(settings + '\nExceptionsList : <array> {\n  0 : ' + excluded + '\n}', 'chatgpt.com'), undefined);
+  }
+  assert.equal(macProxyForHost(settings + '\nProxyAutoConfigEnable : 1', 'chatgpt.com'), undefined);
+  assert.equal(macProxyForHost(settings.replace('7890', '65536'), 'chatgpt.com'), undefined);
 });
 test('request preserves system prompt, tool calls, tool results and optional argument schemas', () => {
   const result = buildRequest({ ...request, system: 'one', reasoningEffort: 'high', messages: [
@@ -82,6 +92,21 @@ test('adapter dispatch uses fixed HTTPS endpoint, attribution and host-readable 
   assert.equal(await readFile(join(home, 'auth.json'), 'utf8'), before);
   const info = await adapter.resolveModel('codex', 'test-model'); assert.equal(info.context.contextWindow, 10000); assert.equal(info.reasoning.efforts[1].id, 'high');
   await assert.rejects(adapter.resolveModel('codex', 'unknown'), { code: 'UNKNOWN_MODEL' });
+});
+test('models expose only declared default efforts and reject unsupported overrides before fetch', async t => {
+  const codexHome = await fixture(t);
+  const adapter = new plugin.CodexAdapter({ codexHome, models: [
+    { id: 'variable', efforts: ['low', 'high'], defaultEffort: 'low' },
+    { id: 'fixed' }, { id: 'invalid-default', efforts: ['low'], defaultEffort: 'high' },
+  ] }, () => assert.fail('invalid request reached fetch'));
+  const catalog = await adapter.listModels('codex');
+  assert.equal(catalog[0].reasoning.defaultEffort, 'low');
+  assert.equal(catalog[1].reasoning, undefined);
+  assert.equal(catalog[2].reasoning.defaultEffort, undefined);
+  for (const model of ['fixed', 'variable']) {
+    const chunks = await collect(adapter.stream({ ...request, model, reasoningEffort: 'max' }));
+    assert.equal(chunks.at(-1).reason.failure.code, 'UNSUPPORTED_OPTION');
+  }
 });
 test('HTTP and network failures never expose credentials or response text', async t => {
   const home = await fixture(t);

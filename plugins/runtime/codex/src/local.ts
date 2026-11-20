@@ -8,6 +8,7 @@ export interface ModelConfig {
   name?: string;
   contextWindow?: number;
   efforts?: string[];
+  defaultEffort?: string;
 }
 export interface Config { codexHome?: string; codexPath?: string; models?: ModelConfig[] }
 export const codexHome = (config: Config): string => config.codexHome ?? process.env.CODEX_HOME ?? join(homedir(), '.codex');
@@ -40,6 +41,8 @@ export async function loadModels(home: string, configured?: ModelConfig[]): Prom
     }) : [];
     models.set(m.slug, { id: m.slug, name: typeof m.display_name === 'string' ? m.display_name : m.slug,
       ...(typeof m.context_window === 'number' && Number.isFinite(m.context_window) && m.context_window > 0 ? { contextWindow: m.context_window } : {}),
+      ...(typeof m.default_reasoning_level === 'string' && efforts.includes(m.default_reasoning_level)
+        ? { defaultEffort: m.default_reasoning_level } : {}),
       efforts: [...new Set(efforts)] });
   }
   return [...models.values()];

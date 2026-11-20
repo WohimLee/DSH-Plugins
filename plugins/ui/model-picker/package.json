@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-picker",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "为 DSH 模型菜单提供厂商级联、账号选择与额度和余额摘要。",
   "type": "module",

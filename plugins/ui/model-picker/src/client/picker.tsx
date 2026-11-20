@@ -80,8 +80,12 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
   function choose(route: Route, model: Model): void {
     if (busy) return;
     const same = state.current?.provider === route.id && state.current.model === model.id;
-    if (same) { dismiss(); return; }
-    const effort = model.reasoning?.defaultEffort;
+    const supported = model.reasoning?.efforts ?? [];
+    const previous = state.current?.reasoningEffort;
+    const fallback = model.reasoning?.defaultEffort;
+    const effort = supported.find(level => level.id === previous)?.id
+      ?? supported.find(level => level.id === fallback)?.id;
+    if (same && (previous === effort || previous === undefined)) { dismiss(); return; }
     void directory.select({ provider: route.id, model: model.id, ...(effort === undefined ? {} : { reasoningEffort: effort }) })
       .then(result => { if (result.ok) dismiss(); else reportFailure(t('selectionFailed')); })
       .catch(() => reportFailure(t('selectionFailed')));

@@ -1,4 +1,5 @@
 import { Glyph, type Icon } from './Glyph.js';
+import { ActivityList, StatusMark } from './ActivityList.js';
 import { ArchivedSection } from './ArchivedSection.js';
 import { EditProjectDialog } from './EditProjectDialog.js';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -29,7 +30,7 @@ type Actions = {
   commands: WorkspaceCommands;
   drafts: Drafts;
   setPinned: (session: SessionId, pin: boolean) => Promise<void>;
-  hooks: { tree: HostObservable<TreeState>; draft: Drafts };
+  hooks: { tree: HostObservable<TreeState>; draft: Drafts; activity: HostObservable<boolean> };
 };
 export type WorkspaceTreeProps = PropsRuntime<'sidebar.workspaces'> & PropsRenderFactories & PropsLocale<'workbench'> & InjectFace<Actions>;
 
@@ -54,9 +55,9 @@ function ProjectChildren({ project, children, sessions, showMoreLabel, depth }: 
   </div>;
 }
 
-function SessionItem({ session, selected, depth, pinned, busy, unread, dragProps, drop, open, toggle, menu, t, useSessionAccess }: {
+function SessionItem({ session, running, selected, depth, pinned, busy, unread, dragProps, drop, open, toggle, menu, t, useSessionAccess }: {
   session: ReturnType<Context['sessions']['list']['getSnapshot']>['byId'][SessionId];
-  selected: boolean; depth: number; pinned: boolean; busy: boolean; unread: boolean;
+  running: boolean; selected: boolean; depth: number; pinned: boolean; busy: boolean; unread: boolean;
   dragProps: React.HTMLAttributes<HTMLDivElement>; drop?: string;
   open: () => void; toggle: () => void; menu: (event: MouseEvent) => void;
   t: WorkspaceTreeProps['t']; useSessionAccess: WorkspaceTreeProps['useSessionAccess'];
@@ -66,20 +67,21 @@ function SessionItem({ session, selected, depth, pinned, busy, unread, dragProps
     onContextMenu={menu} data-selected={selected || undefined} data-drop={drop} style={{ '--wb-depth': depth } as CSSProperties} {...dragProps}>
     <button type="button" className="wb-tree-label" aria-current={selected ? 'true' : undefined}
       aria-label={session.displayTitle} title={session.displayTitle} onClick={open}>
-      {session.running && <span className="wb-tree-running" aria-label={t('running')} />}
-      {!session.running && unread && <span className="wb-tree-running" aria-label={t('unread')} />}
       <span>{session.displayTitle}</span>
     </button>
     <div className="wb-tree-actions">
       <Action label={t('sessionMenu')} icon="more" run={menu} />
       {allowed && <Action label={t(pinned ? 'unpinChat' : 'pinChat')} icon="pin" pinned={pinned} busy={busy} run={toggle} />}
     </div>
+    <StatusMark running={running} unread={unread} t={t} />
   </div>;
 }
 
 export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree, useSessions, useWorkspaces,
-  usePanelInfo, useRemoteAccess, openSession, commands, drafts, useDraft, setPinned, useSessionAccess, updateTree, t }: WorkspaceTreeProps) {
+  usePanelInfo, useActivity, useSessionStatus, useRemoteAccess, openSession, commands, drafts, useDraft, setPinned, useSessionAccess, updateTree, t }: WorkspaceTreeProps) {
   const tree = useTree(state => state);
+  const activityOpen = useActivity(value => value);
+  const statuses = useSessionStatus(value => value);
   const draft = useDraft(value => value);
   const [menu, setMenu] = useState<MenuTarget>();
   const closeMenu = useCallback(() => setMenu(undefined), []);
@@ -250,18 +252,19 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     return entries;
   };
 
+  const openChat = (id: SessionId) => {
+    openSession(id);
+    if (tree.unread?.includes(id)) save(state => ({ ...state, unread: state.unread?.filter(item => item !== id) }));
+  };
   const rows = (project: string, depth: number) => (chatGroups.get(project) ?? [])
     .map(id => sessions.byId[id as SessionId])
     .filter(session => !archived.has(session.id) && (!session.blank || session.title))
     .map(session => <SessionItem key={session.id} session={session} selected={session.id === active && onConversation}
-        depth={depth} pinned={pins.has(session.id)} busy={pinning !== undefined} unread={tree.unread?.includes(session.id) ?? false}
+        running={statuses.get(session.id)?.running ?? session.running} depth={depth} pinned={pins.has(session.id)} busy={pinning !== undefined} unread={tree.unread?.includes(session.id) ?? false}
         dragProps={drag.row({ kind: 'session', id: session.id, parent: project })}
         drop={drag.highlight?.id === session.id ? drag.highlight.placement : undefined}
         menu={event => openMenu(event, t('sessionMenu'), sessionMenu(session.id, project))}
-        open={() => {
-          if (tree.unread?.includes(session.id)) save(state => ({ ...state, unread: state.unread?.filter(id => id !== session.id) }));
-          openSession(session.id);
-        }}
+        open={() => openChat(session.id)}
         toggle={() => { void togglePin(session.id); }} t={t} useSessionAccess={useSessionAccess} />);
 
   async function removeProject(id: Parameters<WorkspaceCommands['removeProject']>[0]) {
@@ -332,7 +335,13 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   if (!wide) return <button type="button" className="wb-tree-action wb-tree-compact"
     aria-label={t('projects')} title={t('projects')} onClick={expandSidebar}><Glyph icon="project" /></button>;
 
-  return <div ref={bindScrollerRef} className="wb-tree" aria-label={t('projects')} data-workbench-tree>
+  const projectNames = new Map<string, string>();
+  if (activityOpen) for (const [project, ids] of chatGroups) {
+    for (const id of ids) projectNames.set(id, projects.get(project)?.title ?? t('ungrouped'));
+  }
+  return <>{activityOpen && <ActivityList sessions={sessions} statuses={statuses} archived={archived} unread={tree.unread ?? []}
+    active={active} projects={projectNames} open={openChat} preview={commands.replyPreview} t={t} />}
+    <div hidden={activityOpen} ref={bindScrollerRef} className="wb-tree" aria-label={t('projects')} data-workbench-tree>
     {error && <p role="status" className="wb-tree-error">{t(error)}</p>}
     {draft?.kind === 'section' && nameDraft(draft)}
     {tree.sections.map(section => {
@@ -407,5 +416,5 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       }} />}
     {sessionRename && <RenameSessionDialog key={sessionRename.id} initial={sessionRename.title} t={t}
       close={() => setSessionRename(undefined)} save={title => commands.renameSession(sessionRename.id, title)} />}
-  </div>;
+  </div></>;
 }

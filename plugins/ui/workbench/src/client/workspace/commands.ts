@@ -20,6 +20,18 @@ export function workspaceCommands(ctx: Context, signal: AbortSignal) {
   };
   return {
     desktopPicker,
+    async replyPreview(id: SessionId, request: AbortSignal): Promise<string> {
+      const result = value(await ctx.remote.session.projections({ sessionId: id }, AbortSignal.any([signal, request])));
+      const outline = result?.values.turnOutline;
+      if (!Array.isArray(outline)) return '';
+      for (let i = outline.length - 1; i >= 0; i--) {
+        const turn = outline[i];
+        if (turn && typeof turn === 'object' && 'response' in turn && typeof turn.response === 'string' && turn.response.trim()) {
+          return turn.response;
+        }
+      }
+      return '';
+    },
     async listDirectory(path: string | undefined, request: AbortSignal) {
       const result = await ctx.remote.directoryPicker.list(path, AbortSignal.any([signal, request]));
       if (!result.ok && result.error.code === 'directory-picker/unavailable') {

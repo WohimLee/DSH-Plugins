@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Context } from '@deepseek-ai/cordis';
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
@@ -13,11 +14,27 @@ import { Picker } from './picker.js';
 import { messages } from './messages.js';
 import type { ReadUsage } from './picker.js';
 import { ModelManagement } from './management.js';
+import { ManagementIcon } from './icons.js';
+import { managementStyles } from './management-styles.js';
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { modelPicker: keyof typeof messages.en }
+  interface ModelPickerConnectionCard {
+    id: string;
+    name: string;
+    status: string;
+    tone: 'neutral' | 'ready' | 'warning';
+    description?: string;
+    footer?: string;
+    action: string;
+    details: ReactNode;
+  }
+  interface ModelPickerConnectionsOwner {
+    renderCard?: (card: ModelPickerConnectionCard) => ReactNode;
+    refresh?: number;
+  }
   interface SlotMap {
-    'modelPicker.connections': { kind: 'list'; scope: 'root' }
+    'modelPicker.connections': { kind: 'list'; scope: 'root'; owner: ModelPickerConnectionsOwner }
   }
 }
 
@@ -39,7 +56,7 @@ function register(ctx: Context): void {
   ctx.effect(() => ctx.locale.register('modelPicker', messages));
   const style = document.createElement('style');
   style.dataset.dshModelPickerStyle = '';
-  style.textContent = styles;
+  style.textContent = managementStyles + pickerStyles;
   ctx.effect(() => {
     document.head.append(style);
     return () => style.remove();
@@ -52,7 +69,7 @@ function register(ctx: Context): void {
   }, props => <ModelManagement {...props} ctx={ctx} />));
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
     name: 'sidebar.panellist', id: panelId, label: () => label('management'), order: 10,
-  }, ({ size }) => <span aria-hidden="true" style={{ fontSize: (size ?? 16) * .8, fontWeight: 500 }}>M</span>));
+  }, ({ size }) => <ManagementIcon name="cable" size={size} />));
   const readUsage: ReadUsage = async (provider, signal) => {
     if (provider === 'deepseek-account') {
       const account = ctx.get('remote.account');
@@ -194,31 +211,7 @@ function placeModelsPanel(panel: HTMLElement, menu: DOMRect): void {
   });
 }
 
-const styles = `
-.dsh-model-management {
-  height: 100%; overflow: auto; box-sizing: border-box; padding: clamp(12px, 3vw, 30px);
-  color: var(--dsw-alias-label-primary, CanvasText);
-}
-.dsh-model-management > * { max-width: 760px; margin: 0 auto 12px; }
-.dsh-model-management-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.dsh-model-management :is(h1, h2, h3) { margin: 0; font-weight: 500; }
-.dsh-model-management h1 { font-size: 20px; }
-.dsh-model-management h2 { font-size: 15px; }
-.dsh-model-management :is(h3, p, summary, li) { font-size: 13px; }
-.dsh-model-management-card, .dsh-model-management > section {
-  padding: 12px 14px; border: 1px solid var(--dsw-alias-border-l1, GrayText); border-radius: var(--dsw-radius-md, 8px);
-}
-.dsh-model-management-card p { margin: 6px 0 0; }
-.dsh-model-management-card details { margin-top: 8px; }
-.dsh-model-management summary span { margin-inline-start: 8px; color: var(--dsw-alias-label-secondary); }
-.dsh-model-management-route { padding: 4px 10px; }
-.dsh-model-management-route ul { margin: 4px 0 0; padding-inline-start: 18px; }
-.dsh-model-management button {
-  font: inherit; color: inherit; padding: 4px 8px; background: transparent; border-radius: var(--dsw-radius-md, 6px);
-  border: 1px solid var(--dsw-alias-border-l1, GrayText);
-}
-.dsh-model-management button:not(:disabled):hover { background: var(--dsw-alias-interactive-bg-hover, rgb(127 127 127 / .18)); }
-.dsh-model-management button:disabled { opacity: .6; }
+const pickerStyles = `
 [data-dsh-model-picker-hidden] { display: none; }
 @media (min-width: 390px) and (pointer: fine) {
   [role="menu"]:has(.dsh-model-picker-flyout) { overflow: visible; }

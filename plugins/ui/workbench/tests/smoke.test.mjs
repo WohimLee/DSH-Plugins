@@ -44,6 +44,7 @@ test('Client factory adds navigation without replacing native slot owners; dispo
   const list = { getSnapshot: () => ({ ids: [], byId: {} }), subscribe: () => () => {} };
   const cleanups = [];
   const ctx = {
+    uiSession: { sessionStatus: { getSnapshot: () => new Map(), subscribe: () => () => {} } },
     inject(names, callback) {
       if (names.includes('remote.workbenchSessions')) callback(ctx);
       return { async dispose() {} };

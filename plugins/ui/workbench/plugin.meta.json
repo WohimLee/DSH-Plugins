@@ -9,11 +9,11 @@
   "surfaces": {
     "web": {
       "status": "verified",
-      "evidence": "2026-11-19，macOS，DSH 0.2.2-rc.5 / Chrome 157.0.8103.79，0.5.0 的 pnpm --filter dsh-workbench test:host 通过安装、分区末尾拖动、空名称取消、行内创建、右键与更多菜单一致、子项目归组、会话目录修改与宿主重启恢复、无项目独立目录、原生导航、右栏、连接器及热启停。测试未调用真实模型。"
+      "evidence": "2026-11-19，macOS，DSH 0.2.2-rc.5 / Chrome 157.0.8103.79，0.5.1 的 pnpm --filter dsh-workbench test:host 通过。验证插件、自动化任务和第三方面板隐藏 Home 侧栏并让出宽度，返回 Home 恢复原列表，窄窗原生导航可返回 Home，以及会话菜单、工作目录和热启停回归。"
     },
     "desktop": {
       "status": "verified",
-      "evidence": "2026-11-19，macOS Desktop 0.2.2-rc.5：通过内置 CLI 将日常 desktop profile 的 dsh-workbench 从 0.4.1 升级到 0.5.0，内置 CLI 列出新版本，在实际窗口分别通过会话行右键和行尾省略号打开同一个菜单。验收范围为安装、加载和会话菜单入口。"
+      "evidence": "2026-11-20，macOS Desktop 0.2.2-rc.5，安装 0.5.1 活动视图构建后，向 Codex 发送消息并切换会话，实测行尾运行圆环、后台结束未读标记、铃铛入口、Priority 中的项目与真实回复摘要。从活动列表打开会话后未读清除，再点铃铛回到 Recents 和 Archived。\n2026-11-19，macOS Desktop 0.2.2-rc.5：使用内置 CLI 将本机 desktop profile 的 dsh-workbench 升至 0.5.1，实测插件页与自动化任务页隐藏 Home 侧栏，返回 Home 恢复当前项目与会话，功能栏的加号及分隔线已移除。"
     },
     "headless": {
       "status": "unsupported"

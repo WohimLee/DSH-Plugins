@@ -2,23 +2,32 @@ import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 
-/** Keep native search, archive and third-party row extensions available on demand. */
-export function registerWorkspaceView(ctx: Context, register: () => () => void, onNative: () => void) {
+export function createViewToggle() {
   const listeners = new Set<() => void>();
-  let native = false;
-  let disposeTree: (() => void) | undefined;
-  const view = {
-    getSnapshot: () => native,
+  let shown = false;
+  return {
+    getSnapshot: () => shown,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
     },
+    set(value: boolean) {
+      if (shown === value) return;
+      shown = value;
+      for (const listener of listeners) listener();
+    },
   };
+}
+
+/** Keep native search, archive and third-party row extensions available on demand. */
+export function registerWorkspaceView(ctx: Context, register: () => () => void, onNative: () => void) {
+  const view = createViewToggle();
+  let disposeTree: (() => void) | undefined;
   const toggle = () => {
+    const native = view.getSnapshot();
     if (native) disposeTree = ctx.slots.inject('sidebar.workspaces', register);
     else { onNative(); disposeTree?.(); disposeTree = undefined; }
-    native = !native;
-    for (const listener of listeners) listener();
+    view.set(!native);
   };
   ctx.effect(() => {
     disposeTree = ctx.slots.inject('sidebar.workspaces', register);
@@ -40,5 +49,5 @@ export function registerWorkspaceView(ctx: Context, register: () => () => void, 
       </svg>
     </button>;
   }));
-  return { native: view, showWorkbench() { if (native) toggle(); } };
+  return { native: view, showWorkbench() { if (view.getSnapshot()) toggle(); } };
 }

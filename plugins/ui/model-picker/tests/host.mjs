@@ -183,8 +183,33 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   const management = page.getByRole('main', { name: 'Model management' });
   const codexConnection = management.getByRole('region', { name: 'Codex', exact: true });
   const available = management.getByRole('region', { name: 'Available models' });
+  const qoderConnection = management.getByRole('region', { name: 'Qoder', exact: true });
+  const openCodex = codexConnection.getByRole('button', { name: 'View connection' });
+  const setupQoder = qoderConnection.getByRole('button', { name: 'Set up Qoder' });
+  const qoderManagement = management.getByRole('region', { name: 'Qoder accounts' });
   await codexConnection.getByText('Codex is not connected').waitFor();
-  await management.getByRole('region', { name: 'Qoder accounts' }).waitFor();
+  await qoderConnection.getByText('Setup required').waitFor();
+  assert.equal(await qoderManagement.isVisible(), false);
+  const layout = () => management.locator('.dsh-connection-card').evaluateAll(cards => cards.map(card => ({
+    top: card.getBoundingClientRect().top,
+    icon: card.querySelector('img')?.naturalWidth,
+  })));
+  const wide = await layout();
+  assert.deepEqual(wide.map(card => card.icon), [96, 96], 'bundled provider icons must load');
+  assert.equal(wide[0].top, wide[1].top, 'desktop cards share a row');
+  await page.setViewportSize({ width: 560, height: 900 });
+  const narrow = await layout();
+  assert.ok(narrow[1].top > narrow[0].top, 'narrow views stack cards');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openCodex.focus();
+  await page.keyboard.press('Enter');
+  await management.getByRole('region', { name: 'Codex connection' }).getByText('codex login', { exact: true }).waitFor();
+  await setupQoder.click();
+  await qoderManagement.waitFor();
+  assert.equal(await openCodex.getAttribute('aria-expanded'), 'false');
+  assert.equal(await qoderManagement.getByRole('button', { name: 'Refresh accounts' }).count(), 0);
+  await management.getByRole('button', { name: 'Refresh connections' }).click();
+  await qoderManagement.getByRole('button', { name: 'Add account' }).waitFor();
   assert.equal(await available.locator('summary').filter({ hasText: 'Codex' }).count(), 0);
   const auth = join(codexHome, 'auth.json');
   await writeFile(auth, JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
@@ -196,6 +221,28 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await connectedCodex.waitFor({ state: 'detached' });
   await writeFile(auth, JSON.stringify({ tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
   await connectedCodex.waitFor();
+  await qoderManagement.getByRole('button', { name: 'Add account', exact: true }).click();
+  const managerForm = qoderManagement.getByRole('form', { name: 'Add account' });
+  await managerForm.getByLabel('Personal access token').fill('fixture-personal');
+  await managerForm.getByLabel('Remark (optional)').fill('Managed from sidebar');
+  await managerForm.getByRole('button', { name: 'Bind account' }).click();
+  const managedQoder = qoderManagement.getByRole('group', { name: 'Managed from sidebar' });
+  const connectedQoder = available.locator('summary').filter({ hasText: 'Qoder' });
+  await connectedQoder.waitFor();
+  const manageQoder = qoderConnection.getByRole('button', { name: 'Manage accounts' });
+  assert.equal(await manageQoder.getAttribute('aria-expanded'), 'true');
+  await qoderConnection.getByText('Connected', { exact: true }).waitFor();
+  await manageQoder.click();
+  assert.equal(await qoderManagement.isVisible(), false);
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
+    await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management.png') });
+  }
+  await manageQoder.click();
+  await managedQoder.getByRole('button', { name: 'Unbind' }).click();
+  await connectedQoder.waitFor({ state: 'detached' });
+  await qoderConnection.getByText('Setup required').waitFor();
+  console.log('PASS sidebar Model management: responsive cards, bundled app icons, connection details, and live Codex/Qoder states.');
   await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
 
   const openSettings = async () => {
@@ -414,6 +461,27 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await picker.waitFor({ state: 'detached' });
   await page.locator(`[data-composer-card] [data-provider-id="${workRoute}"][data-model-id="lite"]`).waitFor();
   await page.setViewportSize({ width: 1280, height: 900 });
+  const selectedTrigger = page.locator('[data-composer-card] button[aria-label^="Select model, current"]');
+  await selectedTrigger.click();
+  await browse.waitFor();
+  assert.equal(await effort.count(), 0, 'Qoder fixture advertises no effort levels');
+  await browse.hover();
+  await provider('Codex').hover();
+  await model('Codex Fixture').click();
+  await selectedTrigger.filter({ hasText: 'Codex Fixture' }).click();
+  await effort.click();
+  const levels = page.getByRole('menuitemradio');
+  assert.deepEqual(await levels.allTextContents(), ['Default', 'high', 'low']);
+  await levels.filter({ hasText: 'high' }).click();
+  await selectedTrigger.filter({ hasText: 'high' }).click();
+  await browse.hover();
+  await provider('Codex').hover();
+  await model('Codex model 2').click();
+  await selectedTrigger.filter({ hasText: 'Codex model 2' }).click();
+  assert.equal(await effort.count(), 0, 'changing to a no-effort model clears the previous selection');
+  assert.doesNotMatch(await selectedTrigger.getAttribute('aria-label'), /reasoning effort/);
+  await page.keyboard.press('Escape');
+  console.log('PASS native effort menu follows the selected provider and model, including no-effort models.');
   await page.getByRole('button', { name: 'Plugins', exact: true }).click();
   const toggle = page.getByRole('switch', { name: /^Enable (?:Model picker|dsh-model-picker)$/i });
   await toggle.click();

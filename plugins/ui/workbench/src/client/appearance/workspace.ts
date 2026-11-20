@@ -95,7 +95,24 @@ export const workspaceStyles = `
   font-size: 12px;
 }
 .wb-tree-show-more:hover { background: var(--dsw-alias-background-hover, #8882); }
-.wb-tree-running { flex: none; inline-size: 6px; block-size: 6px; border-radius: 50%; background: #4c95f6; }
+.wb-tree[hidden] { display: none; }
+.wb-bell { position: relative; }
+.wb-bell .wb-status-unread { position: absolute; right: 4px; top: 4px; margin: 0; }
+.wb-bell[aria-pressed="true"] { color: var(--dsw-alias-accent-primary, #4c95f6); }
+[data-workbench-activity-list] h3 { color: var(--dsw-alias-label-secondary, #999); font-size: 12px; margin: 8px 6px 4px; }
+.wb-activity-row { display: block; width: 100%; text-align: start; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 7px 6px; border-radius: 7px; }
+.wb-activity-row:hover, .wb-activity-row[aria-current] { background: var(--dsw-alias-background-hover, #8882); }
+.wb-activity-line { display: flex; align-items: center; gap: 5px; }
+.wb-activity-line > span:first-child, .wb-activity-line small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-activity-line > span:first-child { flex: 1; }
+.wb-activity-line small { max-width: 40%; }
+.wb-activity-line small, .wb-activity-preview { color: var(--dsw-alias-label-secondary, #999); }
+.wb-activity-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; margin-top: 3px; }
+.wb-status-running, .wb-status-unread { margin-inline-end: 6px; }
+.wb-status-running { flex: none; width: 11px; height: 11px; border: 1.5px solid currentColor; border-inline-end-color: transparent; border-radius: 50%; animation: wb-spin 850ms linear infinite; }
+@keyframes wb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .wb-status-running { animation: none; } }
+.wb-status-unread { flex: none; inline-size: 6px; block-size: 6px; border-radius: 50%; background: #4c95f6; }
 .wb-tree-error { margin: 4px 6px; font-size: 12px; }
 .wb-tree-compact { margin: 6px auto; }
 .wb-tree-tail { min-block-size: 30px; flex: 1 0 30px; }

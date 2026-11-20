@@ -2,6 +2,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap { workbench: keyof typeof zh }
 }
 const zh = {
+  viewActivity: '查看动态', priority: '优先', today: '今天', noActivity: '暂无会话动态',
   navigation: '工作台导航', conversation: '对话', newSession: '新建会话', morePanels: '更多面板', pinLauncher: '固定到功能栏', cancel: '取消', create: '创建',
   sessionSource: '会话来源', codexProjects: 'Codex 项目', unassignedCodex: '未归入项目', unknownDirectory: '未知工作目录',
   externalArchived: '已归档', externalEmpty: '没有已同步的 Codex 项目或会话。', externalOpenFailed: '无法在本机 Codex 中打开此会话。',
@@ -32,6 +33,7 @@ const zh = {
   saveFailed: '无法保存侧栏更改。', pinFailed: '无法更新会话置顶状态。', invalidMove: '项目不能移入自身或它的子项目。',
 };
 const en: Record<keyof typeof zh, string> = {
+  viewActivity: 'View activity', priority: 'Priority', today: 'Today', noActivity: 'No session activity yet.',
   navigation: 'Workbench navigation', conversation: 'Conversation', newSession: 'New session', morePanels: 'More panels', pinLauncher: 'Pin to activity bar', cancel: 'Cancel', create: 'Create',
   sessionSource: 'Session source', codexProjects: 'Codex projects', unassignedCodex: 'Unassigned chats', unknownDirectory: 'Unknown working directory',
   externalArchived: 'Archived', externalEmpty: 'No synced Codex projects or chats.', externalOpenFailed: 'Could not open this chat in local Codex.',

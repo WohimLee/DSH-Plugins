@@ -39,6 +39,12 @@ export async function apply(ctx, config) {
     const session = ctx.agents.get(sessionId)?.session;
     if (session && !session.ownEvents().some(event => event.type === 'turn/start')) session.append([
       ['turn/start', { turn: 1 }],
+      ...(suffix === 'alpha' ? [
+        ['step/start', { turn: 1, step: 1 }],
+        ['assistant/message', { turn: 1, step: 1, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
+          content: [{ type: 'text', text: 'Activity preview fixture' }], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
+        ['step/end', { turn: 1, step: 1 }],
+      ] : []),
       ['turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } }],
     ]);
     await ctx.sessionController.rename({ sessionId, title: 'Workbench ' + suffix });

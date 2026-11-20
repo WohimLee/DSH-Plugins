@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "将本机 Codex 登录可用的模型接入 DSH 原生模型循环。",
   "type": "module",
@@ -49,6 +49,10 @@
     "esbuild": "0.28.2",
     "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
     "@deepseek-ai/schemastery": "3.19.0",
-    "@deepseek-ai/dsh": "0.2.2-rc.5"
+    "@deepseek-ai/dsh": "0.2.2-rc.5",
+    "@dsh-plugins/macos-proxy": "workspace:*"
+  },
+  "dependencies": {
+    "undici": "8.11.2"
   }
 }

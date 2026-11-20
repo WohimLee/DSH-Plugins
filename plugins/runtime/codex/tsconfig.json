@@ -14,6 +14,10 @@
     "declaration": true,
     "types": [
       "node"
+    ],
+    "rootDirs": [
+      "src",
+      "node_modules/@dsh-plugins/macos-proxy"
     ]
   },
   "include": [

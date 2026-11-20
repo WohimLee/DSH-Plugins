@@ -136,7 +136,11 @@ export class QoderAdapter extends LlmAdapter {
       signal.addEventListener('abort', abort, { once: true });
       const { input, systemPrompt } = buildPrompt(options);
       const auth = await this.accounts.auth(options.provider);
-      await this.resolveAccountModel(options.provider, options.model, auth, signal);
+      const model = await this.resolveAccountModel(options.provider, options.model, auth, signal);
+      const effort = model.reasoning && options.reasoningEffort;
+      if (effort && !model.reasoning?.efforts.some(level => level.id === effort)) {
+        throw new LlmError('所选 Qoder 账号的模型不支持此推理强度。', 'UNSUPPORTED_REASONING_EFFORT');
+      }
       const executable = await resolveCli(this.config.cliPath);
       cwd = await mkdtemp(join(tmpdir(), 'dsh-qoder-'));
       signal.throwIfAborted();
@@ -148,11 +152,12 @@ export class QoderAdapter extends LlmAdapter {
         }
         extraArgs['max-output-tokens'] = String(options.maxTokens);
       }
-      if (options.reasoningEffort) extraArgs['reasoning-effort'] = options.reasoningEffort;
       session = await this.openSession(executable, userInput(input), {
         cwd,
         systemPrompt,
         model: options.model,
+        ...(effort && { resolveModel: ({ purpose }) => purpose === 'main'
+          ? { model: model.id, parameters: { reasoningEffort: effort } } : undefined }),
         abortController,
         maxTurns: 1,
         includePartialMessages: true,

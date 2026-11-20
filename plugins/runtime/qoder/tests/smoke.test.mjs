@@ -173,6 +173,31 @@ test('does not expose upstream diagnostics after authentication and verification
   assert.equal(missing.at(-1).reason.failure.code, 'INVALID_REQUEST');
 });
 
+test('uses the selected model’s advertised efforts for the main Qoder call', async () => {
+  const policies = [];
+  const adapter = new plugin.QoderAdapter({ cliPath: process.execPath }, async (_path, _input, options) => {
+    policies.push(options.resolveModel);
+    return { events: source([result({ result: 'ready' })]), async close() {} };
+  }, async () => [
+    { value: 'lite', displayName: 'Lite', isReasoning: true },
+    { value: 'pro', efforts: ['low', 'high', 'low'], defaultEffort: 'low' },
+  ], async () => undefined);
+  try {
+    const [lite, pro] = await adapter.listModels('qoder');
+    assert.equal(lite.reasoning, undefined);
+    assert.deepEqual(pro.reasoning, { efforts: [{ id: 'low', name: 'low' }, { id: 'high', name: 'high' }], defaultEffort: 'low' });
+    for (const model of ['lite', 'pro']) {
+      assert.equal((await collect(adapter.stream({ ...request, model, reasoningEffort: 'high' }))).at(-1).reason.kind, 'stop');
+    }
+    assert.equal(policies[0], undefined);
+    assert.deepEqual(policies[1]({ purpose: 'main' }), { model: 'pro', parameters: { reasoningEffort: 'high' } });
+    assert.equal(policies[1]({ purpose: 'title' }), undefined);
+    const invalid = await collect(adapter.stream({ ...request, model: 'pro', reasoningEffort: 'max' }));
+    assert.equal(invalid.at(-1).reason.failure.code, 'UNSUPPORTED_REASONING_EFFORT');
+    assert.equal(policies.length, 2);
+  } finally { adapter.dispose(); }
+});
+
 test('named accounts use their actual live catalogs and cannot cross-charge', async () => {
   const accounts = [
     { id: 'personal', name: 'Personal', tokenEnv: 'TEST_QODER_PERSONAL' },

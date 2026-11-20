@@ -69,4 +69,4 @@ try {
     child.kill('SIGTERM'); const kill = setTimeout(() => child.kill('SIGKILL'), 5000);
     await closed; clearTimeout(kill);
   }
-} finally { await rm(temp, { recursive: true, force: true }); }
+} finally { await rm(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 }); }

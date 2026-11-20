@@ -6,7 +6,7 @@
 
 需要 DSH `0.2.2-rc.5`、Node.js >=24.9.0，以及运行 DSH 的机器上的 Qoder CLI。SDK 固定为 `1.0.59`，搭配的原生 Qoder CLI 版本为 `1.1.83`。
 
-先按 [Qoder CLI 安装指南](https://docs.qoder.com/cli/installation) 安装 CLI。在 DSH 的 Qoder 设置页可按需添加账号。原有 `qoder` 路由也可通过 `qodercli login` 登录，或使用宿主凭据引用 `QODER_PERSONAL_ACCESS_TOKEN`。
+先按 [Qoder CLI 安装指南](https://docs.qoder.com/cli/installation) 安装 CLI。在 DSH 的 Qoder 设置页可按需添加账号。DSH 通过 SDK 复用当前用户的 CLI 登录。用 `qodercli status -o json` 检查 `logged_in`；若为 false，即使 Qoder 桌面应用已经登录，也需要完成 CLI 浏览器授权或绑定 PAT。见 [Qoder SDK 认证](https://docs.qoder.com/cli/sdk/authentication)。原有 `qoder` 路由也可通过 `qodercli login` 登录，或使用宿主凭据引用 `QODER_PERSONAL_ACCESS_TOKEN`。
 
 在仓库根目录构建 tarball。
 
@@ -19,7 +19,7 @@ pnpm --filter dsh-qoder pack --pack-destination /tmp
 Web 使用对应版本的 DSH CLI 安装。安装参数 `--ignore-scripts` 跳过 SDK 自带的运行时下载脚本，插件使用已安装的 Qoder CLI。
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-qoder-0.1.4.tgz --ignore-scripts
+dsh plugin --profile web add /tmp/dsh-qoder-0.1.5.tgz --ignore-scripts
 ```
 
 Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile desktop`。若从 Desktop 插件页安装，在该 profile 的 `pnpm-workspace.yaml` 现有 `allowBuilds` 下添加 `'@qoder-ai/qoder-agent-sdk': false`，即可跳过该 SDK 的下载脚本。重启宿主后，打开 **设置 → Qoder** 查看账号状态。
@@ -32,7 +32,9 @@ Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile d
     cliPath: /absolute/path/to/qodercli
 ```
 
-### 绑定账号
+推理强度和默认档位取自当前账号的 SDK 模型目录。没有声明档位的模型使用厂商默认行为。
+
+## 绑定账号
 
 1. 在每个账号的 [Qoder 账号集成设置](https://qoder.com/account/integrations) 创建个人访问令牌（PAT）。
 2. 在 DSH 打开 **设置 → Qoder → 添加账号**，填入该账号的 PAT。备注可留空，也可填写「个人」「工作」等名称。DSH 凭据服务保存 PAT 和备注。
