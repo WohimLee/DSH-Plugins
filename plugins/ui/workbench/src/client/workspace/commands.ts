@@ -35,6 +35,7 @@ export function workspaceCommands(ctx: Context, signal: AbortSignal) {
     startSession: (project?: WorkspaceId) => ctx.uiWorkspace.startSession(project),
     renameSession,
     forkSession: (id: SessionId) => ctx.uiWorkspace.forkSession(id),
+    unarchiveSession: (id: SessionId) => ctx.uiWorkspace.unarchiveSession(id),
     archiveSession: (id: SessionId) => ctx.uiWorkspace.archiveSession(id),
     async directory(id: SessionId) { return value(await ctx.remote.workbenchSessions.directory(id, signal)); },
     async setDirectory(id: SessionId, path: string) { value(await ctx.remote.workbenchSessions.setDirectory(id, path, signal)); },

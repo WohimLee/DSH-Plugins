@@ -1,8 +1,9 @@
-export type Icon = 'folderAdd' | 'project' | 'section' | 'add' | 'new' | 'pin' | 'more' | 'edit' | 'list' | 'archive' | 'close';
+export type Icon = 'folderAdd' | 'project' | 'section' | 'add' | 'new' | 'pin' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close';
 export function Glyph({ icon }: { icon: Icon }) {
   const paths: Record<Icon, string> = {
     edit: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM10 2h4l1 3 3 1 3 1-1 4 1 3-2 3-3 1-2 4h-4l-1-3-3-1-3-1 1-4-1-3 2-3 3-1 2-4Z',
     list: 'M8 6h13M8 12h13M8 18h13M3 6h.1M3 12h.1M3 18h.1',
+    unarchive: 'M3 11v9h18v-9M12 15V3m-5 5 5-5 5 5',
     archive: 'M3 4h18v5H3zM5 9v11h14V9M9 13h6',
     close: 'm5 5 14 14M19 5 5 19',
     folderAdd: 'M2 6h7l2 2h11v11H2V6Zm10 5v5m-2.5-2.5h5',

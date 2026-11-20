@@ -1,4 +1,5 @@
 import { Glyph, type Icon } from './Glyph.js';
+import { ArchivedSection } from './ArchivedSection.js';
 import { EditProjectDialog } from './EditProjectDialog.js';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
@@ -348,7 +349,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         } },
       ]);
       const showUngrouped = isDefault && rows(ungrouped, 1).length > 0;
-      return <div className="wb-tree-section" key={section.id}>
+      return <Fragment key={section.id}><div className="wb-tree-section">
         {editingName(section.id) ?? <div className="wb-tree-row" onContextMenu={showSectionMenu} data-wb-kind="section" data-row-key={section.id}
           data-drop={drag.highlight?.id === section.id ? drag.highlight.placement : undefined}
           {...drag.row({ kind: 'section', id: section.id, parent: rootSection })}>
@@ -365,7 +366,15 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         {expanded && draft?.kind === 'project' && draft.parent === section.id && nameDraft(draft)}
         {expanded && (grouped.get(section.id) ?? []).map(id => projectRow(id, section.id, 0))}
         {expanded && showUngrouped && projectRow(ungrouped, section.id, 0)}
-      </div>;
+      </div>
+        {isDefault && <ArchivedSection t={t} useSessionAccess={useSessionAccess}
+          sessions={sessions.ids.filter(id => archived.has(id)).map(id => sessions.byId[id])}
+          restore={async id => {
+            setError(undefined);
+            try { await commands.unarchiveSession(id); }
+            catch { setError('actionFailed'); }
+          }} />}
+      </Fragment>;
     })}
     <div className="wb-tree-tail" data-workbench-tree-end aria-hidden="true"
       data-drop={drag.highlight?.id === rootSection ? 'after' : undefined}

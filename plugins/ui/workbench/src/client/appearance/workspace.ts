@@ -47,6 +47,7 @@ export const workspaceStyles = `
   padding: 3px 6px 3px calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px));
 }
 .wb-tree-label span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-archived-title { cursor: default; }
 .wb-tree-label svg { flex: none; }
 .wb-tree-row[data-wb-kind="section"] .wb-tree-label {
   color: var(--dsw-alias-label-secondary, #999);
