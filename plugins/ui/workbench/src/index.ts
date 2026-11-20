@@ -8,12 +8,14 @@ import type {} from '@deepseek-ai/dsh-typert-registry';
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths';
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import { contribution, service } from './remote.js';
+import { deleteSession, finishSessionDeletions } from './delete-session.js';
 
 export const name = 'dsh-workbench';
-export const inject = ['typert', 'sessionController', 'workingDirectory'];
+export const inject = ['typert', 'sessionController', 'workingDirectory', 'sessionPersistence', 'agents', 'sessions', 'workspaceRegistry'];
 type SessionId = Parameters<Context['sessionController']['resolveAgent']>[0];
 
 export class WorkbenchSessions extends TypertRemoteService {
+  private readonly deleting = new Set<string>();
   constructor(ctx: Context) {
     super(ctx, service);
     ctx.effect(() => ctx.typert.register({ package: name, face: 'host', schemas: [],
@@ -68,6 +70,33 @@ export class WorkbenchSessions extends TypertRemoteService {
     }
     return this.ctx.workingDirectory.set(await this.agent(sessionId, signal), path, signal);
   }
+
+  @Remote
+  async deleteSession(sessionId: string, signal: AbortSignal): Promise<'deleted' | 'restart-required'> {
+    this.owner();
+    signal.throwIfAborted();
+    if (this.deleting.has(sessionId)) throw new RemoteError('workbench/session-busy', 'Deletion is already running.', undefined);
+    this.deleting.add(sessionId);
+    try {
+      return await deleteSession(this.ctx, sessionId as SessionId, signal);
+    } catch (error) {
+      if (error instanceof RemoteError || signal.aborted) throw error;
+      if (error instanceof Error && error.name === 'SessionAlreadyOwnedError') {
+        throw new RemoteError('workbench/session-busy', 'Another process has this session open.', undefined);
+      }
+      this.ctx.logger.warn('Workbench could not finish deleting a session: %s', error);
+      throw new RemoteError('workbench/delete-failed', 'Could not finish deleting the session. Refresh and check its status.', undefined);
+    } finally {
+      this.deleting.delete(sessionId);
+    }
+  }
 }
 
-export function apply(ctx: Context): void { new WorkbenchSessions(ctx); }
+export async function apply(ctx: Context): Promise<void> {
+  new WorkbenchSessions(ctx);
+  const lifetime = new AbortController();
+  ctx.effect(() => () => lifetime.abort());
+  await finishSessionDeletions(ctx, lifetime.signal).catch(error => {
+    if (!lifetime.signal.aborted) ctx.logger.warn('Workbench could not check pending deletions: %s', error);
+  });
+}

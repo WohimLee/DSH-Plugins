@@ -7,7 +7,7 @@ import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
 import * as plugin from '../lib/index.js';
 
 test('Host service declares its required host dependencies', () => {
-  assert.deepEqual(plugin.inject, ['typert', 'sessionController', 'workingDirectory']);
+  assert.deepEqual(plugin.inject, ['typert', 'sessionController', 'workingDirectory', 'sessionPersistence', 'agents', 'sessions', 'workspaceRegistry']);
   assert.equal(typeof plugin.apply, 'function');
 });
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -535,6 +535,54 @@ try {
   }
   await beta.click();
   console.log('PASS native plugin-manager UI hot disable/re-enable removes and restores workbench without duplicate rails, preserving external panels.');
+  await recordMessage('session-deletion-fixture', '');
+  const locationFile = join(temp, 'deletion-locations.json');
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (await access(locationFile).then(() => true, () => false)) break;
+    await new Promise(accept => setTimeout(accept, 100));
+  }
+  const locations = JSON.parse(await readFile(locationFile, 'utf8'));
+  // A complete catalog read discovers the fixture that has already released its live writer.
+  await page.reload();
+  const cold = tree.locator('[data-row-key="session:workbench-delete-cold"]');
+  const live = tree.locator('[data-row-key="session:workbench-delete-live"]');
+  const ungrouped = tree.getByRole('button', { name: 'Ungrouped chats', exact: true });
+  await ungrouped.waitFor();
+  if (await ungrouped.getAttribute('aria-expanded') === 'false') await ungrouped.click();
+  await live.waitFor();
+  await cold.waitFor();
+  await cold.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+  const archivedCold = archive.locator('[data-row-key="archived:workbench-delete-cold"]');
+  if (await archiveLabel.getAttribute('aria-expanded') === 'false') await archiveLabel.click();
+  await archivedCold.waitFor();
+  const confirmDelete = async (row, accept) => {
+    await row.click({ button: 'right' });
+    const asserted = new Promise(resolve => page.once('dialog', async dialog => {
+      const message = dialog.message();
+      if (accept) await dialog.accept(); else await dialog.dismiss();
+      resolve(message);
+    }));
+    await page.getByRole('menuitem', { name: 'Permanently delete', exact: true }).click();
+    assert.match(await asserted, /Permanently delete this session\?/);
+  };
+  await confirmDelete(archivedCold, false);
+  await access(locations.cold);
+  await confirmDelete(archivedCold, true);
+  await archivedCold.waitFor({ state: 'detached' });
+  await assert.rejects(access(dirname(locations.cold)), { code: 'ENOENT' });
+  await confirmDelete(live, true);
+  await tree.getByText('This session will be permanently deleted the next time DSH starts.', { exact: true }).waitFor();
+  await access(locations.live);
+  const deletionPort = new URL(host.url).port;
+  await host.stop();
+  host = await startHost(deletionPort);
+  await page.goto(host.url);
+  await page.locator('[data-workbench-tree]').waitFor();
+  await assert.rejects(access(dirname(locations.live)), { code: 'ENOENT' });
+  assert.equal(await page.getByText('Delete fixture live', { exact: true }).count(), 0);
+  assert.equal(await page.getByText('Delete fixture cold', { exact: true }).count(), 0);
+  console.log('PASS cancel, archived session deletion, queued live-session deletion, catalog refresh and durable deletion after restart.');
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'workbench.png'), fullPage: true });

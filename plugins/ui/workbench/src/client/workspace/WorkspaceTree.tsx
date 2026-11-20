@@ -96,9 +96,12 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const canPickDirectory = useRemoteAccess('directoryPicker/pick');
   const canAdd = useRemoteAccess('workspace/create');
   const canCreateSession = useRemoteAccess('session/create');
+  const canDeleteSession = useRemoteAccess('workbenchSessions/deleteSession');
   const { bindScrollerRef } = useSectionScroller();
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [error, setError] = useState<'saveFailed' | 'pinFailed' | 'invalidMove' | 'actionFailed'>();
+  const [error, setError] = useState<'saveFailed' | 'pinFailed' | 'invalidMove' | 'actionFailed' | 'deleteFailed'>();
+  const [deletePending, setDeletePending] = useState(false);
+  const deleting = useRef(new Set<SessionId>());
   const [pinning, setPinning] = useState<string>();
   const pinInFlight = useRef(false);
   const active = Object.values(sessions.byId).find(item => (item.retainedBy.mainView ?? 0) > 0)?.id;
@@ -218,6 +221,26 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     }
   };
 
+  const deleteEntry = (session: (typeof sessions.byId)[SessionId]): MenuEntry => ({
+    label: t('permanentDelete'), danger: true,
+    run: canDeleteSession && !(statuses.get(session.id)?.running ?? session.running) ? () => {
+      const { id } = session;
+      if (deleting.current.has(id) || !window.confirm(`${t('deleteConfirm')}\n\n${session.displayTitle}`)) return;
+      deleting.current.add(id);
+      setError(undefined);
+      setDeletePending(false);
+      void commands.deleteSession(id).then(result => {
+        if (result === 'restart-required') { setDeletePending(true); return; }
+        save(state => {
+          const sessionProjects = { ...state.sessionProjects };
+          delete sessionProjects[id];
+          return { ...state, sessionProjects, unread: state.unread?.filter(item => item !== id),
+            sessions: Object.fromEntries(Object.entries(state.sessions).map(([project, ids]) => [project, ids.filter(item => item !== id)])) };
+        });
+      }).catch(() => setError('deleteFailed')).finally(() => deleting.current.delete(id));
+    } : undefined,
+  });
+
   const sessionMenu = (id: SessionId, parent: string) => {
     const session = sessions.byId[id];
     const destination = [{ id: ungrouped, label: t('ungrouped') },
@@ -247,7 +270,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       ] },
       { label: t('newWindow') },
       { label: t('archiveChat'), run: () => report(() => commands.archiveSession(id)) },
-      { label: t('permanentDelete'), danger: true },
+      deleteEntry(session),
     ];
     return entries;
   };
@@ -343,6 +366,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     active={active} projects={projectNames} open={openChat} preview={commands.replyPreview} t={t} />}
     <div hidden={activityOpen} ref={bindScrollerRef} className="wb-tree" aria-label={t('projects')} data-workbench-tree>
     {error && <p role="status" className="wb-tree-error">{t(error)}</p>}
+    {deletePending && <p role="status" className="wb-tree-error">{t('deletePending')}</p>}
     {draft?.kind === 'section' && nameDraft(draft)}
     {tree.sections.map(section => {
       const isDefault = section.id === defaultSection;
@@ -378,6 +402,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       </div>
         {isDefault && <ArchivedSection t={t} useSessionAccess={useSessionAccess}
           sessions={sessions.ids.filter(id => archived.has(id)).map(id => sessions.byId[id])}
+          menu={canDeleteSession ? (event, id) => openMenu(event, t('sessionMenu'), [deleteEntry(sessions.byId[id])]) : undefined}
           restore={async id => {
             setError(undefined);
             try { await commands.unarchiveSession(id); }

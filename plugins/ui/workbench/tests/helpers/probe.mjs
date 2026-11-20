@@ -9,6 +9,8 @@ export async function createProbe(temp, runtimeVersion) {
   await mkdir(join(directory, 'lib'), { recursive: true });
   const workspace = join(temp, 'workspace');
   await mkdir(workspace);
+  const deletionPath = join(temp, 'deletion-workspace');
+  await mkdir(deletionPath);
   await writeFile(join(workspace, 'workbench-fixture.md'), '# Workspace search and preview fixture\n');
   const child = join(workspace, 'child-project');
   await mkdir(child);
@@ -24,12 +26,13 @@ export async function createProbe(temp, runtimeVersion) {
   await writeFile(join(directory, 'cordis.patch.yml'), stringify([
     { id: 'workspace-controller', config: { documentsDirectory: join(temp, 'documents') } },
     { insert: [{ id: 'dsh-workbench-probe:main', name: pkg.name,
-      config: { path: workspace, child, activity: join(temp, 'activity') } }] },
+      config: { path: workspace, child, activity: join(temp, 'activity'), deletionPath, deletionLocations: join(temp, 'deletion-locations.json') } }] },
   ]));
   await writeFile(join(directory, 'lib/index.js'), `
 import { readFileSync, unwatchFile, watchFile } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions'];
+export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions', 'sessionPersistence'];
 export async function apply(ctx, config) {
   const { workspace } = await ctx.workspaceController.create({ path: config.path });
   await ctx.workspaceController.create({ path: config.child });
@@ -74,6 +77,26 @@ export async function apply(ctx, config) {
   const recordActivity = () => {
     const { id, text } = JSON.parse(readFileSync(config.activity, 'utf8'));
     if (id === 'subagent-fixture') { recordSubagent(); return; }
+    if (id === 'session-deletion-fixture') {
+      void (async () => {
+        const locations = {};
+        for (const mode of ['cold', 'live']) {
+          const sessionId = 'workbench-delete-' + mode;
+          const handle = await ctx.agents.create({ sessionId, meta: { cwd: config.deletionPath } });
+          const session = handle.agent.session;
+          session.append([
+            ['turn/start', { turn: 1 }],
+            ['turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } }],
+          ]);
+          await ctx.sessionController.rename({ sessionId, title: 'Delete fixture ' + mode });
+          await ctx.sessions.flush(session);
+          if (mode === 'cold') await handle.dispose();
+          locations[mode] = (await ctx.sessionPersistence.stat(sessionId)).location.path;
+        }
+        await writeFile(config.deletionLocations, JSON.stringify(locations));
+      })().catch(error => ctx.logger.warn('Deletion fixture failed: %s', error));
+      return;
+    }
     const session = ctx.agents.get(id)?.session;
     if (!session) return;
     const turn = (session.ownEvents().findLast(event => event.type === 'turn/start')?.data.turn ?? 0) + 1;
