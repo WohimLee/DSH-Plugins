@@ -1,8 +1,8 @@
 export const conversationStyles = `
-/* Use the host typography preference for both settled and streaming messages. */
+/* Workbench zoom scales this baseline independently of the host's text size. */
 html[data-dsh-workbench] [data-conversation-content] {
-  --wb-message-size: max(12px, calc(var(--dsh-content-font-size, 14px) - 1px));
-  --wb-message-leading: calc(var(--wb-message-size) + 9px);
+  --wb-message-size: 13px;
+  --wb-message-leading: 24px;
 }
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] {
   --dsw-font-markdown-base: var(--wb-message-size) / var(--wb-message-leading) var(--dsw-font-family);
@@ -11,8 +11,8 @@ html[data-dsh-workbench] [data-conversation-content] {
   --dsw-font-markdown-h3: 600 calc(var(--wb-message-size) + 1px) / 1.4 var(--dsw-font-family);
   --dsw-font-markdown-h4: 600 var(--wb-message-size) / var(--wb-message-leading) var(--dsw-font-family);
   --dsw-font-markdown-base-strong: var(--dsw-font-markdown-h4);
-  --wb-table-size: max(11px, calc(var(--wb-message-size) - 1px));
-  --wb-table-leading: calc(var(--wb-message-leading) + 1px);
+  --wb-table-size: 12px;
+  --wb-table-leading: 23px;
   --dsw-font-markdown-table: var(--wb-table-size) / var(--wb-table-leading) var(--dsw-font-family);
   --dsw-font-markdown-table-head: 600 var(--wb-table-size) / var(--wb-table-leading) var(--dsw-font-family);
 }
@@ -28,7 +28,7 @@ html[data-dsh-workbench] [data-conversation-content] {
 }
 
 [data-slot="conversation.session.header"] nav :is(button, span) {
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 18px;
 }
 

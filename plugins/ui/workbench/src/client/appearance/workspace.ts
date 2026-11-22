@@ -43,7 +43,7 @@ export const workspaceStyles = `
   gap: 7px;
   min-inline-size: 0;
   min-block-size: 31px;
-  font-size: 14px;
+  font-size: 13.5px;
   line-height: 20px;
   text-align: start;
   padding: 3px 6px 3px calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px));

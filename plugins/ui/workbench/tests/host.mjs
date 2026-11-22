@@ -149,7 +149,7 @@ try {
     assert.deepEqual(await row.locator('.wb-tree-label').evaluate(label => {
       const style = getComputedStyle(label);
       return [style.fontSize, style.lineHeight, label.getBoundingClientRect().height];
-    }), ['14px', '20px', 31]);
+    }), ['13.5px', '20px', 31]);
   }
   const restWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
   await alpha.hover();
@@ -342,12 +342,25 @@ try {
   console.log('PASS native session alpha is selectable.');
   await alpha.locator('[aria-current="true"]').waitFor();
   const sessionHeader = page.locator('[data-slot="conversation.session.header"] nav').getByText('Workbench alpha', { exact: true });
-  assert.equal(await sessionHeader.evaluate(title => getComputedStyle(title).fontSize), '13px');
+  assert.equal(await sessionHeader.evaluate(title => getComputedStyle(title).fontSize), '12.5px');
   const paragraph = page.locator('[data-conversation-content]').getByText('Activity preview fixture', { exact: true });
   assert.deepEqual(await paragraph.evaluate(text => {
-    const style = getComputedStyle(text);
-    return [style.fontSize, style.lineHeight];
-  }), ['13px', '22px']);
+    const measure = () => {
+      const style = getComputedStyle(text);
+      return [style.fontSize, style.lineHeight];
+    };
+    const baseline = measure();
+    const themeSize = '--dsh-content-font-size';
+    const bodyStyle = document.body.style;
+    const previous = bodyStyle.getPropertyValue(themeSize);
+    bodyStyle.setProperty(themeSize, '15px');
+    try {
+      return [baseline, measure()];
+    } finally {
+      if (previous) bodyStyle.setProperty(themeSize, previous);
+      else bodyStyle.removeProperty(themeSize);
+    }
+  }), [['13px', '24px'], ['13px', '24px']], '100% uses the same message size with the Desktop text preference');
   const tabs = page.locator('[data-conversation-tabs]');
   await tabs.getByRole('tab', { name: 'Trajectory' }).click();
   await tabs.getByRole('tab', { name: 'Chat', exact: true }).click();
