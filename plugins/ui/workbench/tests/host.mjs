@@ -549,10 +549,48 @@ try {
   await picker.getByRole('button', { name: 'Use this directory' }).click();
   await picker.getByRole('alert').waitFor();
   await chooseFolder(extraSource);
+  const sourceRows = createProject.locator('.wb-folder-row');
+  const primaryBadge = createProject.getByRole('button', { name: /^Primary: / });
+  const makePrimary = createProject.getByRole('button', { name: /^Make primary: / });
+  const firstSource = sourceRows.filter({ hasText: 'recents-project' });
+  const secondSource = sourceRows.filter({ hasText: 'extra-source' });
+  const actionOpacity = () => makePrimary.evaluate(button => getComputedStyle(button).opacity);
+  await projectName.click();
+  assert.equal(await primaryBadge.innerText(), 'Primary');
+  assert.equal(await firstSource.getByRole('button', { name: /^Primary: / }).count(), 1);
+  assert.equal(await actionOpacity(), '0');
+  await secondSource.hover();
+  assert.equal(await actionOpacity(), '1');
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await createProject.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'create-project-primary.png') });
+  }
+  await makePrimary.click();
+  assert.equal(await sourceRows.first().locator('span').textContent(), 'recents-project');
+  assert.equal(await secondSource.getByRole('button', { name: /^Primary: / }).count(), 1);
+  await secondSource.getByRole('button', { name: /^Remove folder/ }).click();
+  assert.equal(await firstSource.getByRole('button', { name: /^Primary: / }).count(), 1);
+  const addAnother = createProject.getByRole('button', { name: 'Add folder', exact: true });
+  await addAnother.click();
+  await chooseFolder(extraSource);
+  await projectName.click();
+  await page.keyboard.press('Tab'); // Remove the primary folder.
+  await page.keyboard.press('Tab'); // Make the second folder primary.
+  assert.equal(await actionOpacity(), '1');
+  assert.equal(await makePrimary.evaluate(button => document.activeElement === button), true);
+  await page.keyboard.press('Enter');
+  assert.equal(await secondSource.getByRole('button', { name: /^Primary: / }).evaluate(button => document.activeElement === button), true);
   await createButton.click();
   await createProject.waitFor({ state: 'detached' });
   const recentsProject = recents.locator('..').getByRole('button', { name: 'Recents fixture', exact: true });
   await recentsProject.waitFor();
+  const newProjectRow = recentsProject.locator('..');
+  await newProjectRow.hover();
+  await newProjectRow.getByRole('button', { name: 'Add subproject' }).click();
+  await createProject.getByRole('button', { name: 'Add', exact: true }).click();
+  assert.equal(await picker.getByRole('textbox', { name: 'Directory path' }).inputValue(), await realpath(extraSource),
+    'the next folder chooser starts from the project root actually registered with the host');
+  await picker.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await createProject.getByRole('button', { name: 'Cancel', exact: true }).click();
   await recentsProject.click({ button: 'right' });
   await projectMenu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
   await projectEditor.getByText('extra-source', { exact: true }).waitFor();

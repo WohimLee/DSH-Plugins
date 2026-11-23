@@ -19,6 +19,8 @@ export function ProjectDialog(props: ProjectDialogProps) {
   const backdropPress = useRef(false);
   const [name, setName] = useState(creating ? '' : props.initial);
   const [paths, setPaths] = useState(creating ? [] : [...props.folders]);
+  const [selectedPrimary, setSelectedPrimary] = useState<string>();
+  const primary = selectedPrimary ?? paths[0];
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<'actionFailed' | 'projectNameTaken' | 'projectFolderTaken'>();
@@ -35,7 +37,7 @@ export function ProjectDialog(props: ProjectDialogProps) {
     try {
       const title = name.trim();
       const result = props.mode === 'create'
-        ? await props.save(title, [paths[0]!, ...paths.slice(1)])
+        ? await props.save(title, [primary!, ...paths.filter(path => path !== primary)])
         : await props.save(title, paths);
       if (!result) { close(); return; }
       setError(result);
@@ -76,11 +78,25 @@ export function ProjectDialog(props: ProjectDialogProps) {
         {creating && !paths.length ? <div className="wb-folder-empty">
           <span>{t(commands.desktopPicker ? 'addLocalFolder' : 'addSourceFolder')}</span>{add}
         </div> : <div className="wb-folder-list">
-          {paths.map((path, index) => <div key={path} className="wb-folder-row"><Glyph icon="project" /><span>{path.split(/[\\/]/).filter(Boolean).at(-1) || path}</span>
-            {creating && index === 0 && <small>{t('workingFolder')}</small>}
-            <span className="wb-folder-tooltip" role="tooltip">{path}</span>
-            <button type="button" aria-label={t('removeFolder') + ' ' + path} disabled={busy}
-              onClick={() => { setPaths(paths.filter(item => item !== path)); setError(undefined); }}>×</button></div>)}
+          {paths.map(path => {
+            const isPrimary = path === primary;
+            const primaryLabel = t(isPrimary ? 'primaryFolder' : 'makePrimary');
+            return <div key={path} className="wb-folder-row"><Glyph icon="project" />
+              <span title={creating ? path : undefined}>{path.split(/[\\/]/).filter(Boolean).at(-1) || path}</span>
+              {creating ? <div className="wb-folder-primary-slot"><button type="button" className="wb-folder-primary" data-primary={isPrimary || undefined}
+                aria-label={`${primaryLabel}: ${path}`} aria-disabled={isPrimary || undefined} tabIndex={isPrimary ? -1 : undefined}
+                disabled={busy} onClick={() => {
+                  if (isPrimary) return;
+                  setSelectedPrimary(path);
+                  setError(undefined);
+                }}>{primaryLabel}</button></div> : <span className="wb-folder-tooltip" role="tooltip">{path}</span>}
+              <button type="button" aria-label={t('removeFolder') + ' ' + path} disabled={busy}
+                onClick={() => {
+                  setPaths(current => current.filter(item => item !== path));
+                  if (isPrimary) setSelectedPrimary(undefined);
+                  setError(undefined);
+                }}>×</button></div>;
+          })}
           {add}
         </div>}
         {error && <div role="alert">{t(error)}</div>}

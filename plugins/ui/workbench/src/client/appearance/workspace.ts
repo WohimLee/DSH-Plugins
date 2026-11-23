@@ -220,7 +220,25 @@ export const workspaceStyles = `
 .wb-create-project .wb-project-name input::placeholder { color: var(--dsw-alias-label-secondary); }
 .wb-create-project .wb-project-sources { margin-block: 1px -4px; }
 .wb-folder-empty { min-block-size: 104px; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 10px; box-sizing: border-box; text-align: center; }
-.wb-folder-empty > span, .wb-create-project .wb-folder-row small { color: var(--dsw-alias-label-secondary); }
+.wb-folder-empty > span { color: var(--dsw-alias-label-secondary); }
+.wb-create-project .wb-folder-list > * { box-sizing: border-box; min-block-size: 48px; }
+.wb-create-project .wb-folder-list > * + * { border-block-start: 1px solid var(--wb-create-outline); }
+.wb-create-project .wb-folder-list svg { color: var(--dsw-alias-label-secondary); flex: none; }
+.wb-create-project .wb-folder-row > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-folder-primary-slot { flex: 0 0 100px; display: flex; justify-content: end; }
+.wb-create-project .wb-folder-primary {
+  padding: 5px 8px; white-space: nowrap;
+  border: 1px solid transparent; background: var(--wb-create-fill); border-radius: 10px;
+}
+.wb-create-project .wb-folder-primary[data-primary] {
+  border-color: var(--wb-create-outline); background: transparent;
+  color: var(--dsw-alias-label-secondary); cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  .wb-create-project .wb-folder-row:not(:hover, :has(:focus-visible)) .wb-folder-primary:not([data-primary]) {
+    opacity: 0; pointer-events: none;
+  }
+}
 .wb-create-project .wb-folder-empty button {
   display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
   background: var(--wb-create-fill);
