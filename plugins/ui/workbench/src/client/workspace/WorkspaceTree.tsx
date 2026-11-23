@@ -409,7 +409,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       <div className="wb-tree-row" data-wb-kind="project" data-row-key={'project:' + id} data-drop={placement}
         onContextMenu={showProjectMenu} style={{ '--wb-depth': depth } as CSSProperties} {...drag.row({ kind: 'project', id, parent }, project !== undefined)}>
         <button type="button" className="wb-tree-label" aria-expanded={expanded} title={label} onClick={() => toggle(id)}>
-          <Glyph icon="project" /><span>{label}</span>
+          <Glyph icon={expanded ? 'projectOpen' : 'project'} /><span>{label}</span>
         </button>
         <div className="wb-tree-actions">
           <Action label={t(project ? 'projectMenu' : 'ungroupedMenu')} icon="more" run={showProjectMenu} />

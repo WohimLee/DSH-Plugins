@@ -61,7 +61,7 @@ export const workspaceStyles = `
   font-weight: 600;
 }
 .wb-tree-row[data-wb-kind="section"] [aria-expanded="false"] svg { transform: rotate(-90deg); }
-.wb-tree-row[data-wb-kind="project"] [aria-expanded="true"] svg { color: var(--dsw-alias-label-secondary, #999); }
+.wb-tree-row[data-wb-kind="project"] > .wb-tree-label > svg { color: var(--dsw-alias-label-secondary, #999); }
 .wb-tree-actions {
   display: flex;
   align-items: center;

@@ -70,6 +70,17 @@ async function dismissSignIn() {
   await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
   if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 }
+const folderOutline = locator => locator.locator('svg').evaluate(svg => ({
+  path: svg.querySelector('path').getAttribute('d'), width: svg.getBoundingClientRect().width,
+  stroke: getComputedStyle(svg).strokeWidth, decorative: svg.getAttribute('aria-hidden'),
+}));
+
+async function saveFolderScreenshot(locator, name) {
+  if (!process.env.DSH_TEST_ARTIFACTS) return;
+  await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
+  await locator.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, name + '.png') });
+}
+
 try {
   const runtimeVersion = (await command(['--version'])).trim();
   const artifactDir = process.env.DSH_TEST_ARTIFACT_DIR;
@@ -153,6 +164,9 @@ try {
   assert.equal(await header.getByRole('button', { name: 'New Section', exact: true }).count(), 0);
   assert.equal(await sidebarAction.getByRole('button', { name: 'New session', exact: true }).count(), 0);
   await page.mouse.move(1200, 400);
+  const newSectionOutline = await folderOutline(newSection);
+  const addProjectOutline = await folderOutline(recents.getByRole('button', { name: 'Add project', exact: true }));
+  await saveFolderScreenshot(newSection, 'folder-new-section');
   const titleBounds = row => row.locator('.wb-tree-label > span').first().boundingBox();
   const projectTitleBounds = await titleBounds(project);
   const chatTitleBounds = await titleBounds(alpha);
@@ -196,9 +210,21 @@ try {
   assert.equal(await ownRows(projectChildren).count(), 10);
   await projectChildren.getByRole('button', { name: 'Show more', exact: true }).click();
   assert.equal(await ownRows(projectChildren).filter({ hasText: 'Workbench' }).count(), 12);
-  await project.getByRole('button', { name: 'workspace', exact: true }).click();
+  const projectLabel = project.getByRole('button', { name: 'workspace', exact: true });
+  const addSubprojectOutline = await folderOutline(project.getByRole('button', { name: 'Add subproject', exact: true }));
+  await page.mouse.move(1200, 400);
+  const openOutline = await folderOutline(projectLabel);
+  await saveFolderScreenshot(project, 'folder-project-open');
+  await projectLabel.click();
+  await page.mouse.move(1200, 400);
+  const closedOutline = await folderOutline(projectLabel);
+  await saveFolderScreenshot(project, 'folder-project-closed');
+  assert.equal(await projectLabel.getAttribute('aria-expanded'), 'false');
   assert.equal(await tree.locator('[data-wb-kind="session"]').count(), 0);
-  await project.getByRole('button', { name: 'workspace', exact: true }).click();
+  await projectLabel.press('Enter');
+  assert.equal(await projectLabel.getAttribute('aria-expanded'), 'true');
+  assert.deepEqual(await folderOutline(projectLabel), openOutline);
+  assert.ok(Math.abs((await titleBounds(project)).x - projectTitleBounds.x) <= 1, 'folder opening keeps the project title in the same column');
   assert.equal(await ownRows(projectChildren).count(), 10);
   await projectChildren.getByRole('button', { name: 'Show more', exact: true }).click();
   const archive = tree.locator('[data-workbench-archived]');
@@ -414,6 +440,9 @@ try {
   await projectMenu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
   const projectEditor = page.getByRole('dialog', { name: 'Edit project', exact: true });
   const projectTitle = projectEditor.getByRole('textbox', { name: 'Project name' });
+  const projectNameOutline = await folderOutline(projectEditor.locator('.wb-project-name'));
+  const sourceFolderOutline = await folderOutline(projectEditor.locator('.wb-folder-row').first());
+  const addSourceOutline = await folderOutline(projectEditor.getByRole('button', { name: 'Add folder' }));
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await projectEditor.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'edit-project.png') });
@@ -471,6 +500,18 @@ try {
   if (process.env.DSH_TEST_ARTIFACTS) {
     await createProject.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'create-project.png') });
   }
+  assert.notEqual(openOutline.path, closedOutline.path, 'opening the project must change the folder silhouette');
+  assert.deepEqual(projectNameOutline, closedOutline);
+  assert.deepEqual(sourceFolderOutline, closedOutline);
+  assert.deepEqual(await folderOutline(createProject.locator('.wb-project-name')), closedOutline);
+  assert.deepEqual(newSectionOutline, addSourceOutline);
+  assert.deepEqual(await folderOutline(createProject.getByRole('button', { name: 'Add', exact: true })), addSourceOutline);
+  assert.deepEqual(addSubprojectOutline, addProjectOutline);
+  for (const outline of [openOutline, closedOutline, addSourceOutline, addProjectOutline]) {
+    assert.deepEqual([outline.width, outline.stroke, outline.decorative], [16, '1.65px', 'true']);
+  }
+  assert.match(addSourceOutline.path, /M12 10v6M9 13h6/);
+  assert.match(addProjectOutline.path, /M2 13h10M9 16l3-3-3-3/);
   await projectName.fill('child-project');
   assert.equal(await createButton.isDisabled(), true);
   await addRoot(join(temp, 'workspace'));

@@ -1,5 +1,27 @@
-export type Icon = 'folderAdd' | 'projectAdd' | 'project' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close' | 'search'
+/*!
+ * Folder icons from Lucide (ISC License).
+ * Copyright (c) 2026 Lucide Icons and Contributors
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+export type Icon = 'folderAdd' | 'projectAdd' | 'project' | 'projectOpen' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close' | 'search'
   | 'rename' | 'read' | 'unread' | 'fork' | 'share' | 'copy' | 'newWindow' | 'trash';
+
+const folderOutline = 'M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z';
+const strokeWidths: Partial<Record<Icon, number>> = {
+  folderAdd: 1.65, projectAdd: 1.65, project: 1.65, projectOpen: 1.65,
+  more: 3, new: 1.75, pinOutline: 1.75,
+};
+
 export function Glyph({ icon }: { icon: Icon }) {
   const paths: Record<Icon, string> = {
     edit: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM10 2h4l1 3 3 1 3 1-1 4 1 3-2 3-3 1-2 4h-4l-1-3-3-1-3-1 1-4-1-3 2-3 3-1 2-4Z',
@@ -16,9 +38,10 @@ export function Glyph({ icon }: { icon: Icon }) {
     archive: 'M3 4h18v5H3zM5 9v11h14V9M9 13h6',
     close: 'm5 5 14 14M19 5 5 19',
     search: 'M15.5 15.5 21 21m-3-10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z',
-    folderAdd: 'M2 6h7l2 2h11v11H2V6Zm10 5v5m-2.5-2.5h5',
-    projectAdd: 'M3.5 8a2 2 0 0 1 2-2H9l2 2h7.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z M12 10.75v5.5m-2.75-2.75h5.5',
-    project: 'M2 6h7l2 2h11v11H2V6Z',
+    folderAdd: folderOutline + 'M12 10v6M9 13h6',
+    projectAdd: 'M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1M2 13h10M9 16l3-3-3-3',
+    project: folderOutline + 'M2 10h20',
+    projectOpen: 'm6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2',
     section: 'm6 9 6 6 6-6',
     add: 'M12 5v14M5 12h14',
     new: 'M12 5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5.5 M10 14.5l.75-3.25 6.5-6.5a1.77 1.77 0 0 1 2.5 2.5l-6.5 6.5-3.25.75Z',
@@ -29,7 +52,7 @@ export function Glyph({ icon }: { icon: Icon }) {
   };
   const solid = icon === 'pinSolid';
   return <svg width="16" height="16" viewBox="0 0 24 24" fill={solid ? 'currentColor' : 'none'} stroke={solid ? 'none' : 'currentColor'}
-    strokeWidth={icon === 'more' ? 3 : ['projectAdd', 'new', 'pinOutline'].includes(icon) ? 1.75 : 1.7}
+    strokeWidth={strokeWidths[icon] ?? 1.7}
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d={paths[icon]} transform={solid || icon === 'pinOutline' ? 'rotate(40 12 12)' : undefined} />
   </svg>;
