@@ -118,7 +118,13 @@ export const workspaceStyles = `
 .wb-activity-line small, .wb-activity-preview { color: var(--dsw-alias-label-secondary, #999); }
 .wb-activity-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; margin-top: 3px; }
 .wb-status-running, .wb-status-unread { margin-inline-end: 6px; }
-.wb-status-running { flex: none; width: 11px; height: 11px; border: 1.5px solid currentColor; border-inline-end-color: transparent; border-radius: 50%; animation: wb-spin 850ms linear infinite; }
+.wb-status-running {
+  flex: none;
+  inline-size: 11px;
+  block-size: 11px;
+  color: var(--dsw-alias-label-secondary, #999);
+  animation: wb-spin 850ms linear infinite;
+}
 @keyframes wb-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .wb-status-running { animation: none; } }
 .wb-status-unread { flex: none; inline-size: 6px; block-size: 6px; border-radius: 50%; background: #4c95f6; }

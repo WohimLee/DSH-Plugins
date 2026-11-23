@@ -8,9 +8,12 @@ type Translator = PropsLocale<'workbench'>['t'];
 type Chat = SessionListState['byId'][SessionId];
 
 export function StatusMark({ running, unread, t }: { running: boolean; unread: boolean; t: Translator }) {
-  if (!running && !unread) return null;
-  return <span role="img" className={running ? 'wb-status-running' : 'wb-status-unread'}
-    aria-label={t(running ? 'running' : 'unread')} />;
+  if (running) return <svg role="img" className="wb-status-running" aria-label={t('running')} focusable="false"
+    viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4">
+    <circle cx="6" cy="6" r="5" opacity=".28" />
+    <circle cx="6" cy="6" r="5" pathLength="1" strokeDasharray=".72 .28" strokeLinecap="round" />
+  </svg>;
+  return unread ? <span role="img" className="wb-status-unread" aria-label={t('unread')} /> : null;
 }
 
 function ActivityRow({ chat, project, running, unread, active, preview, open, t }: {

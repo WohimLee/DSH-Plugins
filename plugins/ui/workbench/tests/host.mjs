@@ -517,6 +517,27 @@ try {
   await beta.locator('[aria-current="true"]').waitFor();
   console.log('PASS switching to native session beta.');
 
+  await recordMessage('running-fixture', 'running');
+  const spinner = beta.getByRole('img', { name: 'Running', exact: true });
+  await spinner.waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await beta.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'running-session.png'), animations: 'disabled' });
+  }
+  assert.deepEqual(await spinner.evaluate(element => {
+    const style = getComputedStyle(element);
+    return [element.localName, element.querySelector('circle')?.getAttribute('r'), style.width, style.height, style.animationName];
+  }), ['svg', '5', '11px', '11px', 'wb-spin']);
+  await bell.click();
+  const activitySpinner = activity.getByRole('button', { name: /Workbench beta/ }).getByRole('img', { name: 'Running', exact: true });
+  await activitySpinner.waitFor();
+  assert.equal(await activitySpinner.locator('circle').count(), 2);
+  await recordMessage('running-fixture', 'idle');
+  await activitySpinner.waitFor({ state: 'detached' });
+  await bell.click();
+  await tree.waitFor();
+  console.log('PASS circular running indicator in the project and activity lists.');
+
+
   const guide = page.locator('[data-workbench-guide]:visible');
   const right = page.locator('[data-sidebar-right-open]');
   const summary = page.locator('[data-workbench-summary]');
@@ -527,6 +548,8 @@ try {
   await summary.getByRole('button', { name: 'Subagents' }).click();
   const agents = right.locator('.wb-agent-list');
   await agents.getByRole('heading', { name: 'Done · 1' }).waitFor();
+  assert.equal(await tree.locator('[data-row-key="session:workbench-child-record"]').count(), 0,
+    'child records belong in the parent panel and stay out of ordinary session rows');
   if (process.env.DSH_TEST_ARTIFACTS) await right.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'subagents.png') });
   await agents.getByRole('button', { name: /Inspect workbench fixture/ }).click();
   await right.locator('.wb-agent-conversation').getByText('Inspect the sample directory', { exact: true }).waitFor();
@@ -928,6 +951,8 @@ try {
   await recentsLabel.click({ button: 'right' });
   const recentsMenu = page.getByRole('menu', { name: 'Section menu', exact: true });
   await recentsMenu.getByRole('menuitem', { name: 'Delete ungrouped sessions', exact: true }).click();
+  assert.equal(await groupRemoval.locator('b').textContent(), '1',
+    'ungrouped removal counts ordinary sessions and leaves child records with the parent');
   await groupRemoval.getByRole('button', { name: 'Remove group', exact: true }).click();
   await groupRemoval.waitFor({ state: 'detached' });
   await createdUngrouped.waitFor({ state: 'detached' });

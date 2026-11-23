@@ -122,9 +122,11 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const editingProject = editId ? projects.get(editId) : undefined;
   const projectIds = useMemo(() => [...projects.keys()], [projects]);
   const grouped = useMemo(() => projectGroups(tree, projectIds), [tree, projectIds]);
+  const workspaceSessions = useMemo(() => sessions.ids.map(id => sessions.byId[id])
+    .filter(session => session.origin !== 'subagent'), [sessions]);
   const chatGroups = useMemo(() => sessionGroups(tree, [...projects.values()].map(item => ({
     id: item.workspaceId, sessionIds: item.sessionIds,
-  })), sessions.ids.map(id => sessions.byId[id]), pins), [tree, projects, sessions, pins]);
+  })), workspaceSessions, pins), [tree, projects, workspaceSessions, pins]);
   const latestGroups = useRef(chatGroups);
   const latestArchived = useRef(archived);
   latestGroups.current = chatGroups;
@@ -467,7 +469,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           : projectRow(ungrouped, section.id, 0))}
       </div>
         {isDefault && <ArchivedSection t={t} useSessionAccess={useSessionAccess}
-          sessions={sessions.ids.filter(id => archived.has(id)).map(id => sessions.byId[id])}
+          sessions={workspaceSessions.filter(session => archived.has(session.id))}
           menu={canDeleteSession ? (event, id) => openMenu(event, t('sessionMenu'), [deleteEntry(sessions.byId[id])]) : undefined}
           restore={async id => {
             setError(undefined);

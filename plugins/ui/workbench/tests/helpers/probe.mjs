@@ -60,8 +60,10 @@ export async function apply(ctx, config) {
     if (parent && !parent.ownEvents().some(event => event.type === 'subagent/catalog')) {
       const id = 'workbench-child-record';
       const label = 'Inspect workbench fixture';
-      const record = ctx.sessions.create(id, { meta: { parentSession: parent.id, origin: 'subagent', cwd: config.path } });
+      const { agent } = await ctx.agents.create({ sessionId: id, meta: { parentSession: parent.id, origin: 'subagent', cwd: config.path } });
+      const record = agent.session;
       record.append([
+        ['session/title', { title: label, source: { kind: 'fallback' }, messageSeqs: [] }],
         ['subagent/descriptor', { version: 3, mode: 'one-shot', provider: 'spawn', label }],
         ['turn/start', { turn: 1 }],
         ['user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: 'Inspect the sample directory' }], source: { kind: 'user' } }, { surfaceOp: 'append' }],
@@ -77,6 +79,15 @@ export async function apply(ctx, config) {
   };
   const recordActivity = () => {
     const { id, text } = JSON.parse(readFileSync(config.activity, 'utf8'));
+    if (id === 'running-fixture') {
+      const agent = ctx.agents.get('workbench-test-beta');
+      if (!agent) return;
+      // Publish a controlled status transition without contacting a model.
+      if (text === 'running') Object.defineProperty(agent, 'status', { configurable: true, value: 'running' });
+      else delete agent.status;
+      ctx.emit('agent/status', { agent, status: agent.status });
+      return;
+    }
     if (id === 'subagent-fixture') { recordSubagent(); return; }
     if (id === 'session-deletion-fixture') {
       void (async () => {
