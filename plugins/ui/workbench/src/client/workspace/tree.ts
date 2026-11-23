@@ -11,6 +11,8 @@ export interface TreeState {
   sourceFolders?: Orders;
   projectPins?: string[];
   unread?: string[];
+  ungroupedInRecents?: boolean;
+  ungroupedWorkspaceId?: string;
 }
 export type Position = { id: string; after: boolean };
 export interface ProjectInfo { id: string; sessionIds: readonly string[] }
@@ -49,6 +51,8 @@ export function readTree(value: unknown): TreeState {
     projectPins: readIds(value.projectPins),
     sourceFolders: readOrders(value.sourceFolders),
     unread: readIds(value.unread),
+    ...(value.ungroupedInRecents === true ? { ungroupedInRecents: true } : {}),
+    ...(typeof value.ungroupedWorkspaceId === 'string' ? { ungroupedWorkspaceId: value.ungroupedWorkspaceId } : {}),
     sessionProjects: isRecord(value.sessionProjects)
       ? Object.fromEntries(Object.entries(value.sessionProjects).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
       : {},

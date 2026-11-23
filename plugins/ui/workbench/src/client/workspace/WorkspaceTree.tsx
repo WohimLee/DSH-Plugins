@@ -43,7 +43,7 @@ function Action({ label, icon, run, pinned, busy }: {
 }
 
 function ProjectChildren({ project, children, sessions, showMoreLabel, depth }: {
-  project: string; children: ReactNode; sessions: ReactNode[]; showMoreLabel: string; depth: number;
+  project: string; children?: ReactNode; sessions: ReactNode[]; showMoreLabel: string; depth: number;
 }) {
   const [showMore, setShowMore] = useState(false);
   return <div className="wb-tree-children" data-wb-project-children={project}>
@@ -96,24 +96,29 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const canPickDirectory = useRemoteAccess('directoryPicker/pick');
   const canAdd = useRemoteAccess('workspace/create');
   const canCreateSession = useRemoteAccess('session/create');
+  const canPrepareUngrouped = useRemoteAccess('workbenchSessions/prepareUngroupedDirectory');
   const canDeleteSession = useRemoteAccess('workbenchSessions/deleteSession');
   const { bindScrollerRef } = useSectionScroller();
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<'saveFailed' | 'pinFailed' | 'invalidMove' | 'actionFailed' | 'deleteFailed'>();
   const [deletePending, setDeletePending] = useState(false);
   const deleting = useRef(new Set<SessionId>());
+  const recentsButton = useRef<HTMLButtonElement>(null);
   const [pinning, setPinning] = useState<string>();
   const pinInFlight = useRef(false);
   const active = Object.values(sessions.byId).find(item => (item.retainedBy.mainView ?? 0) > 0)?.id;
   const archived = useMemo(() => new Set(workspaces.archivedSessionIds), [workspaces.archivedSessionIds]);
   const pins = useMemo(() => new Set<string>(workspaces.pinnedSessionIds), [workspaces.pinnedSessionIds]);
-  const projects = useMemo(() => new Map(workspaces.items.map(item => [String(item.workspaceId), item])), [workspaces.items]);
+  const backingWorkspace = workspaces.items.find(item => item.workspaceId === tree.ungroupedWorkspaceId);
+  const canStartUngrouped = canCreateSession && (backingWorkspace !== undefined || canAdd && canPrepareUngrouped);
+  const projects = useMemo(() => new Map(workspaces.items.filter(item => item.workspaceId !== tree.ungroupedWorkspaceId)
+    .map(item => [String(item.workspaceId), item])), [workspaces.items, tree.ungroupedWorkspaceId]);
   const editingProject = editId ? projects.get(editId) : undefined;
   const projectIds = useMemo(() => [...projects.keys()], [projects]);
   const grouped = useMemo(() => projectGroups(tree, projectIds), [tree, projectIds]);
-  const chatGroups = useMemo(() => sessionGroups(tree, workspaces.items.map(item => ({
+  const chatGroups = useMemo(() => sessionGroups(tree, [...projects.values()].map(item => ({
     id: item.workspaceId, sessionIds: item.sessionIds,
-  })), sessions.ids.map(id => sessions.byId[id]), pins), [tree, workspaces.items, sessions, pins]);
+  })), sessions.ids.map(id => sessions.byId[id]), pins), [tree, projects, sessions, pins]);
   const sectionLabel = (section: Section) => section.id === defaultSection ? t('recents') : section.title || t('projects');
 
   const show = (id: string) => setCollapsed(previous => {
@@ -244,7 +249,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const sessionMenu = (id: SessionId, parent: string) => {
     const session = sessions.byId[id];
     const destination = [{ id: ungrouped, label: t('ungrouped') },
-      ...workspaces.items.map(project => ({ id: String(project.workspaceId), label: project.title }))];
+      ...[...projects.values()].map(project => ({ id: String(project.workspaceId), label: project.title }))];
     const setRead = () => save(state => ({ ...state,
       unread: state.unread?.includes(id) ? state.unread.filter(item => item !== id) : [...(state.unread ?? []), id] }));
     const entries: MenuEntry[] = [
@@ -327,26 +332,49 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     ];
   }
 
+  const startUngrouped = () => {
+    show(defaultSection);
+    show(ungrouped);
+    report(() => commands.startUngroupedSession(backingWorkspace?.workspaceId, workspaceId => {
+      if (!save(state => ({ ...state, ungroupedWorkspaceId: workspaceId }))) throw new Error('Could not save the ungrouped workspace');
+    }));
+  };
+  const showUngroupedMenu = (event: MouseEvent) => openMenu(event, t('ungroupedMenu'), [
+    { label: t('newSession'), icon: 'new', run: canStartUngrouped ? startUngrouped : undefined },
+    { label: t('removeUngrouped'), icon: 'close', run: () => {
+      if (save(state => ({ ...state, ungroupedInRecents: true }))) recentsButton.current?.focus();
+    } },
+  ]);
+  const showRecentsMenu = tree.ungroupedInRecents ? (event: MouseEvent) => openMenu(event, t('sectionMenu'), [
+    { label: t('newUngrouped'), icon: 'new', run: canStartUngrouped ? startUngrouped : undefined },
+    { label: t('restoreUngrouped'), icon: 'list', run: () => {
+      if (save(state => ({ ...state, ungroupedInRecents: false }))) {
+        show(defaultSection);
+        show(ungrouped);
+      }
+    } },
+  ]) : undefined;
+
   function projectRow(id: string, parent: string, depth: number): ReactNode {
     const project = projects.get(id);
     const label = project?.title || t('ungrouped');
     const expanded = !collapsed.has(id);
     const placement = drag.highlight?.id === id ? drag.highlight.placement : undefined;
-    const showProjectMenu = project ? (event: MouseEvent) => openMenu(event, t('projectMenu'), projectMenu(project, id, parent)) : undefined;
+    const showProjectMenu = project ? (event: MouseEvent) => openMenu(event, t('projectMenu'), projectMenu(project, id, parent)) : showUngroupedMenu;
     return <Fragment key={id}>
       <div className="wb-tree-row" data-wb-kind="project" data-row-key={'project:' + id} data-drop={placement}
         onContextMenu={showProjectMenu} style={{ '--wb-depth': depth } as CSSProperties} {...drag.row({ kind: 'project', id, parent }, project !== undefined)}>
         <button type="button" className="wb-tree-label" aria-expanded={expanded} title={label} onClick={() => toggle(id)}>
           <Glyph icon="project" /><span>{label}</span>
         </button>
-        {project && <div className="wb-tree-actions">
-          <Action label={t('projectMenu')} icon="more" run={showProjectMenu} />
-          {canAdd && <Action label={t('addSubproject')} icon="folderAdd" run={() => begin({ kind: 'project', parent: id })} />}
-          {canCreateSession && <Action label={t('newSession')} icon="new" run={() => {
+        <div className="wb-tree-actions">
+          <Action label={t(project ? 'projectMenu' : 'ungroupedMenu')} icon="more" run={showProjectMenu} />
+          {project && canAdd && <Action label={t('addSubproject')} icon="folderAdd" run={() => begin({ kind: 'project', parent: id })} />}
+          {(project ? canCreateSession : canStartUngrouped) && <Action label={t('newSession')} icon="new" run={project ? () => {
             show(id);
             commands.startSession(project.workspaceId);
-          }} />}
-        </div>}
+          } : startUngrouped} />}
+        </div>
       </div>
       {expanded && <ProjectChildren project={id} depth={depth + 1} sessions={rows(id, depth)} showMoreLabel={t('showMore')}>
         {draft?.kind === 'project' && draft.parent === id && nameDraft(draft, depth + 1)}
@@ -372,7 +400,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       const isDefault = section.id === defaultSection;
       const expanded = !collapsed.has(section.id);
       const label = sectionLabel(section);
-      const showSectionMenu = isDefault ? undefined : (event: MouseEvent) => openMenu(event, t('sectionMenu'), [
+      const showSectionMenu = isDefault ? showRecentsMenu : (event: MouseEvent) => openMenu(event, t('sectionMenu'), [
         { label: t('rename'), run: () => setRename({ id: section.id, name: label, commit: title => {
           if (save(state => ({ ...state, sections: state.sections.map(item => item.id === section.id ? { ...item, title } : item) }))) setRename(undefined);
         } }) },
@@ -381,12 +409,12 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           if (window.confirm(t('removeSectionConfirm'))) save(state => ({ ...state, sections: state.sections.filter(item => item.id !== section.id) }));
         } },
       ]);
-      const showUngrouped = isDefault && rows(ungrouped, 1).length > 0;
+      const ungroupedRows = expanded && isDefault ? rows(ungrouped, 0) : [];
       return <Fragment key={section.id}><div className="wb-tree-section">
         {editingName(section.id) ?? <div className="wb-tree-row" onContextMenu={showSectionMenu} data-wb-kind="section" data-row-key={section.id}
           data-drop={drag.highlight?.id === section.id ? drag.highlight.placement : undefined}
           {...drag.row({ kind: 'section', id: section.id, parent: rootSection })}>
-          <button type="button" className="wb-tree-label" aria-expanded={expanded} onClick={() => toggle(section.id)}>
+          <button type="button" className="wb-tree-label" aria-expanded={expanded} ref={isDefault ? recentsButton : undefined} onClick={() => toggle(section.id)}>
             <span>{label}</span><Glyph icon="section" />
           </button>
           <div className="wb-tree-actions">
@@ -398,7 +426,9 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         </div>}
         {expanded && draft?.kind === 'project' && draft.parent === section.id && nameDraft(draft)}
         {expanded && (grouped.get(section.id) ?? []).map(id => projectRow(id, section.id, 0))}
-        {expanded && showUngrouped && projectRow(ungrouped, section.id, 0)}
+        {ungroupedRows.length > 0 && (tree.ungroupedInRecents
+          ? <ProjectChildren project={ungrouped} depth={0} sessions={ungroupedRows} showMoreLabel={t('showMore')} />
+          : projectRow(ungrouped, section.id, 0))}
       </div>
         {isDefault && <ArchivedSection t={t} useSessionAccess={useSessionAccess}
           sessions={sessions.ids.filter(id => archived.has(id)).map(id => sessions.byId[id])}

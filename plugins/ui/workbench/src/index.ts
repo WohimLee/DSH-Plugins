@@ -57,6 +57,15 @@ export class WorkbenchSessions extends TypertRemoteService {
   }
 
   @Remote
+  async prepareUngroupedDirectory(signal: AbortSignal): Promise<string> {
+    this.owner();
+    signal.throwIfAborted();
+    const directory = join(resolveDshHome(), 'workspaces', 'workbench-ungrouped');
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    return directory;
+  }
+
+  @Remote
   async directory(sessionId: string, signal: AbortSignal): Promise<string> {
     const agent = await this.agent(sessionId, signal);
     return this.ctx.workingDirectory.get(agent.session);

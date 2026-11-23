@@ -45,6 +45,19 @@ export function workspaceCommands(ctx: Context, signal: AbortSignal) {
     removeProject: (id: WorkspaceId) => ctx.workspaces.delete(id),
     async reveal(path: string) { value(await ctx.remote.session.openWorkspacePath({ path, action: 'reveal' }, signal)); },
     startSession: (project?: WorkspaceId) => ctx.uiWorkspace.startSession(project),
+    async startUngroupedSession(backingWorkspace: WorkspaceId | undefined, remember: (id: WorkspaceId) => void) {
+      if (backingWorkspace !== undefined) {
+        await ctx.uiWorkspace.openWorkspace(backingWorkspace);
+        return;
+      }
+      const navigation = AbortSignal.any([signal, ctx.layout.beginNavigation()]);
+      const path = value(await ctx.remote.workbenchSessions.prepareUngroupedDirectory(navigation));
+      if (navigation.aborted) return;
+      const workspace = await ctx.workspaces.create({ path });
+      if (signal.aborted) return;
+      remember(workspace.workspaceId);
+      if (!navigation.aborted) await ctx.uiWorkspace.openWorkspace(workspace.workspaceId);
+    },
     renameSession,
     forkSession: (id: SessionId) => ctx.uiWorkspace.forkSession(id),
     unarchiveSession: (id: SessionId) => ctx.uiWorkspace.unarchiveSession(id),

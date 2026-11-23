@@ -52,10 +52,11 @@ export function createTreeStore(ctx: Context): TreeStore {
   function promote(changed: readonly string[]) {
     const workspace = ctx.workspaces.list.getSnapshot();
     const sessions = source.getSnapshot();
-    const projects = workspace.items.map(item => ({ id: item.workspaceId, sessionIds: item.sessionIds }));
     const rows = sessions.ids.map(id => sessions.byId[id]);
     const pins = new Set<string>(workspace.pinnedSessionIds);
     store.update(current => {
+      const projects = workspace.items.filter(item => item.workspaceId !== current.ungroupedWorkspaceId)
+        .map(item => ({ id: item.workspaceId, sessionIds: item.sessionIds }));
       for (const id of changed) {
         for (const [project, ids] of sessionGroups(current, projects, rows, pins)) {
           if (!ids.includes(id)) continue;

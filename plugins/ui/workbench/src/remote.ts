@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const service = 'workbenchSessions';
 export interface WorkbenchSessionsRemote {
   createStandalone(signal?: AbortSignal): Promise<RemoteResult<string>>;
+  prepareUngroupedDirectory(signal?: AbortSignal): Promise<RemoteResult<string>>;
   directory(sessionId: string, signal?: AbortSignal): Promise<RemoteResult<string>>;
   setDirectory(sessionId: string, path: string, signal?: AbortSignal): Promise<RemoteResult<string>>;
   deleteSession(sessionId: string, signal?: AbortSignal): Promise<RemoteResult<'deleted' | 'restart-required'>>;
@@ -11,7 +12,10 @@ export interface WorkbenchSessionsRemote {
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespaceMap { workbenchSessions: WorkbenchSessionsRemote }
-  interface TypertRemoteMap { 'workbenchSessions/deleteSession': WorkbenchSessionsRemote['deleteSession'] }
+  interface TypertRemoteMap {
+    'workbenchSessions/deleteSession': WorkbenchSessionsRemote['deleteSession'];
+    'workbenchSessions/prepareUngroupedDirectory': WorkbenchSessionsRemote['prepareUngroupedDirectory'];
+  }
   interface RemoteErrorDetailsMap {
     'workbench/denied': undefined;
     'workbench/session-unavailable': undefined;
@@ -33,6 +37,6 @@ const method = (name: string, parameters: InvocationDescriptor['parameters']): I
 const session = parameter('sessionId', 256);
 export const contribution: TypertRemoteContribution = {
   package: 'dsh-workbench',
-  descriptors: [method('createStandalone', []), method('directory', [session]), method('setDirectory', [session, parameter('path', 4096)]),
+  descriptors: [method('createStandalone', []), method('prepareUngroupedDirectory', []), method('directory', [session]), method('setDirectory', [session, parameter('path', 4096)]),
     method('deleteSession', [session])],
 };
