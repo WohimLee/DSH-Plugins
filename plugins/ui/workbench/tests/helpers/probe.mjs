@@ -35,6 +35,9 @@ import { randomUUID } from 'node:crypto';
 export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions', 'sessionPersistence'];
 export async function apply(ctx, config) {
   const { workspace } = await ctx.workspaceController.create({ path: config.path });
+  const activityCalls = ['read', 'fixture_lookup', 'bash', 'edit'].map(name => ({
+    type: 'tool-call', id: randomUUID(), name, arguments: '{}',
+  }));
   for (const suffix of [...Array.from({ length: 10 }, (_, index) => 'extra-' + index), 'alpha', 'beta']) {
     const sessionId = 'workbench-test-' + suffix;
     await ctx.sessionController.create({ workspaceId: workspace.workspaceId, sessionId });
@@ -45,8 +48,17 @@ export async function apply(ctx, config) {
         ['user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: 'Review the edited files' }], source: { kind: 'user' } }, { surfaceOp: 'append' }],
         ['step/start', { turn: 1, step: 1 }],
         ['assistant/message', { turn: 1, step: 1, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
-          content: [{ type: 'text', text: 'Activity preview fixture' }], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
+          content: activityCalls, source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
+        ...activityCalls.flatMap(({ id: callId, name, arguments: args }) => [
+          ['tool/call', { turn: 1, step: 1, callId, name, arguments: args }],
+          ['tool/result', { turn: 1, step: 1, message: { id: randomUUID(), role: 'tool', toolCallId: callId,
+            content: [{ type: 'text', text: 'Tool result fixture' }], source: { kind: 'tool', callId }, isError: false } }, { surfaceOp: 'append' }],
+        ]),
         ['step/end', { turn: 1, step: 1 }],
+        ['step/start', { turn: 1, step: 2 }],
+        ['assistant/message', { turn: 1, step: 2, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
+          content: [{ type: 'text', text: 'Activity preview fixture' }], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
+        ['step/end', { turn: 1, step: 2 }],
         ['workspace/changes', { turn: 1 }],
       ] : []),
       ['turn/end', { turn: 1, reason: suffix === 'alpha' ? { kind: 'completed' } : { kind: 'aborted', reason: { kind: 'user' } } }],
