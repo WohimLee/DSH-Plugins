@@ -2,6 +2,12 @@
 
 通过官方 Qoder Agent SDK，把 Qoder 登录可用的模型接入 DSH 模型选择器。模型选择器按账号显示 Qoder 返回的可用档位和具体模型。启动时检查账号，只有查到可用模型的账号才显示在 Models 和会话模型菜单里。
 
+## DSH 原生行为与接入方式
+
+- **原生行为**。DSH 从宿主模型目录提供会话选模，并负责工具审批、执行和对话持久化。
+- **接入方式**。通过 `ctx.llm.registerAdapter` 为可用的 CLI 登录或账号新增 `qoder`、`qoder-account-<id>` 路由。账号失去可用模型时从目录撤回其路由。通过 `settings.section` 提供独立设置，并以 `id: 'qoder'` 向 Model Picker 的 `modelPicker.connections` 贡献连接卡片。 [Host 入口](src/index.ts) · [客户端注册](src/client/index.tsx)
+- **验证证据**。在 Desktop `0.2.2-rc.5` 已实测从管理页授权并自动加载可用模型。真实 CLI 登录推理和 PAT 模拟验证见[验证记录](#验证)与 [plugin.meta.json](plugin.meta.json)。
+
 ## 安装和使用
 
 需要 DSH `0.2.2-rc.5`、Node.js >=24.9.0，以及运行 DSH 的机器上的 Qoder CLI。SDK 固定为 `1.0.59`，搭配的原生 Qoder CLI 版本为 `1.1.83`。

@@ -32,6 +32,20 @@ pnpm catalog:generate
 
 修改 README、描述和示例，添加业务行为与必要测试。安装新插件或依赖后提交更新的锁文件。普通包的 build 产出 lib；有界面时同时产出 lib/client.js。
 
+## DSH 原生行为与接入方式
+
+每个在维护的插件在 README 中用一个短节交代三件事。按开发基线核对宿主源码或公开契约，描述当前实现。
+
+1. **原生行为**。描述安装插件前的 DSH 入口或能力。界面有中英文名称时都可用于定位，并按需写出所属包、组件或注册名。纯新增功能说明借用的宿主入口或能力。
+2. **接入方式**。说明插件新增、扩展或替换了什么，写明实际使用的公开插槽、服务或工具。若涉及插槽覆盖，记录 `id` 或 `key`、`priority`、数据来源和停用后的变化。
+3. **验证证据**。链接已有验证记录或简述实际检查的宿主版本、环境和行为，标明相关待验项。环境支持状态与证据以插件的 `plugin.meta.json` 为准。
+
+### 会话任务面板示例
+
+- **原生行为**。输入框上方的「To-dos / 任务」显示当前会话的清单。组件叫 `TodoPanel`，由 `@deepseek-ai/dsh-client-ui-conversation` 中的 `conversation-todo-dock` 注册。 [宿主注册源码](https://github.com/deepseek-ai/deepseek-harness/blob/ca33fd6843b205e279c7ccb6cb73a472c78f5760/packages/client/ui-conversation/src/client/skeleton/TodoPanel.tsx#L102-L119)
+- **接入方式**。在 `conversation.input.dock` 用 `id: 'todo'`、`priority: -1` 注册组件，覆盖优先级为 `0` 的原条目。用 `useProjection('todos')` 读取由 `todo_write` 更新的清单，停用时恢复原条目。
+- **验证证据**。用 DSH `0.2.2-rc.5` 的插槽包验证了覆盖和移除贡献后的恢复。Desktop 界面待验。
+
 ## 最小检查
 
 ```sh

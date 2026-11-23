@@ -2,6 +2,12 @@
 
 使用 xAI API Key 将 Grok 语言模型接入 DSH。需要 DSH `0.2.2-rc.5`。
 
+## DSH 原生行为与接入方式
+
+- **原生行为**。会话菜单从 DSH 模型目录读取可选模型。宿主提供凭据存储、流式回复和工具执行。
+- **接入方式**。验证密钥并读取可用模型后，通过 `ctx.llm.registerAdapter` 新增 `grok` 路由，断开时撤回。客户端在 `settings.section` 提供设置入口，并以 `id: 'grok'` 向 Model Picker 的 `modelPicker.connections` 贡献连接卡片。 [Host 入口](src/index.ts) · [客户端注册](src/client/index.tsx)
+- **验证证据**。隔离 Web 已通过回环 API 验证连接、流式回复和断开。Desktop `0.2.2-rc.5` 已验证管理页卡片，真实 xAI 账号推理待验收。 [plugin.meta.json](plugin.meta.json)
+
 ## 连接
 
 1. 在 [xAI Console](https://console.x.ai/) 创建具有推理权限的普通 API Key。

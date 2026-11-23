@@ -2,6 +2,12 @@
 
 为 DSH 原生界面增加常驻功能栏，提供项目导航、原生对话和右侧工具标签。继续使用 DSH 原生 harness、项目会话、模型选择、工具和审批流程，与 dsh-codex 模型插件独立。
 
+## DSH 原生行为与接入方式
+
+- **原生行为**。左栏「Workspaces / 工作区」由 `@deepseek-ai/dsh-client-ui-workspace` 的 `WorkspaceBrowser` 提供，注册在 `sidebar.workspaces`，负责浏览原生项目和会话。 [宿主注册源码](https://github.com/deepseek-ai/deepseek-harness/blob/ca33fd6843b205e279c7ccb6cb73a472c78f5760/packages/client/ui-workspace/src/client/index.ts#L378-L395)
+- **接入方式**。Workbench 在 `shell.overlay` 用 `id: 'dsh-workbench:activity'` 添加功能栏，并以 `priority: -100` 覆盖 `sidebar.workspaces` 和 `sidebar.brand.name`。列表读取宿主项目和会话，通过 `uiWorkspace` 打开会话，通过 `workspaces` 更新置顶。切回原生列表时撤销列表覆盖。停用插件会移除功能栏并恢复这两个插槽的原生条目。 [客户端注册](src/client/index.tsx) · [列表切换](src/client/workspace/view.tsx)
+- **验证证据**。见[验证记录](#验证记录)和 [plugin.meta.json](plugin.meta.json)，其中有 DSH `0.2.2-rc.5` 的隔离 Web 热启停及 Desktop 列表切换证据。
+
 ## 源码组织评估
 
 采用 workspace，不使用 Git submodule。插件由本仓库统一维护，需要与构建、目录和宿主兼容验证同步修改，目前没有独立团队、仓库权限或外部上游源码同步需求。模块在包内组织，一个安装包独立发布；维护团队、权限边界或源码来源发生变化时重新评估。

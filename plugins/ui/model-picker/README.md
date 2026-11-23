@@ -11,6 +11,12 @@
 
 展开管理页的厂商可以查看每个模型的说明、接入限制与推理档位。账号与模型目录变化后，页面重新读取宿主目录。
 
+## DSH 原生行为与接入方式
+
+- **原生行为**。输入框的模型菜单由 `@deepseek-ai/dsh-client-ui-model-selection` 的 `ModelSelect` 渲染，负责当前会话的模型和推理强度选择。 [宿主菜单源码](https://github.com/deepseek-ai/deepseek-harness/blob/ca33fd6843b205e279c7ccb6cb73a472c78f5760/packages/client/ui-model-selection/src/client/ModelSelect.tsx#L550-L554)
+- **接入方式**。向 `conversation.input.model.options` 加入 `id: 'dsh-model-picker'`、`order: -100` 的「Models / 模型」菜单项，复用会话的模型目录和模型选择操作。另以 `dsh-model-picker` 为键在 `main` 注册管理页，并在 `sidebar.panellist` 增加入口。停用时这些贡献随插件移除。 [客户端注册](src/client/index.tsx)
+- **验证证据**。DSH `0.2.2-rc.5` 的隔离 Web 已验证模型选择和热启停，Desktop 已验证管理页入口及原生推理强度菜单。 [plugin.meta.json](plugin.meta.json)
+
 ## 安装与验证
 
 需要 DSH `0.2.2-rc.5`、Node.js >=24.9.0。该插件可以与 Workbench 独立安装。

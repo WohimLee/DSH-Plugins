@@ -4,6 +4,12 @@
 
 提供文本与推理流、工具调用和结果回放、token 用量、推理强度选择、请求取消及卸载清理。模型声明图片输入且宿主提供附件服务时，可以直接发送截图。插件读取 DSH 规范化后的图片，按消息中的顺序发送文字与图片。音频、原生文件上传、temperature 和 stop 暂未接入。Codex 后端管理输出预算，DSH 的 maxTokens 不转换为请求字段。
 
+## DSH 原生行为与接入方式
+
+- **原生行为**。会话从 DSH 模型选择器或 `/model` 选择宿主模型目录里的路由，由 DSH 执行工具和保存会话。
+- **接入方式**。通过 `ctx.llm.registerAdapter` 新增 `codex` 路由，以本机 Codex 登录和模型目录为来源。适配器将流式回复和模型提出的工具调用交回 DSH。停用会撤销插件的适配器注册。 [Host 入口](src/index.ts)
+- **验证证据**。在 macOS Desktop `0.2.2-rc.5` 的独立 Worktree 会话中，已通过 0.1.9 选择 GPT-6.2-Sol high 并收到真实回复。 [plugin.meta.json](plugin.meta.json)
+
 ## 前提与安装
 
 开发基线为 DSH `0.2.2-rc.5`，发布宿主范围以 package.json 的 `engines.dsh` 为准，Node.js >=24.9.0。运行 DSH 的用户需先执行 `codex login`，且 Codex 使用文件存储登录凭据。仅保存在系统钥匙串中的登录暂不支持。
