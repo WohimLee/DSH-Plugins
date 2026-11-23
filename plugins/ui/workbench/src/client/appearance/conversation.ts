@@ -20,11 +20,41 @@ html[data-dsh-workbench] [data-conversation-content] {
   font-size: var(--wb-message-size);
   line-height: var(--wb-message-leading);
 }
+html[data-dsh-workbench] body[data-ds-dark-theme] [data-conversation-content] [data-message-bubble] {
+  --dsw-specific-bubble: var(--dsw-static-blue-900);
+}
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] p:has(+ p):not([data-markdown-variant="compact"] p) {
   margin-block-end: 0.85em;
 }
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] p + p:not([data-markdown-variant="compact"] p) {
   margin-block-start: 0.85em;
+}
+
+/* The native draft, placeholder and mirror inherit typography from the card. */
+@media (pointer: fine) {
+  html[data-dsh-workbench] [data-composer-card] {
+    font-size: 13.5px;
+    line-height: 24px;
+  }
+}
+
+html[data-dsh-workbench] [data-changed-files] {
+  /* The single-file header is the trigger inside a native HoverCard. */
+  & > button:not([aria-expanded]),
+  &[data-single] > span > button {
+    height: 65px;
+
+    & > span:nth-child(2) > span:first-child { font-size: 14px; }
+    & > span:nth-child(2) > span:last-child { font-size: 13px; line-height: 18px; }
+  }
+
+  & > ul button { font-size: 13px; line-height: 22px; }
+  & > ul button > span:first-child,
+  & > button[aria-expanded] { font-size: 14px; }
+}
+
+html[data-dsh-workbench] [data-changes-hover-preview] [data-review-view] {
+  font-size: 12px;
 }
 
 [data-slot="conversation.session.header"] nav :is(button, span) {

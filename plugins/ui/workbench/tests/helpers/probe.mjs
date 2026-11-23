@@ -42,10 +42,12 @@ export async function apply(ctx, config) {
     if (session && !session.ownEvents().some(event => event.type === 'turn/start')) session.append([
       ['turn/start', { turn: 1 }],
       ...(suffix === 'alpha' ? [
+        ['user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: 'Review the edited files' }], source: { kind: 'user' } }, { surfaceOp: 'append' }],
         ['step/start', { turn: 1, step: 1 }],
         ['assistant/message', { turn: 1, step: 1, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
           content: [{ type: 'text', text: 'Activity preview fixture' }], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
         ['step/end', { turn: 1, step: 1 }],
+        ['workspace/changes', { turn: 1 }],
       ] : []),
       ['turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } }],
     ]);

@@ -86,7 +86,10 @@ try {
   browser = await chromium.launch({ headless: true,
     ...(process.env.DSH_TEST_BROWSER_EXECUTABLE ? { executablePath: process.env.DSH_TEST_BROWSER_EXECUTABLE } : { channel: 'chrome' }),
   });
-  page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'en-US', colorScheme: 'dark' });
+  page = await browser.newPage({
+    viewport: { width: 1440, height: 1000 }, locale: 'en-US', colorScheme: 'dark',
+    deviceScaleFactor: process.env.DSH_TEST_ARTIFACTS ? 2 : 1,
+  });
   await page.addInitScript(() => {
     const key = 'dsh-workbench:workspace-tree:v1';
     if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({
@@ -98,6 +101,26 @@ try {
   page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') consoleErrors.push(message.text()); });
   page.on('framenavigated', frame => { if (frame === page.mainFrame()) navigations++; });
   await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+  const changedPaths = [
+    'plugins/ui/workbench/src/client/messages.ts',
+    'plugins/ui/workbench/src/client/workspace/EditProjectDialog.tsx',
+    'plugins/ui/workbench/src/client/appearance/workspace.ts',
+    'docs/plugins.md',
+    'docs/work.md',
+  ];
+  const changedFilesFixture = changedPaths.map((path, index) => ({
+    path, display: path, added: index === 0 ? 18 : 1, deleted: index === 0 ? 2 : 0,
+  }));
+  await page.route('**/api/changes.summary?sessionId=workbench-test-alpha&*', route => route.fulfill({
+    json: { turn: 1, files: changedFilesFixture, total: 5, added: 22, deleted: 2 },
+  }));
+  await page.route('**/api/changes.diff?sessionId=workbench-test-alpha&*', route => route.fulfill({
+    json: { ...changedFilesFixture[0], kind: 'text', before: true, after: true, coarse: false, hunks: [
+      { oldStart: 32, oldLines: 2, newStart: 32, newLines: 2, lines: [
+        ' archiveChats', '-Remove project', '+Remove project and sessions',
+      ] },
+    ] },
+  }));
   await page.goto(host.url);
   await page.locator('html[data-dsh-workbench="true"]').waitFor();
   const preview = page.getByRole('button', { name: /Continue|继续/, exact: true });
@@ -385,6 +408,82 @@ try {
       else bodyStyle.removeProperty(themeSize);
     }
   }), [['13px', '24px'], ['13px', '24px']], '100% uses the same message size with the Desktop text preference');
+  const bubble = page.locator('[data-message-bubble]').filter({ hasText: 'Review the edited files' });
+  const darkTheme = page.locator('body[data-ds-dark-theme]');
+  const bubbleFill = () => bubble.evaluate(node => getComputedStyle(node).backgroundColor);
+  await darkTheme.waitFor({ state: 'attached' });
+  assert.equal(await bubbleFill(), 'rgb(14, 48, 116)');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await darkTheme.waitFor({ state: 'detached' });
+  assert.equal(await bubbleFill(), 'rgb(237, 243, 254)');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await darkTheme.waitFor({ state: 'attached' });
+  const theme = await page.addStyleTag({ content: 'body { --dsh-content-font-size: 15px !important; --dsh-code-font-size: 15px !important; }' });
+  const composer = page.locator('[data-composer-card]');
+  const draft = composer.locator('[data-composer-input]');
+  const placeholder = composer.locator('[data-composer-placeholder]');
+  const typography = node => {
+    const { fontSize, lineHeight } = getComputedStyle(node);
+    return [fontSize, lineHeight];
+  };
+  assert.deepEqual(await placeholder.evaluate(typography), ['13.5px', '24px']);
+  await draft.fill('输入框部分的字体也是，codex的比较小，dsh很大');
+  await draft.press('Shift+Enter');
+  await page.keyboard.insertText('第二行输入文字');
+  const draftLines = await draft.evaluate(node => {
+    const textNodes = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    const tops = new Set();
+    for (let text; (text = textNodes.nextNode());) {
+      range.selectNodeContents(text);
+      for (const rect of range.getClientRects()) if (rect.width > 0) tops.add(rect.top);
+    }
+    return [...tops];
+  });
+  assert.equal(draftLines.length, 2);
+  assert.equal(draftLines[1] - draftLines[0], 24);
+  assert.deepEqual(await draft.evaluate(typography), ['13.5px', '24px']);
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
+    await composer.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'composer-typography.png') });
+    await bubble.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'user-message-bubble.png') });
+  }
+  await draft.fill('');
+  await placeholder.waitFor();
+  const changedFiles = page.locator('[data-changed-files]');
+  const changesTitle = changedFiles.getByText('Edited 5 files', { exact: true });
+  const changesTotal = changedFiles.getByText('+22', { exact: true });
+  const changedRows = changedFiles.getByRole('listitem');
+  const firstFile = changedRows.first().getByRole('button');
+  const fold = changedFiles.getByRole('button', { name: 'Show all 5 changed files' });
+  assert.deepEqual(await changesTitle.evaluate(typography), ['14px', '20px']);
+  assert.deepEqual(await changesTotal.evaluate(typography), ['13px', '18px']);
+  assert.deepEqual(await firstFile.getByText(changedPaths[0], { exact: true }).evaluate(typography), ['14px', '22px']);
+  assert.deepEqual(await firstFile.getByText('+18', { exact: true }).evaluate(typography), ['13px', '22px']);
+  assert.equal((await firstFile.boundingBox()).height, 36);
+  assert.equal((await fold.evaluate(typography))[0], '14px');
+  assert.equal(await changedRows.count(), 4);
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await changedFiles.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'edited-files-typography.png') });
+  }
+  await fold.click();
+  assert.equal(await changedRows.count(), 5);
+  await changedFiles.getByRole('button', { name: 'Collapse changed files', exact: true }).click();
+  assert.equal(await changedRows.count(), 4);
+  await firstFile.hover();
+  const hoverDiff = page.locator('[data-changes-hover-preview]');
+  const contextRow = hoverDiff.locator('[data-diff-line="context"]');
+  await contextRow.getByText('archiveChats', { exact: true }).waitFor();
+  assert.deepEqual(await contextRow.getByText('archiveChats', { exact: true }).evaluate(typography), ['12px', '22px']);
+  assert.deepEqual(await contextRow.getByText('32', { exact: true }).first().evaluate(typography), ['12px', '22px']);
+  assert.equal((await contextRow.boundingBox()).height, 22);
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await hoverDiff.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'hover-diff-typography.png') });
+  }
+  await page.mouse.move(100, 100);
+  await hoverDiff.waitFor({ state: 'detached' });
+  await theme.evaluate(node => node.remove());
+  console.log('PASS composer, Edited files card and hover diff typography at 100% with 15px host preferences, plus dark and light user bubbles.');
   const tabs = page.locator('[data-conversation-tabs]');
   await tabs.getByRole('tab', { name: 'Trajectory' }).click();
   await tabs.getByRole('tab', { name: 'Chat', exact: true }).click();
