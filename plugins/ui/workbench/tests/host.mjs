@@ -593,6 +593,28 @@ try {
   }
   assert.equal(await duration.locator('span').first().evaluate(label => getComputedStyle(label).fontSize), '14px',
     'completed timing uses the Workbench reference size with a 15px host preference');
+  if (await duration.getAttribute('aria-expanded') === 'false') await duration.click();
+  const toolSummary = page.locator('[data-conversation-content] [data-step-process]')
+    .getByRole('button', { name: /^Read files/ });
+  await toolSummary.waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await toolSummary.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'tool-summary-typography.png') });
+  }
+  const toolSummaryTypography = await toolSummary.getByText(/^Read files/).evaluate(label => {
+    const { fontSize, lineHeight, fontWeight } = getComputedStyle(label);
+    return { text: label.textContent, fontSize, lineHeight, fontWeight };
+  });
+  console.log('Tool summary typography:', toolSummaryTypography);
+  assert.equal(toolSummaryTypography.fontSize, '14px',
+    'tool summary uses the Workbench reference size with a 15px host preference');
+  assert.equal(await toolSummary.getAttribute('aria-expanded'), 'false');
+  await toolSummary.click();
+  assert.equal(await toolSummary.getAttribute('aria-expanded'), 'true');
+  await toolSummary.click();
+  assert.equal(await toolSummary.getAttribute('aria-expanded'), 'false');
+  await duration.click();
+  assert.equal(await duration.getAttribute('aria-expanded'), 'false');
+  console.log('PASS tool summary typography and native tool and turn disclosure.');
   const composer = page.locator('[data-composer-card]');
   const draft = composer.locator('[data-composer-input]');
   const placeholder = composer.locator('[data-composer-placeholder]');

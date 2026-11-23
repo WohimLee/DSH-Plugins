@@ -24,6 +24,9 @@ html[data-dsh-workbench] [data-conversation-content] {
 html[data-dsh-workbench] [data-conversation-content] [data-turn-process]:is([data-has-duration], :has(> span > span)) {
   font-size: 14px;
 }
+html[data-dsh-workbench] [data-conversation-content] [data-step-process] button[data-process-activity] {
+  font-size: 14px;
+}
 html[data-dsh-workbench] body[data-ds-dark-theme] [data-conversation-content] [data-message-bubble] {
   --dsw-specific-bubble: var(--dsw-static-blue-900);
 }
