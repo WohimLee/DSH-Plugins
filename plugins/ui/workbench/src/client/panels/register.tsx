@@ -24,7 +24,7 @@ export function registerRightPanels(ctx: Context, tree: TreeStore, commands: Wor
     name: 'sidebar.right.pane.tab', key: agentsKind, locale: 'workbench',
     children: { 'workbench.agent.record': { kind: 'single', scope: 'session' } },
     inject: () => ({ refresh, retain }),
-  }, props => <SubagentsTab {...props} />));
+  }, props => <SubagentsTab key={props.sessionId} {...props} />));
   ctx.slots.inject('workbench.agent.record', () => ctx.slots.register({ name: 'workbench.agent.record' }, AgentRecord));
   const watchChanges: Parameters<typeof HeaderControls>[0]['watchChanges'] = async (id, signal, publish) => {
     const panel = ctx.get('remote.forgePanel') as ForgePanel | undefined;
@@ -54,6 +54,9 @@ export function registerRightPanels(ctx: Context, tree: TreeStore, commands: Wor
     getSnapshot: () => ctx.slots.entriesOfSlot(header).some(entry => entry.options.id === 'liveshare-share'),
     subscribe: (listener: () => void) => ctx.slots.subscribe(header, listener),
   };
+  ctx.slots.inject('conversation.hero.frame', () => ctx.slots.register({
+    name: 'conversation.hero.frame', id: 'dsh-workbench:summary-layout',
+  }, ({ children, hero }) => hero ? children : <div data-workbench-summary-frame>{children}</div>));
   ctx.slots.inject(header, () => ctx.slots.register({
     name: header, id: 'dsh-workbench:header', order: -6, locale: 'workbench',
     inject: () => ({ openResource: (address: string) => ctx.sidebarRight.openResource(address), refresh, openAgents: () => ctx.sidebarRight.openTab(agentsKind),

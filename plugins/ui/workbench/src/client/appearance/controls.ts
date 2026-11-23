@@ -45,34 +45,73 @@ html[data-dsh-workbench] [data-slot="sidebar.brand.name"] [data-workbench-brand]
 .wb-panel-menu-row button:first-child { flex: 1; text-align: start; }
 .wb-header-controls { display: flex; align-items: center; gap: 4px; position: relative; }
 .wb-header-controls .wb-control { display: inline-grid; place-items: center; background: transparent; }
-.wb-header-controls .wb-control:hover, .wb-header-controls .wb-control[aria-pressed="true"] {
+.wb-header-controls .wb-control:hover, .wb-header-controls .wb-control[aria-expanded="true"] {
   background: var(--dsw-alias-background-active, #8883);
 }
+[data-workbench-summary-frame] { display: contents; }
+[data-workbench-summary-frame]:has(> [data-workbench-summary]) {
+  position: relative; display: flex; flex: 1; min-block-size: 0;
+  container: wb-summary / inline-size;
+}
+[data-workbench-summary-frame] > [data-conversation-scroll] { min-inline-size: 0; }
 .wb-pinned-summary {
   position: absolute; z-index: 5; inset: calc(100% + 8px) 0 auto auto;
-  display: grid; gap: 9px; inline-size: min(265px, 60vw); padding: 13px;
+  display: grid; gap: 4px; inline-size: min(300px, calc(100vw - 32px));
+  max-block-size: min(70vh, 600px); box-sizing: border-box; overflow: auto; padding: 12px 16px;
+  font-size: 13px; line-height: 18px;
   color: var(--dsw-alias-label-primary, #eee); background: var(--dsw-specific-sidebar-fill, #252525);
-  border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 12px; box-shadow: 0 6px 22px #0004;
+  border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 16px; box-shadow: 0 6px 22px #0004;
   -webkit-app-region: no-drag;
 }
-.wb-pinned-summary { max-height: min(70vh, 600px); overflow: auto; }
-.wb-pinned-summary section { display: grid; gap: 6px; border-top: 1px solid #8883; padding-top: 10px; }
-.wb-pinned-summary small, .wb-agent-list h3, .wb-agent-list p, .wb-agent-list small, .wb-agent-detail small { color: var(--dsw-alias-label-secondary, #aaa); font-weight: normal; }
-.wb-pinned-summary .wb-control { justify-items: start; text-align: start; overflow-wrap: anywhere; }
-.wb-pinned-summary .wb-summary-agents { gap: 9px; }
-.wb-summary-agents span span { margin-right: 4px; }
-.wb-agent-list { width: 100%; height: 100%; overflow: auto; padding: 18px; box-sizing: border-box; }
-.wb-agent-list h3, .wb-agent-list p { font-size: inherit; margin: 8px; }
-.wb-agent-list section + section { margin-top: 26px; }
-.wb-agent-list button, .wb-agent-detail header { display: flex; align-items: center; gap: 10px; }
-.wb-agent-list button { width: 100%; padding: 9px; border: 0; border-radius: 8px; color: inherit; text-align: start; background: transparent; font: inherit; }
-.wb-agent-list button:enabled:hover { cursor: pointer; background: #8882; }
-.wb-agent-list small, .wb-agent-detail small { margin-left: auto; }
+[data-workbench-summary-frame] > .wb-pinned-summary { inset: 8px 8px auto auto; max-inline-size: calc(100% - 16px); }
+@container wb-summary (min-width: 1020px) {
+  [data-workbench-summary-frame] > .wb-pinned-summary {
+    position: relative; inset: auto; flex: none; align-self: flex-start;
+    margin: 8px 8px 0 12px;
+  }
+}
+.wb-pinned-summary h2, .wb-pinned-summary h3 {
+  margin: 0; font: inherit; color: var(--dsw-alias-label-secondary, #aaa);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wb-pinned-summary h2 { padding-block: 2px 3px; }
+.wb-pinned-summary section {
+  display: grid; gap: 3px; min-inline-size: 0; border-top: 1px solid var(--dsw-alias-border-primary, #8884);
+  margin-block-start: 2px; padding-block-start: 6px;
+}
+.wb-pinned-summary .wb-summary-row {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center;
+  min-block-size: 30px; min-inline-size: 0; gap: 8px; padding: 3px 0;
+  text-align: start; background: transparent; font-size: 13px; line-height: 18px;
+}
+.wb-pinned-summary .wb-summary-row:hover { background: var(--dsw-alias-background-hover, #8882); }
+.wb-summary-row > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-summary-row.wb-summary-changes { font-size: 14px; line-height: 20px; }
+.wb-summary-value { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.wb-agent-list h3, .wb-agent-list p, .wb-agent-list small, .wb-agent-detail small { color: var(--dsw-alias-label-secondary, #aaa); font-weight: normal; }
+.wb-agent-list { width: 100%; height: 100%; overflow: auto; padding: 16px 14px; box-sizing: border-box; font-size: 13px; line-height: 18px; }
+.wb-agent-list h3, .wb-agent-list p { font: inherit; margin: 6px 8px; }
+.wb-agent-list section + section { margin-top: 20px; }
+.wb-agent-list button, .wb-agent-detail header {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
+}
+.wb-agent-list button {
+  width: 100%; min-block-size: 38px; padding: 6px 8px; border: 0; border-radius: 8px;
+  color: inherit; text-align: start; background: transparent; font: inherit;
+}
+.wb-agent-list button:enabled:hover { cursor: pointer; background: var(--dsw-alias-background-hover, #8882); }
+.wb-agent-name, .wb-agent-detail h3 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.wb-agent-list small, .wb-agent-detail small { font-size: 12px; line-height: 16px; }
 .wb-agent-detail { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
-.wb-agent-detail header, .wb-agent-detail details { padding: 10px 14px; }
-.wb-agent-detail header { border-bottom: 1px solid #8883; }
+.wb-agent-detail header, .wb-agent-detail details, .wb-agent-detail > p { padding: 8px 14px; }
+.wb-agent-detail header { display: flex; border-bottom: 1px solid #8883; }
+.wb-agent-detail h3 { flex: 1; min-inline-size: 0; margin: 0; font-size: 14px; line-height: 20px; font-weight: 500; }
+.wb-agent-detail small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-inline-size: 42%; }
+.wb-agent-detail details { color: var(--dsw-alias-label-secondary, #aaa); font-size: 13px; line-height: 18px; }
+.wb-agent-detail summary { cursor: pointer; }
+.wb-agent-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 10px 0 2px; }
+.wb-agent-detail dd { margin: 0; overflow-wrap: anywhere; }
 .wb-agent-conversation { position: relative; display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: auto; }
-.wb-header-controls .wb-summary-changes { display: flex; justify-content: space-between; }
 .wb-summary-changes b { color: #49ae78; font-weight: normal; }
 .wb-summary-changes em { color: #e36565; font-style: normal; }
 .wb-guide {

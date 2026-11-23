@@ -26,6 +26,7 @@ test('Client factory adds navigation without replacing native slot owners; dispo
     sidebar: { kind: 'single', scope: 'root' },
     'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
+    'conversation.hero.frame': { kind: 'hoc', scope: 'root' },
     'sidebar.right.pane.tab': { kind: 'keyed', scope: 'session' },
     'sidebar.right.tab.guide': { kind: 'chain', scope: 'session' },
     'sidebar.right.pane.tab.title': { kind: 'keyed', scope: 'session' },
@@ -74,7 +75,7 @@ test('Client factory adds navigation without replacing native slot owners; dispo
     assert.notEqual(core.entriesOfSlot('sidebar.brand.name')[0].component, NativeBrand);
     assert.equal(core.entriesOfSlot('shell.overlay').length, 1);
   } finally { for (const off of cleanups.reverse()) await off(); }
-  for (const slot of ['shell.overlay', 'sidebar.session.action', 'conversation.session.header.utilities', 'sidebar.right.tab.guide', 'sidebar.right.pane.tab.title']) {
+  for (const slot of ['shell.overlay', 'sidebar.session.action', 'conversation.session.header.utilities', 'conversation.hero.frame', 'sidebar.right.tab.guide', 'sidebar.right.pane.tab.title']) {
     assert.equal(core.entriesOfSlot(slot).length, 0);
   }
   assert.equal(core.entriesOfSlot('sidebar.brand.name')[0].component, NativeBrand);

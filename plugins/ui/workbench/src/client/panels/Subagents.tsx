@@ -90,10 +90,15 @@ function Detail({ row, back, retain, SessionProvider, renderSlot, useSessions, t
   }, [row.id, row.parent, row.mode, retain]);
   return <section className="wb-agent-detail">
     <header><button type="button" className="wb-control" aria-label={t('back')} onClick={back}>←</button>
-      <AgentIcon id={row.id} /><strong>{row.title}</strong><small>{[model?.model, model?.reasoningEffort].filter(Boolean).join(' · ')}</small></header>
+      <AgentIcon id={row.id} /><h3 title={row.title}>{row.title}</h3>
+      {model && <small title={model.model}>{[model.model, model.reasoningEffort].filter(Boolean).join(' · ')}</small>}</header>
     {elapsed !== undefined && <details><summary>{t('worked')} {Math.floor(elapsed / 60)}m {elapsed % 60}s</summary>
-      <time>{new Date(row.createdAt).toLocaleString()}</time></details>}
+      <dl><dt>{t('agentCreated')}</dt><dd><time dateTime={new Date(row.createdAt).toISOString()}>{new Date(row.createdAt).toLocaleString()}</time></dd>
+        {timing?.active && <><dt>{t('agentTurnStarted')}</dt>
+          <dd><time dateTime={new Date(timing.active.since).toISOString()}>{new Date(timing.active.since).toLocaleString()}</time></dd></>}
+      </dl></details>}
     {error && <p role="alert">{t('openFailed')}</p>}
+    {!error && !reference && <p role="status">{t('loadingAgentRecord')}</p>}
     {reference && <div className="wb-agent-conversation"><SessionProvider session={reference}>{renderSlot('workbench.agent.record', {})}</SessionProvider></div>}
   </section>;
 }
@@ -122,7 +127,12 @@ export function SubagentsTab(props: TabProps) {
       return <section key={group}><h3>{t(group)} · {items.length}</h3>
         {group === 'active' && !items.length && !pending.length && !failed.length && <p>{t('noActive')}</p>}
         {items.map(entry => <button type="button" key={entry.id} onClick={() => select(entry.id)} disabled={entry.mode === 'external'}>
-          <AgentIcon id={entry.id} /><span>{entry.title}</span><small>{entry.mode === 'external' ? t('unavailableRecord') : relativeTime(entry.updatedAt)}</small>
+          <AgentIcon id={entry.id} /><span className="wb-agent-name" title={entry.title}>{entry.title}</span>
+          {entry.mode === 'external' ? <small>{t('unavailableRecord')}</small> : <small>
+            <time dateTime={new Date(entry.updatedAt).toISOString()} title={new Date(entry.updatedAt).toLocaleString()}>
+              {relativeTime(entry.updatedAt)}
+            </time>
+          </small>}
         </button>)}</section>;
     })}
   </div>;

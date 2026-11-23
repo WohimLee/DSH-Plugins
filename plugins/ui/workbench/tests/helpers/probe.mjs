@@ -53,12 +53,22 @@ export async function apply(ctx, config) {
     ]);
     await ctx.sessionController.rename({ sessionId, title: 'Workbench ' + suffix });
   }
-  const recordSubagent = async () => {
+  const recordSubagent = async (stage) => {
+    const id = 'workbench-child-record';
+    if (stage === 'done') {
+      const agent = ctx.agents.get(id);
+      agent.session.append([
+        ['step/end', { turn: 1, step: 1 }],
+        ['turn/end', { turn: 1, reason: { kind: 'completed' } }],
+      ]);
+      delete agent.status;
+      ctx.emit('agent/status', { agent, status: agent.status });
+      return;
+    }
     const result = await ctx.sessionController.resolveAgent('workbench-test-beta');
     if ('error' in result) throw new Error('Missing fixture parent');
     const parent = result.agent.session;
     if (parent && !parent.ownEvents().some(event => event.type === 'subagent/catalog')) {
-      const id = 'workbench-child-record';
       const label = 'Inspect workbench fixture';
       const { agent } = await ctx.agents.create({ sessionId: id, meta: { parentSession: parent.id, origin: 'subagent', cwd: config.path } });
       const record = agent.session;
@@ -71,10 +81,10 @@ export async function apply(ctx, config) {
         ['request/header', { header: { config: { provider: 'fixture', model: 'Fixture model', reasoningEffort: 'high' } }, reason: 'initial' }],
         ['assistant/message', { turn: 1, step: 1, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
           content: [{ type: 'text', text: '**Directory checked**' }], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
-        ['step/end', { turn: 1, step: 1 }],
-        ['turn/end', { turn: 1, reason: { kind: 'completed' } }],
       ]);
       parent.append('subagent/catalog', { version: 1, childId: id, childCreatedAt: Date.now(), mode: 'one-shot', label });
+      Object.defineProperty(agent, 'status', { configurable: true, value: 'running' });
+      ctx.emit('agent/status', { agent, status: agent.status });
     }
   };
   const recordActivity = () => {
@@ -88,7 +98,7 @@ export async function apply(ctx, config) {
       ctx.emit('agent/status', { agent, status: agent.status });
       return;
     }
-    if (id === 'subagent-fixture') { recordSubagent(); return; }
+    if (id === 'subagent-fixture') { void recordSubagent(text).catch(error => ctx.logger.warn('Subagent fixture failed: %s', error)); return; }
     if (id === 'session-deletion-fixture') {
       void (async () => {
         const locations = {};

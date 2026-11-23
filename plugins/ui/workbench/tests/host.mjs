@@ -541,12 +541,55 @@ try {
   const guide = page.locator('[data-workbench-guide]:visible');
   const right = page.locator('[data-sidebar-right-open]');
   const summary = page.locator('[data-workbench-summary]');
-  await recordMessage('subagent-fixture', '');
+  await recordMessage('subagent-fixture', 'running');
   const summaryButton = page.getByRole('button', { name: 'Toggle pinned summary' });
+  const summaryComposer = page.locator('[data-conversation-content] [data-composer-card]');
+  const summaryScroll = page.locator('[data-conversation-content] [data-conversation-scroll]');
+  const closedComposer = await summaryComposer.boundingBox();
+  const closedScroll = await summaryScroll.boundingBox();
+  if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-closed.png') });
   await summaryButton.click();
-  await summary.getByRole('button', { name: join(temp, 'workspace', 'child-project'), exact: true }).waitFor();
+  const summaryFolder = summary.getByRole('button', { name: join(temp, 'workspace', 'child-project'), exact: true });
+  await summaryFolder.waitFor();
+  assert.equal(await summaryFolder.innerText(), 'child-project');
+  assert.equal(await summaryFolder.getAttribute('title'), join(temp, 'workspace', 'child-project'));
+  assert.equal(await summary.getByRole('heading', { name: 'Created chats' }).count(), 0);
+  assert.deepEqual(await summary.evaluate(element => {
+    const heading = getComputedStyle(element.querySelector('h2'));
+    const changes = getComputedStyle(element.querySelector('.wb-summary-changes'));
+    return [heading.fontSize, heading.fontWeight, changes.fontSize, changes.lineHeight];
+  }), ['13px', '400', '14px', '20px']);
+  const openedPanel = await summary.boundingBox();
+  const openedScroll = await summaryScroll.boundingBox();
+  const openedComposer = await summaryComposer.boundingBox();
+  assert.ok(openedComposer.x < closedComposer.x - 100, 'the wide chat composer moves left');
+  assert.ok(Math.abs(openedComposer.width - closedComposer.width) < 1, 'the wide chat composer keeps its width');
+  assert.ok(openedScroll.x + openedScroll.width <= openedPanel.x, 'the wide summary clears the message scrollport');
+  assert.equal(await right.count(), 0, 'opening Summary does not open the native tool panel');
+  if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-open-wide.png') });
+  await page.keyboard.press('Escape');
+  await summary.waitFor({ state: 'detached' });
+  assert.ok(await summaryButton.evaluate(element => element === document.activeElement));
+  assert.ok(Math.abs((await summaryScroll.boundingBox()).width - closedScroll.width) < 1);
+  await page.setViewportSize({ width: 1180, height: 1000 });
+  // Allow the frame's ResizeObserver to publish the new host column width.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const narrowComposer = await summaryComposer.boundingBox();
+  await summaryButton.click();
+  await summaryFolder.waitFor();
+  const narrowPanel = await summary.boundingBox();
+  const narrowOpenedComposer = await summaryComposer.boundingBox();
+  assert.ok(Math.abs(narrowOpenedComposer.x - narrowComposer.x) < 1,
+    `the narrow summary leaves the composer in place (${narrowComposer.x} → ${narrowOpenedComposer.x})`);
+  assert.ok(narrowPanel.x >= 0 && narrowPanel.x + narrowPanel.width <= 1180, 'the narrow summary fits in the window');
+  if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-open-narrow.png') });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await summary.getByRole('button', { name: 'Subagents' }).getByText(/\b1 Active\b/).waitFor();
   await summary.getByRole('button', { name: 'Subagents' }).click();
   const agents = right.locator('.wb-agent-list');
+  await agents.getByRole('heading', { name: 'Active · 1' }).waitFor();
+  await agents.getByRole('button', { name: /Inspect workbench fixture/ }).waitFor();
+  await recordMessage('subagent-fixture', 'done');
   await agents.getByRole('heading', { name: 'Done · 1' }).waitFor();
   assert.equal(await tree.locator('[data-row-key="session:workbench-child-record"]').count(), 0,
     'child records belong in the parent panel and stay out of ordinary session rows');
@@ -559,6 +602,14 @@ try {
   await right.locator('.wb-agent-detail details[open] time').waitFor();
   if (process.env.DSH_TEST_ARTIFACTS) await right.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'subagent-record.png') });
   await right.getByRole('button', { name: 'Back', exact: true }).click();
+  await agents.getByRole('button', { name: /Inspect workbench fixture/ }).waitFor();
+  await agents.getByRole('button', { name: /Inspect workbench fixture/ }).click();
+  await right.locator('.wb-agent-detail').getByRole('heading', { name: 'Inspect workbench fixture' }).waitFor();
+  await alpha.getByRole('button', { name: 'Workbench alpha', exact: true }).click();
+  await right.locator('.wb-agent-detail').waitFor({ state: 'hidden' });
+  await beta.getByRole('button', { name: 'Workbench beta', exact: true }).click();
+  await summaryButton.click();
+  await summary.getByRole('button', { name: 'Subagents' }).click();
   await agents.getByRole('button', { name: /Inspect workbench fixture/ }).waitFor();
   await right.getByRole('button', { name: 'New tab', exact: true }).click();
   await guide.waitFor();
@@ -867,7 +918,7 @@ try {
   console.log('PASS native plugin-manager UI hot disable/re-enable removes and restores workbench without duplicate rails, preserving external panels.');
   await recordMessage('session-deletion-fixture', '');
   const locationFile = join(temp, 'deletion-locations.json');
-  for (let attempt = 0; attempt < 50; attempt++) {
+  for (let attempt = 0; attempt < 200; attempt++) {
     if (await access(locationFile).then(() => true, () => false)) break;
     await new Promise(accept => setTimeout(accept, 100));
   }
