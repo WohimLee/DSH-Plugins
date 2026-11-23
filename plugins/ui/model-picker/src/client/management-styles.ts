@@ -36,7 +36,10 @@ export const managementStyles = `
   border-radius: 14px;
   background: var(--connection-card);
 }
-.dsh-connection-card { display: flex; flex-direction: column; align-items: flex-start; padding: 18px 18px 0; }
+.dsh-connection-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 18px 18px 0; }
+.dsh-connection-card:has(.dsh-connection-open:hover) { border-color: var(--connection-muted); }
+.dsh-connection-open::after { content: ''; position: absolute; inset: 0; border-radius: 14px; cursor: pointer; }
+.dsh-connection-open:focus-visible::after { outline: 2px solid var(--connection-accent); outline-offset: 2px; }
 .dsh-connection-card header { display: flex; align-items: center; gap: 11px; margin-bottom: 16px; }
 .dsh-connection-icon { display: block; object-fit: contain; }
 .dsh-connection-fallback { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 11px; background: var(--connection-accent-bg); color: var(--connection-accent); }
@@ -50,9 +53,37 @@ export const managementStyles = `
   width: 100%; padding-block: 10px; margin-top: auto; border-top: 1px solid var(--connection-border);
 }
 .dsh-connection-footer-label { display: flex; align-items: center; gap: 6px; color: var(--connection-muted); font-size: 12px; }
-.dsh-connection-grid > .dsh-connection-details { grid-column: 1 / -1; order: 1; }
-.dsh-connection-grid > :not(.dsh-connection-card, .dsh-connection-details) { grid-column: 1 / -1; order: 2; }
-.dsh-connection-details[hidden] { display: none; }
+.dsh-connection-grid > :not(.dsh-connection-card) { grid-column: 1 / -1; order: 1; }
+.dsh-connection-actions, .dsh-connection-usage-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.dsh-connection-usage-controls { position: relative; z-index: 1; }
+.dsh-connection-usage-controls select {
+  color: inherit; background: var(--connection-card); border: 1px solid var(--connection-border);
+  border-radius: 7px; min-height: 32px; padding-inline: 6px; font: inherit; font-size: 12px; max-width: min(100%, 148px);
+}
+.dsh-connection-details {
+  color: inherit; box-sizing: border-box; margin: auto; padding: 0;
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto;
+}
+.dsh-connection-details::backdrop { background: rgb(0 0 0 / 38%); }
+.dsh-connection-details > section > :is(h2, h3) { padding-inline-end: 34px; }
+.dsh-model-management .dsh-connection-close {
+  position: absolute; inset-block-start: 9px; inset-inline-end: 10px; justify-content: center; font-size: 19px;
+}
+.dsh-connection-usage { position: relative; }
+.dsh-connection-usage:is(:hover, :focus-within) { z-index: 2; }
+.dsh-model-management .dsh-connection-usage-button { border-color: transparent; padding: 3px; }
+.dsh-connection-usage-button svg { width: 20px; height: 20px; display: block; transform: rotate(-90deg); }
+.dsh-connection-usage-button circle { fill: none; stroke-width: 2; }
+.dsh-connection-usage-track { stroke: var(--connection-border); }
+.dsh-connection-usage-button[data-remaining] .dsh-connection-usage-track { stroke: var(--connection-muted); opacity: .4; }
+.dsh-connection-usage-arc { stroke: var(--connection-accent); stroke-linecap: round; }
+.dsh-connection-usage-tooltip {
+  display: none; position: absolute; z-index: 1; inset-block-end: 100%; inset-inline-end: 0;
+  width: max-content; max-width: min(252px, 72vw); padding: 7px 9px; border-radius: 7px;
+  color: var(--connection-text); background: var(--connection-card); border: 1px solid var(--connection-border);
+  box-shadow: var(--dsw-elevation-prominent); font-size: 12px; overflow-wrap: anywhere;
+}
+.dsh-connection-usage:is(:hover, :focus-within) .dsh-connection-usage-tooltip { display: grid; gap: 3px; }
 .dsh-connection-text-details { display: grid; gap: 8px; padding: 16px 18px; overflow-wrap: anywhere; }
 .dsh-connection-status svg, .dsh-connection-footer-label svg { flex: none; }
 .dsh-model-management button {
@@ -61,8 +92,7 @@ export const managementStyles = `
   color: inherit; background: transparent; border-radius: 7px; border: 1px solid var(--connection-border);
 }
 .dsh-model-management button[data-emphasis="true"] { color: var(--connection-accent); background: var(--connection-accent-bg); border-color: transparent; }
-.dsh-model-management button:not(:disabled):hover, .dsh-connection-card button[aria-expanded="true"] { background: var(--connection-hover); }
-.dsh-connection-card button[aria-expanded="true"] svg { transform: rotate(180deg); }
+.dsh-model-management button:not(:disabled):hover { background: var(--connection-hover); }
 .dsh-model-management button:disabled { opacity: .6; }
 .dsh-model-management input {
   max-width: 100%; box-sizing: border-box; color: inherit; font: inherit; padding: 4px 6px; background: transparent;
@@ -84,6 +114,6 @@ export const managementStyles = `
   .dsh-connection-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (pointer: coarse) {
-  .dsh-model-management :is(button, summary) { min-height: 44px; }
+  .dsh-model-management :is(button, summary, select) { min-height: 44px; }
 }
 `;

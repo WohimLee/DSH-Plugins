@@ -11,7 +11,7 @@ DSH-Plugins 是维护 DeepSeek Harness 扩展插件的多包仓库，面向插�
 - 插件位于 plugins/<category>/<slug>，共享包按需进入 packages；templates 不属于 workspace。
 - 自动检查使用工作区和隔离测试目录。面向 Desktop 的业务插件实现完成后，Agent 按[本机桌面交付](development.md#本机桌面交付)将本次构建安装到日常 Desktop 并验收。
 - dsh-workbench 位于 plugins/ui/workbench，使用公开插槽增加常驻功能栏和分区、嵌套项目、会话列表，保留原生项目会话、对话和扩展入口。采用 workspace，未使用 Git submodule。
-- dsh-model-picker 位于 plugins/ui/model-picker，提供左栏模型管理页，统一展示 Codex、Qoder 和 Grok 连接卡片，并通过原生模型菜单的选项插槽提供厂商级联、账号切换和用量显示。管理页和选择器复用 DSH 模型目录，厂商可向管理页贡献连接表单。它与 Workbench 独立安装。
+- dsh-model-picker 位于 plugins/ui/model-picker，提供左栏模型管理页，连接卡片支持进入详情、选择要查看的账号和悬停用量圆环。原生模型菜单的选项插槽提供厂商级联和模型选择。管理页和选择器复用 DSH 模型目录，厂商可向管理页贡献连接表单。它与 Workbench 独立安装。
 - `dsh-agent-sync` 0.1.1 于 2026-11-19 从本机 Desktop 卸载并移入[插件归档](../archived/integrations/agent-sync/README.md)。工作台的常规宿主测试独立运行。
 
 ## 导航

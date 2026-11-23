@@ -1,4 +1,5 @@
 import type { ModelDirectoryState } from '@deepseek-ai/dsh-client-ui-model-selection/client';
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 
 type Route = ModelDirectoryState['groups'][number];
 export interface ProviderGroup {
@@ -26,4 +27,11 @@ export function activeRoute(group: ProviderGroup, preferred?: string): Route {
   return group.routes.find(route => route.id === preferred)
     ?? group.routes.find(route => route.id === 'deepseek-account')
     ?? group.routes[0];
+}
+
+export function routeName(route: Route, t: PropsLocale<'modelPicker'>['t']): string {
+  if (route.id === 'deepseek-account') return t('deepseekAccount');
+  if (route.id === 'deepseek-official') return t('deepseekKey');
+  if (route.id === 'qoder') return t('defaultAccount');
+  return route.name.replace(/^Qoder · /, '');
 }

@@ -132,7 +132,7 @@ globalThis.fetch = (input, options) => {
   const tarballs = [];
   for (const source of [directory, join(root, 'plugins/ui/model-picker')]) {
     const pkg = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
-    const artifactDir = source === directory && process.env.DSH_TEST_ARTIFACT_DIR || temp;
+    const artifactDir = (source === directory ? process.env.DSH_TEST_ARTIFACT_DIR : process.env.DSH_TEST_MODEL_PICKER_ARTIFACT_DIR) || temp;
     if (artifactDir === temp) await run('pnpm', ['pack', '--pack-destination', temp], source);
     tarballs.push(join(artifactDir, `${pkg.name}-${pkg.version}.tgz`));
   }
@@ -150,7 +150,10 @@ globalThis.fetch = (input, options) => {
   assert.equal(await group.count(), 0);
 
   const setup = connection.getByRole('button', { name: 'Set up Grok' });
-  assert.equal(await setup.getAttribute('aria-expanded'), 'false');
+  assert.equal(await connection.locator('img').evaluate(image => image.naturalWidth), 96);
+  await connection.getByRole('button', { name: 'Grok usage' }).hover();
+  await connection.getByRole('tooltip').getByText('View API usage in the xAI Console.').waitFor();
+  await details.waitFor({ state: 'hidden' });
   await setup.click();
   const keyInput = details.getByLabel('xAI API Key', { exact: true });
   await keyInput.fill('invalid');
@@ -161,15 +164,18 @@ globalThis.fetch = (input, options) => {
   await keyInput.fill('fixture-grok-key');
   await details.getByRole('button', { name: 'Connect', exact: true }).click();
   await connection.getByText('Connected with an xAI API Key').waitFor();
+  await page.keyboard.press('Escape');
   await group.waitFor();
   await group.click();
   await page.getByText(model.id, { exact: true }).waitFor();
+  await connection.getByRole('button', { name: 'View connection' }).click();
   assert.equal(await keyInput.inputValue(), '');
 
   await keyInput.fill('invalid');
   await details.getByRole('button', { name: 'Replace key', exact: true }).click();
   await details.getByRole('alert').filter({ hasText: 'xAI rejected' }).waitFor();
   assert.equal(await group.count(), 1);
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
   const composer = page.locator('[data-composer-card]');

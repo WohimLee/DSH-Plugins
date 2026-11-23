@@ -1,21 +1,32 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-api-remotes/client';
 import type { ModelPickerConnectionCard, PropsLocale, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { groupProviders } from './model.js';
 import { ConnectionCard } from './connection-card.js';
+import { CardUsage } from './card-usage.js';
 import { ManagementIcon } from './icons.js';
+import { createReadUsage } from './usage.js';
 
-type Props = PropsLocale<'modelPicker'> & PropsRenderSlots<'modelPicker.connections'> & { ctx: Context };
+type Props = PropsLocale<'modelPicker'> & PropsRenderSlots<'modelPicker.connections'> & { ctx: Context; language: string };
 type Groups = ReturnType<typeof groupProviders>;
-type Snapshot = { groups: Groups; failures: readonly { id: string; name: string; message: string }[]; codex: boolean | null; catalogError: boolean; connectionError: boolean };
-const empty: Snapshot = { groups: [], failures: [], codex: null, catalogError: false, connectionError: false };
+type Snapshot = {
+  groups: Groups;
+  failures: readonly { id: string; name: string; message: string }[];
+  codex: boolean | null;
+  deepseekSignedIn: boolean;
+  catalogError: boolean;
+  connectionError: boolean;
+};
+const empty: Snapshot = {
+  groups: [], failures: [], codex: null, deepseekSignedIn: false, catalogError: false, connectionError: false,
+};
 
-export function ModelManagement({ ctx, t, renderSlot }: Props) {
+export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
   const [snapshot, setSnapshot] = useState(empty);
   const [checking, setChecking] = useState(true);
   const [refresh, setRefresh] = useState(0);
-  const [open, setOpen] = useState<string>();
+  const readUsage = useMemo(() => createReadUsage(ctx), [ctx]);
 
   useEffect(() => {
     let revision = 0;
@@ -23,9 +34,10 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
     const read = async () => {
       const latest = ++revision;
       setChecking(true);
-      const [catalog, connection] = await Promise.allSettled([
+      const [catalog, connection, account] = await Promise.allSettled([
         ctx.remote.session.modelCatalog(),
         ctx.remote.dshModelPickerUsage.codexConnection(),
+        ctx.get('remote.account')?.getState(),
       ]);
       if (!mounted || latest !== revision) return;
       const value = catalog.status === 'fulfilled' && catalog.value.ok ? catalog.value.value : null;
@@ -34,6 +46,8 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
         groups: value ? groupProviders(value.groups.filter(group => group.models.length > 0)) : [],
         failures: value?.failures ?? [],
         codex: response?.ok ? response.value : null,
+        deepseekSignedIn: account.status === 'fulfilled' && account.value?.ok === true
+          && account.value.value?.status === 'credential-stored',
         catalogError: value === null,
         connectionError: !response?.ok,
       });
@@ -55,6 +69,7 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
     new Set(group.routes.flatMap(route => route.models.map(model => model.id))).size;
   const modelLabel = (count: number) => t(count === 1 ? 'modelCountOne' : 'modelCount', { count });
   const codexModels = snapshot.groups.find(group => group.id === 'codex');
+  const deepseekModels = snapshot.groups.find(group => group.id === 'deepseek');
   const codexStatus = checking && snapshot.codex === null && !snapshot.connectionError ? 'checkingConnection'
     : snapshot.connectionError ? 'connectionFailed'
       : snapshot.codex === null ? 'connectionUnavailable'
@@ -62,9 +77,11 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
   const codexTone = codexStatus === 'checkingConnection' ? 'neutral' : snapshot.codex ? 'ready' : 'warning';
 
   function renderCard(card: ModelPickerConnectionCard) {
-    return <ConnectionCard {...card} open={open === card.id} toggle={() => {
-      setOpen(current => current === card.id ? undefined : card.id);
-    }} />;
+    const group = snapshot.groups.find(group => group.id === card.id);
+    return <ConnectionCard {...card} closeLabel={t('closeDetails')}
+      usage={<CardUsage group={group} name={card.name} {...{ readUsage, refresh, t, language }}
+        includeDeepSeekAccount={card.id === 'deepseek' && snapshot.deepseekSignedIn}
+        unavailable={card.id === 'grok' ? t('usageInXaiConsole') : t('unavailable')} />} />;
   }
 
   return <main className="dsh-model-management" aria-label={t('management')}>
@@ -93,6 +110,17 @@ export function ModelManagement({ ctx, t, renderSlot }: Props) {
             </section>,
           })}
           {renderSlot('modelPicker.connections', { renderCard, refresh })}
+          {(deepseekModels || snapshot.deepseekSignedIn) && renderCard({
+            id: 'deepseek', name: 'DeepSeek', status: t('providerAvailable'), tone: 'ready',
+            footer: deepseekModels ? modelLabel(countModels(deepseekModels)) : undefined, action: t('viewConnection'),
+            details: <section className="dsh-connection-text-details" aria-label={t('deepseekDetails')}>
+              <h3>{t('deepseekDetails')}</h3>
+              {deepseekModels?.routes.map(route => <p key={route.id}>
+                {route.id === 'deepseek-account' ? t('deepseekAccount') : t('deepseekKey')} · {modelLabel(route.models.length)}
+              </p>)}
+              {!deepseekModels && <p>{t('empty')}</p>}
+            </section>,
+          })}
         </div>
       </section>
       <section className="dsh-model-management-section" aria-label={t('availableCatalog')}>

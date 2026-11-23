@@ -134,8 +134,9 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   const tarballs = [];
   for (const dir of packages) {
     const pkg = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'));
-    await run('pnpm', ['pack', '--pack-destination', temp], dir);
-    tarballs.push(join(temp, `${pkg.name}-${pkg.version}.tgz`));
+    const artifactDir = dir === directory && process.env.DSH_TEST_ARTIFACT_DIR;
+    if (!artifactDir) await run('pnpm', ['pack', '--pack-destination', temp], dir);
+    tarballs.push(join(artifactDir || temp, `${pkg.name}-${pkg.version}.tgz`));
   }
   const files = await run('tar', ['-tzf', tarballs[0]]);
   for (const file of ['lib/index.js', 'lib/client.js', 'cordis.patch.yml', 'README.md']) assert.ok(files.includes(`package/${file}`));
@@ -184,18 +185,18 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   const codexConnection = management.getByRole('region', { name: 'Codex', exact: true });
   const available = management.getByRole('region', { name: 'Available models' });
   const qoderConnection = management.getByRole('region', { name: 'Qoder', exact: true });
+  const deepseekConnection = management.getByRole('region', { name: 'DeepSeek', exact: true });
   const openCodex = codexConnection.getByRole('button', { name: 'View connection' });
   const setupQoder = qoderConnection.getByRole('button', { name: 'Set up Qoder' });
   const qoderManagement = management.getByRole('region', { name: 'Qoder accounts' });
-  await codexConnection.getByText('Codex is not connected').waitFor();
+  await codexConnection.getByRole('status').filter({ hasText: 'Codex is not connected' }).waitFor();
   await qoderConnection.getByText('Setup required').waitFor();
   assert.equal(await qoderManagement.isVisible(), false);
   const layout = () => management.locator('.dsh-connection-card').evaluateAll(cards => cards.map(card => ({
-    top: card.getBoundingClientRect().top,
-    icon: card.querySelector('img')?.naturalWidth,
+    ...card.getBoundingClientRect().toJSON(), icon: card.querySelector('img')?.naturalWidth,
   })));
   const wide = await layout();
-  assert.deepEqual(wide.map(card => card.icon), [96, 96], 'bundled provider icons must load');
+  assert.deepEqual(wide.slice(0, 2).map(card => card.icon), [96, 96], 'bundled provider icons must load');
   assert.equal(wide[0].top, wide[1].top, 'desktop cards share a row');
   await page.setViewportSize({ width: 560, height: 900 });
   const narrow = await layout();
@@ -204,16 +205,23 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await openCodex.focus();
   await page.keyboard.press('Enter');
   await management.getByRole('region', { name: 'Codex connection' }).getByText('codex login', { exact: true }).waitFor();
+  assert.deepEqual(await layout(), wide, 'opening details preserves every card rectangle');
+  await page.keyboard.press('Escape');
+  await management.getByRole('dialog', { name: 'Codex' }).waitFor({ state: 'hidden' });
+  assert.ok(await openCodex.evaluate(node => node === document.activeElement), 'focus returns to the card opener');
+  const cardTitle = await codexConnection.getByRole('heading', { name: 'Codex' }).boundingBox();
+  await page.mouse.click(cardTitle.x + cardTitle.width / 2, cardTitle.y + cardTitle.height / 2);
+  await management.getByRole('dialog', { name: 'Codex' }).getByRole('button', { name: 'Close details' }).click();
+  await management.getByRole('button', { name: 'Refresh connections' }).click();
   await setupQoder.click();
   await qoderManagement.waitFor();
-  assert.equal(await openCodex.getAttribute('aria-expanded'), 'false');
   assert.equal(await qoderManagement.getByRole('button', { name: 'Refresh accounts' }).count(), 0);
-  await management.getByRole('button', { name: 'Refresh connections' }).click();
   await qoderManagement.getByRole('button', { name: 'Add account' }).waitFor();
+  await page.keyboard.press('Escape');
   assert.equal(await available.locator('summary').filter({ hasText: 'Codex' }).count(), 0);
   const auth = join(codexHome, 'auth.json');
   await writeFile(auth, JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
-  await codexConnection.getByText('Local Codex sign-in detected').waitFor();
+  await codexConnection.getByRole('status').filter({ hasText: 'Local Codex sign-in detected' }).waitFor();
   const connectedCodex = available.locator('summary').filter({ hasText: 'Codex' });
   await connectedCodex.click();
   const fixture = available.getByRole('listitem').filter({ hasText: 'Codex Fixture' });
@@ -228,32 +236,49 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await writeFile(cachePath, before);
   await fixture.getByText(/声明输入：text、image。/).waitFor();
   await rm(auth);
-  await codexConnection.getByText('Codex is not connected').waitFor();
+  await codexConnection.getByRole('status').filter({ hasText: 'Codex is not connected' }).waitFor();
   await connectedCodex.waitFor({ state: 'detached' });
   await writeFile(auth, JSON.stringify({ tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
   await connectedCodex.waitFor();
+  const codexUsage = codexConnection.getByRole('button', { name: 'Codex usage' });
+  const codexTooltip = codexConnection.getByRole('tooltip');
+  assert.equal(await codexTooltip.isVisible(), false);
+  const beforeUsage = await layout();
+  await codexUsage.hover();
+  await codexTooltip.getByText(/Weekly · 62% left.*Resets/).waitFor();
+  await codexTooltip.getByText(/5 (?:hr|hours) · 82% left/).waitFor();
+  assert.equal(await codexUsage.getAttribute('data-remaining'), '62');
+  assert.deepEqual(await layout(), beforeUsage, 'the usage tooltip does not move the cards');
+  await deepseekConnection.getByRole('button', { name: 'DeepSeek usage' }).hover();
+  await deepseekConnection.getByRole('tooltip').getByText(/Bonus balance.*7\.00/).waitFor();
+  await deepseekConnection.getByRole('tooltip').getByText(/Account balance.*23\.48/).waitFor();
+  await setupQoder.click();
   await qoderManagement.getByRole('button', { name: 'Add account', exact: true }).click();
   const managerForm = qoderManagement.getByRole('form', { name: 'Add account' });
   await managerForm.getByLabel('Personal access token').fill('fixture-personal');
   await managerForm.getByLabel('Remark (optional)').fill('Managed from sidebar');
   await managerForm.getByRole('button', { name: 'Bind account' }).click();
   const managedQoder = qoderManagement.getByRole('group', { name: 'Managed from sidebar' });
+  await managedQoder.waitFor();
+  await page.keyboard.press('Escape');
   const connectedQoder = available.locator('summary').filter({ hasText: 'Qoder' });
   await connectedQoder.waitFor();
   const manageQoder = qoderConnection.getByRole('button', { name: 'Manage accounts' });
-  assert.equal(await manageQoder.getAttribute('aria-expanded'), 'true');
   await qoderConnection.getByText('Connected', { exact: true }).waitFor();
-  await manageQoder.click();
   assert.equal(await qoderManagement.isVisible(), false);
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management.png') });
+    await codexUsage.hover();
+    await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management-usage.png') });
   }
   await manageQoder.click();
   await managedQoder.getByRole('button', { name: 'Unbind' }).click();
+  await qoderManagement.getByRole('group', { name: 'Managed from sidebar' }).waitFor({ state: 'detached' });
+  await page.keyboard.press('Escape');
   await connectedQoder.waitFor({ state: 'detached' });
   await qoderConnection.getByText('Setup required').waitFor();
-  console.log('PASS sidebar Model management: responsive cards, bundled app icons, connection details, and live Codex/Qoder states.');
+  console.log('PASS sidebar Model management: card layout, keyboard and pointer details, usage tooltip, icons, and live connection states.');
   await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
 
   const openSettings = async () => {
@@ -322,6 +347,22 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   assert.notEqual(workRoute, originalWorkRoute);
   await closeModels();
 
+  await page.getByRole('button', { name: 'Model management', exact: true }).click();
+  const qoderAccount = qoderConnection.getByRole('combobox', { name: 'Qoder account' });
+  const qoderUsage = qoderConnection.getByRole('button', { name: 'Qoder usage' });
+  const qoderTooltip = qoderConnection.getByRole('tooltip');
+  await qoderAccount.selectOption({ label: 'Personal' });
+  await qoderUsage.focus();
+  await qoderTooltip.getByText('Plan · 60 / 300 Credits left', { exact: true }).waitFor();
+  assert.equal(await qoderUsage.getAttribute('data-remaining'), '20');
+  await qoderAccount.selectOption(workRoute);
+  await qoderUsage.hover();
+  await qoderTooltip.getByText('Plan · 240 / 300 Credits left', { exact: true }).waitFor();
+  await qoderTooltip.getByText('Add-on · 20 / 100 Credits left', { exact: true }).waitFor();
+  assert.equal(await qoderUsage.getAttribute('data-remaining'), '80');
+  assert.equal(await management.getByRole('dialog').count(), 0, 'account and usage controls must not open details');
+  await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
+
   console.log('PASS isolated Web Qoder accounts: no preset accounts, optional remarks, stable routes on rename and removal on unbind.');
 
   await trigger.click();
@@ -356,13 +397,11 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await assertDocked('left');
   const provider = name => picker.locator('[data-provider-row]').filter({ hasText: name });
   const model = name => picker.locator('[data-model-row]').getByText(name, { exact: true });
-  await provider('DeepSeek').getByText(/23\.48/).waitFor();
   await provider('DeepSeek').hover();
-  await picker.getByText(/Bonus balance.*7\.00/).waitFor();
+  assert.equal(await picker.getByText(/Usage unavailable|Bonus balance|Credits left|% left/).count(), 0);
+  assert.equal(await picker.locator('.picker-ring, .picker-usage').count(), 0);
   await effort.waitFor();
   await page.getByText('Enable agent teamwork', { exact: true }).waitFor();
-  await provider('Codex').getByText(/62%/).waitFor();
-  await provider('Qoder').getByText(/60 Credits/).waitFor();
   const hoverTargets = ['DeepSeek', 'Codex', 'Qoder'];
   const originalRows = await Promise.all(hoverTargets.map(name => provider(name).boundingBox()));
   const providers = picker.getByRole('group', { name: 'Providers', exact: true });
@@ -387,19 +426,16 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     assert.deepEqual(await Promise.all(hoverTargets.map(name => provider(name).boundingBox())), originalRows);
   };
   await assertStableHover(1, 'Codex Fixture');
-  await picker.getByText(/82%/).waitFor();
   await right.evaluate(el => { el.scrollTop = el.scrollHeight; });
   assert.ok(await right.evaluate(el => el.scrollTop > 0));
   await assertStableHover(2, 'Auto');
   await assertStableHover(0, 'DeepSeek-V4.1-Flash');
   await assertStableHover(2, 'Auto');
-  // A provider without a usage summary still adds exactly one normal row.
+  // Each additional provider contributes one normal row.
   await providers.evaluate(el => {
     const row = el.querySelector('[data-provider-row]').cloneNode(true);
     row.removeAttribute('aria-current');
     row.querySelector('.picker-title').textContent = 'Fourth provider fixture';
-    row.querySelector('.picker-detail')?.remove();
-    row.querySelector('.picker-ring')?.remove();
     el.append(row);
   });
   const fourth = providers.getByRole('button', { name: 'Fourth provider fixture' });
@@ -411,7 +447,6 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   const account = picker.getByLabel('Account', { exact: true });
   await account.focus();
   await account.selectOption(workRoute);
-  await provider('Qoder').getByText(/240 Credits/).waitFor();
   assert.ok(await account.evaluate(el => el === document.activeElement));
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
@@ -509,7 +544,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await toggle.and(page.locator('[aria-checked="false"]')).click();
   await stylesheet.waitFor({ state: 'attached' });
   assert.deepEqual(errors, []);
-  console.log('PASS isolated Web model picker: three and four provider rows, stable sizing during hover and independent model scrolling, docking, narrow desktop, usage, selection, search and hot reload.');
+  console.log('PASS isolated Web model picker: stable row sizing and independent scrolling, docking, narrow desktop, selection without usage, search and hot reload.');
 } catch (error) {
   if (page) console.error(await page.locator('body').innerText().then(text => text.slice(-3200)).catch(() => ''));
   console.error(log.replace(/([?&]token=)[^&\s]+/g, '$1[redacted]'));

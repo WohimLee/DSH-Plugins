@@ -8,11 +8,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type { ModelDirectory } from '@deepseek-ai/dsh-client-ui-model-selection/client';
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
-import type {} from '@deepseek-ai/dsh-deepseek-account/types';
 import { contribution } from '../remote.js';
 import { Picker } from './picker.js';
 import { messages } from './messages.js';
-import type { ReadUsage } from './picker.js';
 import { ModelManagement } from './management.js';
 import { ManagementIcon } from './icons.js';
 import { managementStyles } from './management-styles.js';
@@ -66,36 +64,21 @@ function register(ctx: Context): void {
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main', key: panelId, locale: 'modelPicker',
     children: { 'modelPicker.connections': { kind: 'list', scope: 'root' } },
-  }, props => <ModelManagement {...props} ctx={ctx} />));
+  }, props => <ModelManagement {...props} ctx={ctx} language={ctx.locale.getSnapshot().active} />));
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
     name: 'sidebar.panellist', id: panelId, label: () => label('management'), order: 10,
   }, ({ size }) => <ManagementIcon name="cable" size={size} />));
-  const readUsage: ReadUsage = async (provider, signal) => {
-    if (provider === 'deepseek-account') {
-      const account = ctx.get('remote.account');
-      if (!account) return null;
-      const result = await account.getBalance({
-        locale: ctx.locale.getSnapshot().active, version: '0.2.2-rc.5',
-        timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
-      });
-      if (!result.ok || result.value?.status !== 'ready') return null;
-      return { wallets: result.value.value, bonus: result.value.bonusWallets };
-    }
-    if (provider !== 'codex' && provider !== 'qoder' && !provider.startsWith('qoder-account-')) return null;
-    const result = await ctx.remote.dshModelPickerUsage.read(provider, signal);
-    return result.ok ? result.value : null;
-  };
   ctx.slots.inject('conversation.input.model.options', () => ctx.slots.register({
     name: 'conversation.input.model.options', id: key, order: -100, locale: 'modelPicker',
     inject: sessionId => ({ directory: ctx.sessions.subagentAddress(sessionId) === undefined
-      ? ctx.modelDirectories.directoryFor(sessionId) : undefined, readUsage }),
+      ? ctx.modelDirectories.directoryFor(sessionId) : undefined }),
   }, ({ directory, ...props }) => directory
-    ? <ModelsOption {...props} directory={directory} language={ctx.locale.getSnapshot().active} />
+    ? <ModelsOption {...props} directory={directory} />
     : null));
 }
 
 type OptionsProps = Pick<PropsRuntime<'conversation.input.model.options'>, 'locked' | 'dismiss' | 'reportFailure'>
-  & PropsLocale<'modelPicker'> & { directory: ModelDirectory; language: string; readUsage: ReadUsage };
+  & PropsLocale<'modelPicker'> & { directory: ModelDirectory };
 
 function ModelsOption({ directory, t, ...props }: OptionsProps) {
   const [open, setOpen] = useState(false);
@@ -266,26 +249,15 @@ const pickerStyles = `
 }
 [data-dsh-model-picker] .picker-providers { max-block-size: var(--picker-list-height); }
 [data-dsh-model-picker] button { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 3px 6px; min-height: 25px; }
-[data-dsh-model-picker] [data-provider-row] { display: grid; grid-template-columns: minmax(0, 1fr) 16px 7px; min-height: 34px; }
-[data-dsh-model-picker] [data-provider-row] > :last-child { grid-column: 3; text-align: end; }
+[data-dsh-model-picker] [data-provider-row] { min-height: 34px; }
 [data-dsh-model-picker] button:disabled { opacity: .55; }
-[data-dsh-model-picker] :is(.picker-title, .picker-provider-copy > .picker-detail) {
+[data-dsh-model-picker] .picker-title {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-[data-dsh-model-picker] .picker-provider-copy { min-width: 0; display: grid; line-height: 16px; }
 [data-dsh-model-picker] .picker-detail { color: var(--dsw-alias-label-secondary); font-size: 11px; }
-[data-dsh-model-picker] .picker-provider-copy .picker-detail { line-height: 12px; }
-[data-dsh-model-picker] .picker-ring {
-  width: 16px; height: 16px; flex: none; border-radius: 50%; display: grid; place-items: center;
-  background: conic-gradient(currentColor var(--picker-fill), color-mix(in srgb, currentColor 24%, transparent) 0);
-}
-[data-dsh-model-picker] .picker-ring::after {
-  content: ''; border-radius: 50%; width: 12px; height: 12px; background: var(--dsw-alias-bg-module-platform, Canvas);
-}
 [data-dsh-model-picker] .picker-back { display: none; }
 [data-dsh-model-picker] .picker-account { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 3px 7px; }
 [data-dsh-model-picker] .picker-account select { padding: 3px 6px; }
-[data-dsh-model-picker] .picker-usage { padding: 2px 7px 6px; overflow-wrap: anywhere; }
 [data-dsh-model-picker] .picker-section { margin: 4px 7px 1px; }
 @media (max-width: 389px), (pointer: coarse) {
   [role="menu"]:has(.dsh-model-picker-flyout) {

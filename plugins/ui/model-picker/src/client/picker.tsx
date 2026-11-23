@@ -2,25 +2,18 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncEx
 import type { KeyboardEvent } from 'react';
 import type { ModelDirectory, ModelDirectoryState } from '@deepseek-ai/dsh-client-ui-model-selection/client';
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
-import type { ProviderUsage } from '../remote.js';
-import { activeRoute, groupProviders } from './model.js';
+import { activeRoute, groupProviders, routeName } from './model.js';
 
 type Route = ModelDirectoryState['groups'][number];
 type Model = Route['models'][number];
-type T = PropsLocale<'modelPicker'>['t'];
-type Wallet = { currency: string; balance: string };
-type Usage = ProviderUsage | { wallets: readonly Wallet[]; bonus: readonly Wallet[] };
-export type ReadUsage = (provider: string, signal: AbortSignal) => Promise<Usage | null>;
 type Props = Pick<PropsRuntime<'conversation.input.model.options'>, 'locked' | 'dismiss' | 'reportFailure'> & PropsLocale<'modelPicker'> & {
   directory: ModelDirectory;
-  readUsage: ReadUsage;
-  language: string;
   back: () => void;
 };
 
 const narrow = () => window.matchMedia('(max-width: 389px), (pointer: coarse)').matches;
 
-export function Picker({ directory, readUsage, language, locked, dismiss, reportFailure, back, t }: Props) {
+export function Picker({ directory, locked, dismiss, reportFailure, back, t }: Props) {
   const state = useSyncExternalStore(directory.store.subscribe, directory.store.getSnapshot);
   const legacyQoder = state.current?.provider === 'qoder';
   const groups = useMemo(() => {
@@ -31,7 +24,6 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
   const [accounts, setAccounts] = useState<Record<string, string>>({});
   const [entered, setEntered] = useState(false);
   const [query, setQuery] = useState('');
-  const [usage, setUsage] = useState<Record<string, Usage | null>>({});
   const [failed, setFailed] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
@@ -53,22 +45,6 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
     void directory.load().catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [directory]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const keys = new Set<string>();
-    for (const item of groups) {
-      if (item.id === 'deepseek') keys.add('deepseek-account');
-      if (item.id === 'codex') keys.add('codex');
-      if (item.id === 'qoder') for (const route of item.routes) keys.add(route.id);
-    }
-    for (const key of keys) {
-      void readUsage(key, controller.signal).catch(() => null).then(value => {
-        if (!controller.signal.aborted) setUsage(previous => ({ ...previous, [key]: value }));
-      });
-    }
-    return () => controller.abort();
-  }, [groups, readUsage]);
 
   const models = (term
     ? groups.flatMap(item => item.routes.map(route => ({ route, provider: item.name })))
@@ -140,7 +116,6 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
     }
   }
 
-  const details = group?.id === 'deepseek' ? usage['deepseek-account'] : route && usage[route.id];
   return (
     <div data-dsh-model-picker="" data-entered={String(entered)} ref={root} onKeyDown={keys}>
       <input ref={search} type="search" aria-label={t('search')} placeholder={t('search')}
@@ -155,9 +130,6 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
           {groups.map(item => {
             const highlighted = item.id === group?.id;
             const defaultRoute = activeRoute(item, accounts[item.id] ?? state.current?.provider);
-            const snapshot = usage[item.id === 'deepseek' ? 'deepseek-account' : defaultRoute.id];
-            const summary = item.id === 'codex' || item.id === 'qoder' || item.id === 'deepseek'
-              ? primary(snapshot, item.id, t, language) : undefined;
             const title = item.id === 'qoder' && item.routes.length > 1
               ? `${item.name} · ${routeName(defaultRoute, t)}` : item.name;
             return <button key={item.id} type="button" data-provider-row="" aria-current={highlighted}
@@ -169,12 +141,7 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
                 setEntered(true);
                 requestAnimationFrame(() => focusRow('[data-model-row]', 1));
               }}>
-              <span className="picker-provider-copy">
-                <span className="picker-title">{title}</span>
-                {summary && <span className="picker-detail">{summary.text}</span>}
-              </span>
-              {summary && <span aria-hidden="true" className="picker-ring"
-                style={{ '--picker-fill': `${summary.percent ?? 0}%` } as React.CSSProperties} />}
+              <span className="picker-title">{title}</span>
               <span aria-hidden="true">›</span>
             </button>;
           })}
@@ -194,9 +161,6 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
                 {group.routes.map(route => <option key={route.id} value={route.id}>{routeName(route, t)}</option>)}
               </select>
             </div>}
-            {details && <div className="picker-detail picker-usage">
-              {usageDetails(details, t, language).map((line, index) => <div key={index}>{line}</div>)}
-            </div>}
           </>}
           {models.map(item => <div key={item.route.id}>
             {term && <div className="picker-detail picker-section">{item.provider === item.route.name
@@ -214,70 +178,4 @@ export function Picker({ directory, readUsage, language, locked, dismiss, report
       </div>}
     </div>
   );
-}
-
-function routeName(route: Route, t: T): string {
-  if (route.id === 'deepseek-account') return t('deepseekAccount');
-  if (route.id === 'deepseek-official') return t('deepseekKey');
-  if (route.id === 'qoder') return t('defaultAccount');
-  return route.name.replace(/^Qoder · /, '');
-}
-
-function walletText(wallet: Wallet, language: string): string {
-  const value = Number(wallet.balance);
-  return Number.isFinite(value) && /^[A-Z]{3}$/.test(wallet.currency)
-    ? new Intl.NumberFormat(language, { style: 'currency', currency: wallet.currency, maximumFractionDigits: 4 }).format(value)
-    : `${wallet.balance} ${wallet.currency}`;
-}
-
-function windowText(minutes: number, t: T, language: string): string {
-  if (minutes === 7 * 24 * 60) return t('weekly');
-  if (!minutes) return t('window');
-  const unit = minutes % 1440 === 0 ? 'day' : minutes % 60 === 0 ? 'hour' : 'minute';
-  return new Intl.NumberFormat(language, { style: 'unit', unit }).format(minutes / (unit === 'day' ? 1440 : unit === 'hour' ? 60 : 1));
-}
-
-function primary(data: Usage | null | undefined, provider: string, t: T, language: string): { text: string; percent?: number } {
-  if (data && 'wallets' in data) {
-    if (data.wallets.length) return { text: `${t('balanceShort')} ${walletText(data.wallets[0], language)}` };
-  } else if (data) {
-    const windows = data.windows ?? [];
-    const window = windows.find(window => window.minutes === 10080) ?? windows[0];
-    if (window && provider === 'codex') {
-      return { text: `${windowText(window.minutes, t, language)} · ${t('left', { value: `${window.remainingPercent}%` })}`,
-        percent: window.remainingPercent };
-    }
-    const credits = data.credits;
-    const quota = credits?.plan ?? credits?.addOn ?? credits?.organization;
-    if (quota) {
-      const label = credits?.plan ? 'plan' : credits?.addOn ? 'addOn' : 'organization';
-      const value = `${new Intl.NumberFormat(language).format(quota.remaining)} ${t('credits')}`;
-      return { text: `${t(label)} · ${t('left', { value })}`,
-        percent: quota.total ? Math.min(100, 100 * quota.remaining / quota.total) : undefined };
-    }
-  }
-  return { text: t('unavailable') };
-}
-
-function usageDetails(data: Usage, t: T, language: string): string[] {
-  if ('wallets' in data) {
-    return [...data.wallets.map(w => `${t('balance')} ${walletText(w, language)}`),
-      ...data.bonus.map(w => `${t('bonus')} ${walletText(w, language)}`)];
-  }
-  const credits = data.credits;
-  return [
-    ...(data.windows ?? []).map(window => {
-      const date = window.resetsAt === undefined ? undefined : new Date(window.resetsAt * 1000);
-      const reset = date && Number.isFinite(date.valueOf())
-        ? ` · ${t('resets')} ${new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(date)}` : '';
-      return `${windowText(window.minutes, t, language)} · ${t('left', { value: `${window.remainingPercent}%` })}${reset}`;
-    }),
-    ...(['plan', 'addOn', 'organization'] as const).flatMap(label => {
-      const quota = credits?.[label];
-      if (!quota) return [];
-      const format = new Intl.NumberFormat(language);
-      const value = `${format.format(quota.remaining)}${quota.total === undefined ? '' : ` / ${format.format(quota.total)}`} ${t('credits')}`;
-      return [`${t(label)} · ${t('left', { value })}`];
-    }),
-  ];
 }
