@@ -1,7 +1,7 @@
 import { Glyph, type Icon } from './Glyph.js';
 import { ActivityList, StatusMark } from './ActivityList.js';
 import { ArchivedSection } from './ArchivedSection.js';
-import { EditProjectDialog } from './EditProjectDialog.js';
+import { ProjectDialog } from './ProjectDialog.js';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
@@ -88,7 +88,8 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const draft = useDraft(value => value);
   const [menu, setMenu] = useState<MenuTarget>();
   const closeMenu = useCallback(() => setMenu(undefined), []);
-  const [directory, setDirectory] = useState<{ initial?: string; confirm: (path: string) => Promise<void>; cancel?: () => void }>();
+  const [directory, setDirectory] = useState<{ initial?: string; confirm: (path: string) => Promise<void> }>();
+  const [createParent, setCreateParent] = useState<string>();
   const [rename, setRename] = useState<{ id: string; name: string; commit: (title: string) => void }>();
   const [editId, setEditId] = useState<string>();
   const [sessionRename, setSessionRename] = useState<{ id: SessionId; title: string }>();
@@ -150,38 +151,32 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     setError(undefined);
     void execute().catch(() => setError('actionFailed'));
   };
-  const begin = (next: Draft) => {
-    setRename(undefined);
-    if (next.parent) show(next.parent);
-    drafts.begin(next);
-  };
-  const titleDraft = (item: Draft, title: string) => {
-    if (item.kind === 'section') {
-      if (save(state => ({ ...state, sections: [{ id: 'section:' + crypto.randomUUID(), title }, ...state.sections] }))) drafts.end(item);
-      return;
+  const createProject = async (parent: string, title: string, [root, ...extraFolders]: string[]) => {
+    if (workspaces.items.some(project => project.title === title)) return 'projectNameTaken' as const;
+    const { workspace, created } = await commands.createProject(root);
+    if (!created) return 'projectFolderTaken' as const;
+    const id = workspace.workspaceId;
+    const available = [...projectIds, id];
+    try {
+      if (workspace.title !== title) await commands.renameProject(id, title);
+      updateTree(state => {
+        const first = projectGroups(state, available).get(parent)?.find(project => project !== id);
+        const next = moveProject(state, id, parent, available, first ? { id: first, after: false } : undefined);
+        if (next === state) throw new Error('Invalid project parent');
+        const paths = [workspace.path, ...extraFolders.filter(path => path !== workspace.path)];
+        return { ...next, sourceFolders: { ...next.sourceFolders, [id]: paths } };
+      });
+    } catch (error) {
+      // Undo only the registration created here, never the directory or its sessions.
+      await commands.removeProject(id).catch(() => {});
+      throw error;
     }
-    setDirectory({
-      initial: projects.get(item.parent)?.path,
-      cancel: () => drafts.end(item),
-      confirm: async path => {
-        const workspace = await commands.createProject(path);
-        const id = workspace.workspaceId;
-        const available = projects.has(id) ? projectIds : [...projectIds, id];
-        const first = projectGroups(tree, available).get(item.parent)?.find(project => project !== id);
-        const position = first ? { id: first, after: false } : undefined;
-        if (moveProject(tree, id, item.parent, available, position) === tree) throw new Error('Invalid project parent');
-        if (workspace.title !== title) await commands.renameProject(id, title);
-        if (!save(state => moveProject(state, id, item.parent, available, position))) throw new Error('Could not persist project placement');
-        drafts.end(item);
-        setDirectory(undefined);
-      },
-    });
+    show(parent);
   };
-  const nameDraft = (item: Draft, depth = 0) => <InlineName key={item.kind + ':' + item.parent}
-    label={t(item.kind === 'section' ? 'sectionName' : 'projectName')}
-    depth={depth} cancel={() => { if (!directory) drafts.end(item); }}
-    confirm={title => titleDraft(item, title)}
-    controls={<button type="submit" className="wb-control">{t('create')}</button>} />;
+  const nameSection = (item: Draft) => <InlineName label={t('sectionName')} cancel={() => drafts.end(item)}
+    confirm={title => {
+      if (save(state => ({ ...state, sections: [{ id: 'section:' + crypto.randomUUID(), title }, ...state.sections] }))) drafts.end(item);
+    }} controls={<button type="submit" className="wb-control">{t('create')}</button>} />;
   const editingName = (id: string, depth = 0) => rename?.id === id
     ? <InlineName label={t('rename')} depth={depth} initial={rename.name} cancel={() => setRename(undefined)} confirm={rename.commit} />
     : null;
@@ -407,7 +402,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         </button>
         <div className="wb-tree-actions">
           <Action label={t(project ? 'projectMenu' : 'ungroupedMenu')} icon="more" run={showProjectMenu} />
-          {project && canAdd && <Action label={t('addSubproject')} icon="folderAdd" run={() => begin({ kind: 'project', parent: id })} />}
+          {project && canAdd && <Action label={t('addSubproject')} icon="folderAdd" run={event => { event.currentTarget.focus(); setCreateParent(id); }} />}
           {(project ? canCreateSession : canStartUngrouped) && <Action label={t('newSession')} icon="new" run={project ? () => {
             show(id);
             commands.startSession(project.workspaceId);
@@ -415,7 +410,6 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         </div>
       </div>
       {expanded && <ProjectChildren project={id} depth={depth + 1} sessions={rows(id, depth)} showMoreLabel={t('showMore')}>
-        {draft?.kind === 'project' && draft.parent === id && nameDraft(draft, depth + 1)}
         {(grouped.get(id) ?? []).map(child => projectRow(child, id, depth + 1))}
       </ProjectChildren>}
     </Fragment>;
@@ -437,7 +431,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     <div hidden={activityOpen} ref={bindScrollerRef} className="wb-tree" aria-label={t('projects')} data-workbench-tree>
     {error && <p role="status" className="wb-tree-error">{t(error)}</p>}
     {deletePending && <p role="status" className="wb-tree-error">{t('deletePending')}</p>}
-    {draft?.kind === 'section' && nameDraft(draft)}
+    {draft && nameSection(draft)}
     {tree.sections.map(section => {
       const isDefault = section.id === defaultSection;
       const expanded = !collapsed.has(section.id);
@@ -446,7 +440,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         { label: t('rename'), run: () => setRename({ id: section.id, name: label, commit: title => {
           if (save(state => ({ ...state, sections: state.sections.map(item => item.id === section.id ? { ...item, title } : item) }))) setRename(undefined);
         } }) },
-        { label: t('addProject'), run: canAdd ? () => begin({ kind: 'project', parent: section.id }) : undefined },
+        { label: t('addProject'), run: canAdd ? () => setCreateParent(section.id) : undefined },
         { label: t('removeSection'), danger: true, run: () => {
           if (window.confirm(t('removeSectionConfirm'))) save(state => ({ ...state, sections: state.sections.filter(item => item.id !== section.id) }));
         } },
@@ -461,12 +455,12 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           </button>
           <div className="wb-tree-actions">
             {showSectionMenu && <Action label={t('sectionMenu')} icon="more" run={showSectionMenu} />}
-            {canAdd && <Action label={t('addProject')} icon="folderAdd" run={() => begin({ kind: 'project', parent: section.id })} />}
+            {canAdd && <Action label={t('addProject')} icon="folderAdd"
+               run={event => { event.currentTarget.focus(); setCreateParent(section.id); }} />}
             {isDefault && canCreateSession && <Action label={t('newSession')} icon="new"
               run={() => commands.startSession()} />}
           </div>
         </div>}
-        {expanded && draft?.kind === 'project' && draft.parent === section.id && nameDraft(draft)}
         {expanded && (grouped.get(section.id) ?? []).map(id => projectRow(id, section.id, 0))}
         {ungroupedRows.length > 0 && (tree.ungroupedInRecents
           ? <ProjectChildren project={ungrouped} depth={0} sessions={ungroupedRows} showMoreLabel={t('showMore')} />
@@ -488,8 +482,11 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     {menu && <RowMenu key={menu.x + ':' + menu.y + menu.label} target={menu} close={closeMenu}
       unavailable={t('actionUnavailable')} back={t('back')} />}
     {directory && <DirectoryDialog initial={directory.initial} list={commands.listDirectory} pick={commands.pickDirectory}
-      t={t} cancel={() => { directory.cancel?.(); setDirectory(undefined); }} confirm={directory.confirm} />}
-    {editingProject && <EditProjectDialog key={editId} t={t} initial={editingProject.title} root={editingProject.path}
+      t={t} cancel={() => setDirectory(undefined)} confirm={directory.confirm} />}
+    {createParent && <ProjectDialog key={createParent} mode="create" t={t} root={projects.get(createParent)?.path}
+      canPickDirectory={canPickDirectory} commands={commands} close={() => setCreateParent(undefined)}
+      save={(title, paths) => createProject(createParent, title, paths)} />}
+    {editingProject && <ProjectDialog key={editId} mode="edit" t={t} initial={editingProject.title} root={editingProject.path}
       canPickDirectory={canPickDirectory} folders={tree.sourceFolders?.[editingProject.workspaceId] ?? [editingProject.path]} commands={commands}
       close={() => setEditId(undefined)}
       remove={() => setRemoval({ id: editingProject.workspaceId, title: editingProject.title, workspaceId: editingProject.workspaceId })}

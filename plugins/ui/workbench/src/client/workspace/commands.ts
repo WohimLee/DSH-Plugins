@@ -40,7 +40,7 @@ export function workspaceCommands(ctx: Context, signal: AbortSignal) {
       return { listing: value(result), native: false };
     },
     async pickDirectory() { return value(await ctx.remote.directoryPicker.pick(signal)); },
-    createProject: (path: string) => ctx.workspaces.create({ path }),
+    async createProject(path: string) { return value(await ctx.remote.workspace.create({ path })); },
     renameProject: (id: WorkspaceId, title: string) => ctx.workspaces.rename(id, title),
     removeProject: (id: WorkspaceId) => ctx.workspaces.delete(id),
     async reveal(path: string) { value(await ctx.remote.session.openWorkspacePath({ path, action: 'reveal' }, signal)); },

@@ -202,4 +202,31 @@ export const workspaceStyles = `
 .wb-remove-project p { margin: 0; }
 .wb-remove-project p + p { margin-top: 8px; }
 .wb-edit-project .wb-save-project { color: var(--dsw-specific-sidebar-fill, #27282b); background: var(--dsw-alias-label-primary, #eee); }
+
+.wb-create-project {
+  box-sizing: border-box; width: min(524px, 92vw); border-radius: 22px; font-size: 13px;
+  --wb-create-outline: color-mix(in srgb, var(--dsw-alias-label-primary) 15%, transparent);
+  --wb-create-fill: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);
+  background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 92%, var(--dsw-alias-label-primary));
+}
+.wb-create-project form { padding: clamp(14px, 4vw, 20px); gap: 12px; }
+.wb-create-project strong { font-size: 20px; }
+.wb-create-project header button, .wb-create-project footer button[type="button"] { color: var(--dsw-alias-label-secondary); }
+.wb-create-project .wb-project-name, .wb-create-project .wb-folder-empty, .wb-create-project .wb-folder-list {
+  border: 1px solid var(--wb-create-outline); border-radius: 10px;
+}
+.wb-create-project .wb-project-name:focus-within { outline: 1px solid var(--dsw-alias-state-business-primary); outline-offset: -1px; }
+.wb-create-project .wb-project-name input { border-inline-start: 1px solid var(--wb-create-outline); }
+.wb-create-project .wb-project-name input::placeholder { color: var(--dsw-alias-label-secondary); }
+.wb-create-project .wb-project-sources { margin-block: 1px -4px; }
+.wb-folder-empty { min-block-size: 104px; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 10px; box-sizing: border-box; text-align: center; }
+.wb-folder-empty > span, .wb-create-project .wb-folder-row small { color: var(--dsw-alias-label-secondary); }
+.wb-create-project .wb-folder-empty button {
+  display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+  background: var(--wb-create-fill);
+}
+.wb-create-project button:enabled:hover { background: var(--dsw-alias-background-active); }
+.wb-create-project footer { justify-content: flex-end; flex-wrap: wrap; margin-block-start: 18px; }
+.wb-create-project footer button { padding: 8px 16px; border-radius: 10px; }
+.wb-create-project .wb-save-project:enabled:hover { background: var(--dsw-alias-label-primary); opacity: .88; }
 `;

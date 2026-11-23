@@ -21,7 +21,7 @@ import { WorkspaceTree } from './workspace/WorkspaceTree.js';
 import { createTreeStore } from './workspace/store.js';
 import { createViewToggle, registerWorkspaceView } from './workspace/view.js';
 
-export const inject = ['slots', 'layout', 'uiSession', 'uiWorkspace', 'locale', 'remoteAccess', 'sessions', 'workspaces', 'sidebarRight', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles', 'remote.session', 'remote.directoryPicker'];
+export const inject = ['slots', 'layout', 'uiSession', 'uiWorkspace', 'locale', 'remoteAccess', 'sessions', 'workspaces', 'sidebarRight', 'sidebarRightTabs', 'remote', 'remote.workspace', 'remote.workspaceFiles', 'remote.session', 'remote.directoryPicker'];
 
 export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const unmount = await ctx.remote.$mount(contribution);
@@ -74,7 +74,7 @@ function assemble(ctx: Context): void {
   ctx.slots.inject('sidebar.session.action', () => ctx.slots.register({
     name: 'sidebar.session.action', id: 'dsh-workbench:new-section', locale: 'workbench',
     inject: () => ({
-      newSection: () => { activity.set(false); drafts.begin({ kind: 'section', parent: '' }); },
+      newSection: () => { activity.set(false); drafts.begin({ kind: 'section' }); },
       toggleActivity: () => activity.set(!activity.getSnapshot()),
       hooks: { sources, nativeView: view.native, activity, tree },
     }),

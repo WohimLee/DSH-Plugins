@@ -4,22 +4,29 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 
 type ListDirectory = WorkspaceCommands['listDirectory'];
 
-export function DirectoryDialog({ initial, list, pick, cancel, confirm, t }: PropsLocale<'workbench'> & {
+export function DirectoryDialog({ initial, list, pick, cancel, confirm, requireExisting, t }: PropsLocale<'workbench'> & {
   initial?: string;
+  requireExisting?: boolean;
   list: ListDirectory;
   pick: () => Promise<string | null>;
   cancel: () => void;
   confirm: (path: string) => Promise<void>;
 }) {
   const modal = useRef<HTMLDialogElement>(null);
+  const validation = useRef<AbortController>();
   const [location, setLocation] = useState(initial);
   const [result, setResult] = useState<Awaited<ReturnType<ListDirectory>>>();
   const browse = (next: string) => { setPath(next); setLocation(next); };
   const [path, setPath] = useState(initial ?? '');
+  const [nativePath, setNativePath] = useState<string>();
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { modal.current?.showModal(); }, []);
+  useEffect(() => {
+    const dialog = modal.current!;
+    dialog.showModal();
+    return () => { validation.current?.abort(); dialog.close(); };
+  }, []);
   useEffect(() => {
     const request = new AbortController();
     setError(false);
@@ -39,7 +46,18 @@ export function DirectoryDialog({ initial, list, pick, cancel, confirm, t }: Pro
       if (busy || !path.trim()) return;
       setBusy(true);
       setError(false);
-      void confirm(path.trim()).catch(() => { setError(true); setBusy(false); });
+      const submit = async () => {
+        const requested = path.trim();
+        if (!requireExisting) { await confirm(requested); return; }
+        if (result?.native && requested === nativePath) { await confirm(requested); return; }
+        const request = new AbortController();
+        validation.current = request;
+        const { listing } = await list(requested, request.signal);
+        if (request.signal.aborted) return;
+        if (!listing) throw new Error('Directory is unavailable');
+        await confirm(listing.path);
+      };
+      void submit().catch(() => { setError(true); setBusy(false); });
     }}>
       <strong>{t('chooseDirectory')}</strong>
       <label>{t('directoryPath')}<input value={path} onChange={event => setPath(event.target.value)} disabled={busy} /></label>
@@ -48,7 +66,7 @@ export function DirectoryDialog({ initial, list, pick, cancel, confirm, t }: Pro
           onClick={() => browse(path.trim())}>{t('browse')}</button>}
         {result?.native && <button type="button" className="wb-control" disabled={busy} onClick={() => {
           setBusy(true);
-          void pick().then(selected => { if (selected) setPath(selected); }, () => setError(true))
+          void pick().then(selected => { if (selected) { setNativePath(selected); setPath(selected); } }, () => setError(true))
             .finally(() => setBusy(false));
         }}>{t('systemPicker')}</button>}
       </div>

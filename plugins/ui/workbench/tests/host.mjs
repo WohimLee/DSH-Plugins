@@ -14,7 +14,9 @@ const pkg = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
 const temp = await mkdtemp(join(tmpdir(), 'dsh-workbench-host-'));
 const home = join(temp, 'home');
 await mkdir(home);
+// Exercise the in-app directory browser rather than opening an OS picker from headless Chrome.
 const env = { PATH: process.env.PATH, HOME: home, USERPROFILE: home, DSH_HOME: home,
+  SSH_CONNECTION: '127.0.0.1 1 127.0.0.1 2',
   TMPDIR: process.env.TMPDIR ?? tmpdir(), SYSTEMROOT: process.env.SYSTEMROOT, CI: 'true', NO_COLOR: '1' };
 
 function run(command, args, cwd = temp) {
@@ -301,12 +303,34 @@ try {
   await page.keyboard.press('Escape');
   await project.hover();
   await project.getByRole('button', { name: 'Add subproject', exact: true }).click();
-  const projectName = tree.getByRole('textbox', { name: 'Project name' });
-  await projectName.fill('child-project');
-  await projectName.press('Enter');
+  const createProject = page.getByRole('dialog', { name: 'Create project', exact: true });
+  const projectName = createProject.getByRole('textbox', { name: 'Project name' });
+  const createButton = createProject.getByRole('button', { name: 'Create project', exact: true });
   const picker = page.getByRole('dialog', { name: 'Choose working directory' });
-  await picker.getByRole('textbox', { name: 'Directory path' }).fill(join(temp, 'workspace', 'child-project'));
-  await picker.getByRole('button', { name: 'Use this directory' }).click();
+  const chooseFolder = async path => {
+    await picker.getByRole('textbox', { name: 'Directory path' }).fill(path);
+    await picker.getByRole('button', { name: 'Use this directory' }).click();
+    await picker.waitFor({ state: 'detached' });
+  };
+  const addRoot = async path => {
+    await createProject.getByRole('button', { name: 'Add', exact: true }).click();
+    await chooseFolder(path);
+  };
+  assert.equal(await projectName.evaluate(input => document.activeElement === input), true);
+  assert.equal(await tree.locator('[data-workbench-draft]').count(), 0);
+  assert.equal(await createButton.isDisabled(), true);
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await createProject.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'create-project.png') });
+  }
+  await projectName.fill('child-project');
+  assert.equal(await createButton.isDisabled(), true);
+  await addRoot(join(temp, 'workspace'));
+  await createButton.click();
+  await createProject.getByRole('alert').filter({ hasText: 'A project already uses this working folder.' }).waitFor();
+  await createProject.getByRole('button', { name: /^Remove folder/ }).click();
+  await addRoot(join(temp, 'workspace', 'child-project'));
+  await createButton.click();
+  await createProject.waitFor({ state: 'detached' });
   await projectChildren.locator('[data-wb-kind="project"]').filter({ hasText: 'child-project' }).waitFor();
   assert.equal(await projectChildren.locator(':scope > [data-wb-kind]').first().getAttribute('data-wb-kind'), 'project');
   await beta.dragTo(child);
@@ -480,14 +504,60 @@ try {
   await picker.getByRole('button', { name: 'Cancel' }).click();
   const recentsProjectPath = join(temp, 'recents-project');
   await mkdir(recentsProjectPath);
-  await recents.hover();
-  await recents.getByRole('button', { name: 'Add project', exact: true }).click();
+  const addProject = recents.getByRole('button', { name: 'Add project', exact: true });
+  const openCreate = async () => {
+    await recents.hover();
+    await addProject.click();
+    assert.equal(await projectName.inputValue(), '');
+    assert.equal(await createProject.locator('.wb-folder-row').count(), 0);
+  };
+  await recentsLabel.click();
+  assert.equal(await recentsLabel.getAttribute('aria-expanded'), 'false');
+  await openCreate();
+  await projectName.fill('Discard project');
+  await addRoot(recentsProjectPath);
+  const behindDialog = await recentsLabel.boundingBox();
+  await page.mouse.click(behindDialog.x + 15, behindDialog.y + 8);
+  await createProject.waitFor({ state: 'detached' });
+  assert.equal(await addProject.evaluate(button => document.activeElement === button), true);
+  assert.equal(await recentsLabel.getAttribute('aria-expanded'), 'false');
+  assert.equal(await tree.getByText('Discard project', { exact: true }).count(), 0);
+  for (const cancel of [() => page.keyboard.press('Escape'),
+    () => createProject.getByRole('button', { name: 'Close', exact: true }).click(),
+    () => createProject.getByRole('button', { name: 'Cancel', exact: true }).click()]) {
+    await openCreate();
+    await projectName.fill('Discard project');
+    await cancel();
+    await createProject.waitFor({ state: 'detached' });
+  }
+  const engineeringRow = engineering.locator('[data-wb-kind="section"]');
+  await engineeringRow.click({ button: 'right' });
+  await page.getByRole('menu', { name: 'Section menu' }).getByRole('menuitem', { name: 'Add project' }).click();
+  await createProject.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await openCreate();
   await projectName.fill('Recents fixture');
-  await projectName.press('Enter');
-  await picker.getByRole('textbox', { name: 'Directory path' }).fill(recentsProjectPath);
+  const addFolder = createProject.getByRole('button', { name: 'Add', exact: true });
+  await addFolder.click();
+  await picker.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await picker.waitFor({ state: 'detached' });
+  assert.equal(await projectName.inputValue(), 'Recents fixture');
+  await addRoot(recentsProjectPath);
+  const extraSource = join(temp, 'extra-source');
+  await mkdir(extraSource);
+  await createProject.getByRole('button', { name: 'Add folder', exact: true }).click();
+  await picker.getByRole('textbox').fill(join(temp, 'missing-source'));
   await picker.getByRole('button', { name: 'Use this directory' }).click();
+  await picker.getByRole('alert').waitFor();
+  await chooseFolder(extraSource);
+  await createButton.click();
+  await createProject.waitFor({ state: 'detached' });
   const recentsProject = recents.locator('..').getByRole('button', { name: 'Recents fixture', exact: true });
   await recentsProject.waitFor();
+  await recentsProject.click({ button: 'right' });
+  await projectMenu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await projectEditor.getByText('extra-source', { exact: true }).waitFor();
+  await projectEditor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  console.log('PASS modal project creation, clean dismissal from all four controls, nested picker, and multiple source folders.');
 
   const topNewSession = page.locator('.wb-section-session').getByRole('button', { name: 'New session', exact: true });
   const topDraft = await openDraft(topNewSession, childDraft);

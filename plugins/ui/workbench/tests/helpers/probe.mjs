@@ -26,7 +26,7 @@ export async function createProbe(temp, runtimeVersion) {
   await writeFile(join(directory, 'cordis.patch.yml'), stringify([
     { id: 'workspace-controller', config: { documentsDirectory: join(temp, 'documents') } },
     { insert: [{ id: 'dsh-workbench-probe:main', name: pkg.name,
-      config: { path: workspace, child, activity: join(temp, 'activity'), deletionPath, deletionLocations: join(temp, 'deletion-locations.json') } }] },
+      config: { path: workspace, activity: join(temp, 'activity'), deletionPath, deletionLocations: join(temp, 'deletion-locations.json') } }] },
   ]));
   await writeFile(join(directory, 'lib/index.js'), `
 import { readFileSync, unwatchFile, watchFile } from 'node:fs';
@@ -35,7 +35,6 @@ import { randomUUID } from 'node:crypto';
 export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions', 'sessionPersistence'];
 export async function apply(ctx, config) {
   const { workspace } = await ctx.workspaceController.create({ path: config.path });
-  await ctx.workspaceController.create({ path: config.child });
   for (const suffix of [...Array.from({ length: 10 }, (_, index) => 'extra-' + index), 'alpha', 'beta']) {
     const sessionId = 'workbench-test-' + suffix;
     await ctx.sessionController.create({ workspaceId: workspace.workspaceId, sessionId });
