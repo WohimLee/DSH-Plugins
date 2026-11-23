@@ -13,11 +13,11 @@ import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepse
 import { ControlRequestError } from '@qoder-ai/qoder-agent-sdk';
 import type { SDKUserMessage } from '@qoder-ai/qoder-agent-sdk';
 import { advertiseTools, buildPrompt } from './request.js';
-import { openQoderSession, readQoderModels, readQoderUsage } from './runtime.js';
+import { openQoderSession, readQoderDesktopIdentity, readQoderModels, readQoderUsage } from './runtime.js';
 import { BrowserLogin } from './login.js';
 import type { LoginAction, LoginView } from './remote.js';
 import { QoderAccounts } from './accounts.js';
-import { isQoderAccountRecord } from './account-store.js';
+import { desktopDirectory, isQoderAccountRecord } from './account-store.js';
 import type { AccountConfig } from './account-store.js';
 import { accountService, contribution, parseAccountChange } from './remote.js';
 import type { AccountChange, AccountView } from './remote.js';
@@ -76,6 +76,7 @@ export class QoderAdapter extends LlmAdapter {
     resolveSecret = async (ref: string) => process.env[ref],
     credentials: () => CredentialProvider | undefined = () => undefined,
     private readonly attachments: () => Pick<Context['attachments'], 'readImageRequest'> | undefined = () => undefined,
+    private readonly readDesktopIdentity = readQoderDesktopIdentity,
   ) {
     super();
     this.accounts = new QoderAccounts(config.accounts, resolveSecret, async auth => {
@@ -86,6 +87,20 @@ export class QoderAdapter extends LlmAdapter {
 
   get providers(): string[] {
     return this.accounts.providers;
+  }
+
+  async addDesktop({ configDir, remark }: Extract<AccountChange, { kind: 'addDesktop' }>): Promise<boolean> {
+    const directory = await desktopDirectory(configDir);
+    const executable = await resolveCli(this.config.cliPath);
+    const signal = this.lifetime.signal;
+    const identity = await this.readDesktopIdentity(executable, directory, signal);
+    const local = await this.accounts.auth('qoder');
+    if (local.type === 'qodercli') {
+      const current = await this.readDesktopIdentity(executable, undefined, signal).catch(() => undefined);
+      if (current === identity) return false;
+    }
+    signal.throwIfAborted();
+    return this.accounts.addDesktop({ configDir: directory, identity }, remark);
   }
 
   async usage(provider: string, signal: AbortSignal) {
@@ -324,7 +339,7 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
   async function changeAccount(change: AccountChange): Promise<boolean> {
     await reloadDirectory();
     if (!live) return false;
-    return adapter.accounts.change(change);
+    return change.kind === 'addDesktop' ? adapter.addDesktop(change) : adapter.accounts.change(change);
   }
 
   function refreshDirectory() {

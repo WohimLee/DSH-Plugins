@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { access } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 import { Context } from '@deepseek-ai/cordis';
@@ -299,6 +301,109 @@ test('account remarks survive reload and preserve legacy and managed routes', as
     assert.equal(await reloaded.accounts.change({ kind: 'remark', provider: managed, remark: 'stale edit' }), false);
   } finally {
     reloaded.dispose();
+  }
+});
+
+test('validates a PAT before binding and preserves the active key when a replacement fails', async () => {
+  const records = new Map();
+  const explored = [];
+  const credentials = {
+    async listRecords() { return [...records].map(([key, { kind }]) => ({ key, kind })); },
+    async readRecord(key) { return records.get(key); },
+    async modifyRecord(key, mutate) {
+      const next = await mutate(records.get(key));
+      if (next) records.set(key, next);
+      return records.get(key);
+    },
+  };
+  const accounts = new QoderAccounts(undefined, async () => undefined, async auth => {
+    explored.push(auth.accessToken);
+    if (auth.accessToken === 'invalid') throw new Error('Fixture authorization failed');
+    if (auth.accessToken === 'disabled') return [{ value: 'hidden', isEnabled: false }];
+    return [{ value: auth.accessToken === 'updated' ? 'advanced' : 'lite' }];
+  }, () => credentials, () => false);
+  assert.equal(await accounts.change({ kind: 'add', token: 'invalid', remark: '' }), false);
+  assert.equal(await accounts.change({ kind: 'add', token: 'disabled', remark: '' }), false);
+  assert.equal(records.size, 0);
+  assert.equal(await accounts.change({ kind: 'add', token: 'initial', remark: 'Work' }), true);
+  await accounts.reload();
+  const [, provider] = accounts.providers;
+  assert.equal(await accounts.change({ kind: 'replace', provider, token: 'invalid' }), false);
+  assert.equal(await accounts.change({ kind: 'replace', provider, token: 'disabled' }), false);
+  assert.equal((await accounts.auth(provider)).accessToken, 'initial');
+  assert.equal(await accounts.change({ kind: 'replace', provider, token: 'updated' }), true);
+  assert.equal((await accounts.auth(provider)).accessToken, 'updated');
+  assert.deepEqual(explored, ['invalid', 'disabled', 'initial', 'invalid', 'disabled', 'updated']);
+  assert.deepEqual((await accounts.listModels(provider, await accounts.auth(provider))).map(model => model.id), ['advanced']);
+});
+
+test('links distinct Qoder CLI profiles and preserves their identities across restart', async () => {
+  const temp = await mkdtemp(join(tmpdir(), 'qoder-profile-test-'));
+  const paths = ['first', 'second', 'duplicate', 'local', 'signed-out'].map(name => join(temp, name));
+  await Promise.all(paths.map(path => mkdir(path)));
+  const [firstProfile, secondProfile, duplicate, local, unsigned] = await Promise.all(paths.map(path => realpath(path)));
+  const firstIdentity = '1'.repeat(64), secondIdentity = '2'.repeat(64), localIdentity = '3'.repeat(64);
+  const identities = new Map([[firstProfile, firstIdentity], [secondProfile, secondIdentity], [duplicate, firstIdentity],
+    [undefined, localIdentity], [local, localIdentity]]);
+  const records = new Map();
+  const credentials = {
+    async listRecords() { return [...records].map(([key, value]) => ({ key, kind: value.kind })); },
+    async readRecord(key) { return records.get(key); },
+    async modifyRecord(key, mutate) {
+      const next = await mutate(records.get(key));
+      if (next) records.set(key, next);
+      return records.get(key);
+    },
+    async deleteRecord(key) { records.delete(key); },
+  };
+  const sessions = [];
+  const make = () => new plugin.QoderAdapter({ cliPath: process.execPath },
+    async (_executable, _input, _options, auth) => {
+      sessions.push(auth.profile);
+      return { events: source([assistant([{ type: 'text', text: 'fixture' }]), result({})]), async close() {} };
+    },
+    async (_executable, auth) => [{ value: auth.profile?.configDir === secondProfile ? 'work' : 'lite' }],
+    async () => undefined, () => credentials, undefined, async (_executable, directory) => {
+      const identity = identities.get(directory);
+      if (!identity) throw new Error('Fixture signed out');
+      return identity;
+    });
+  const adapter = make();
+  const add = (configDir, remark) => adapter.addDesktop({ kind: 'addDesktop', configDir, remark });
+  const firstRoute = 'qoder-account-d-' + firstIdentity.slice(0, 24);
+  const secondRoute = 'qoder-account-d-' + secondIdentity.slice(0, 24);
+  const restarted = make();
+  try {
+    await assert.rejects(add('relative/path', ''), { code: 'INVALID_REQUEST' });
+    await assert.rejects(add(unsigned, ''), /Fixture signed out/);
+    assert.equal(await add(local, ''), false, 'the default signed-in identity is already linked');
+    assert.equal(await add(firstProfile, 'Personal'), true);
+    assert.equal(await add(duplicate, 'Duplicate'), false);
+    assert.equal(await add(secondProfile, 'Work'), true);
+    await adapter.accounts.reload();
+    assert.deepEqual(adapter.providers, ['qoder', firstRoute, secondRoute]);
+    assert.equal((await adapter.accounts.auth('qoder')).profile, undefined);
+    const visible = await adapter.accounts.statusOf(secondRoute);
+    assert.equal(visible.browserLogin, true);
+    assert.doesNotMatch(JSON.stringify(visible), /qoder-profile-test|2{64}/);
+    assert.equal(await adapter.accounts.change({ kind: 'replace', provider: secondRoute, token: 'unused' }), false);
+    assert.equal(await adapter.accounts.change({ kind: 'remark', provider: secondRoute, remark: 'Studio' }), true);
+    await restarted.accounts.reload();
+    assert.equal(restarted.providerInfo(secondRoute).name, 'Qoder · Studio');
+    assert.deepEqual((await restarted.listModels(firstRoute)).map(model => model.id), ['lite']);
+    assert.deepEqual((await restarted.listModels(secondRoute)).map(model => model.id), ['work']);
+    assert.equal((await collect(restarted.stream({ ...request, provider: secondRoute, model: 'work' }))).at(-1).reason.kind, 'stop');
+    assert.deepEqual(sessions, [{ configDir: secondProfile, identity: secondIdentity }]);
+    assert.equal(await restarted.accounts.change({ kind: 'unbind', provider: secondRoute }), true);
+    await restarted.accounts.reload();
+    assert.deepEqual(restarted.providers, ['qoder', firstRoute]);
+    await access(secondProfile);
+    await rm(firstProfile, { recursive: true });
+    assert.equal((await restarted.accounts.statusOf(firstRoute)).state, 'authFailed');
+  } finally {
+    adapter.dispose();
+    restarted.dispose();
+    await rm(temp, { force: true, recursive: true });
   }
 });
 

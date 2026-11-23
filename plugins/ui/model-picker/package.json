@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-picker",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "private": true,
   "description": "为 DSH 提供厂商模型选择、连接管理与账号用量。",
   "type": "module",
@@ -64,7 +64,11 @@
     "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-session": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.5"
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm-deepseek": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-anonymous-user-id": "0.2.2-rc.5"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
@@ -84,7 +88,11 @@
     "@deepseek-ai/dsh-client-ui-session": "0.2.2-rc.5",
     "playwright-core": "1.62.1",
     "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.5"
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm-deepseek": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-anonymous-user-id": "0.2.2-rc.5"
   },
   "dependencies": {
     "zod": "4.6.7"

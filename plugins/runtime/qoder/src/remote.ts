@@ -24,6 +24,7 @@ const remark = z.string().trim().max(80);
 const token = z.string().trim().min(1).max(8192);
 const accountChange = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('add'), remark, token }),
+  z.strictObject({ kind: z.literal('addDesktop'), remark, configDir: z.string().trim().min(1).max(4096) }),
   z.strictObject({ kind: z.literal('remark'), provider, remark }),
   z.strictObject({ kind: z.literal('replace'), provider, token }),
   z.strictObject({ kind: z.literal('unbind'), provider }),

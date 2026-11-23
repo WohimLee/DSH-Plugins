@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, readFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
@@ -144,6 +144,90 @@ test('real Cordis/LLM registration supports model preparation, unload and reload
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(ctx.llm.listProviders().filter(p => p.id === 'codex').length, 1);
   await second.dispose(); await runtime.dispose();
+});
+
+test('desktop connections keep the original route, persist distinct local accounts and reject a changed login', async t => {
+  const defaultHome = await fixture(t);
+  const secondaryHome = await fixture(t);
+  const thirdHome = await fixture(t);
+  const duplicateHome = await fixture(t);
+  const signedOutHome = await fixture(t);
+  const executable = join(defaultHome, process.platform === 'win32' ? 'codex.exe' : 'codex');
+  const auth = (home, account) => writeFile(join(home, 'auth.json'), JSON.stringify({
+    auth_mode: 'chatgpt', tokens: { access_token: 'sensitive-synthetic-token', account_id: account },
+  }));
+  const cache = (home, model) => writeFile(join(home, 'models_cache.json'), JSON.stringify({
+    models: [{ slug: model, visibility: 'list', supported_in_api: true }],
+  }));
+  await Promise.all([
+    auth(secondaryHome, 'synthetic-secondary'),
+    auth(duplicateHome, 'synthetic-secondary'),
+    auth(thirdHome, 'synthetic-third'),
+    rm(join(signedOutHome, 'auth.json')),
+    cache(defaultHome, 'default-model'),
+    cache(secondaryHome, 'secondary-model'),
+    cache(thirdHome, 'third-model'),
+    writeFile(executable, '', { mode: 0o755 }),
+  ]);
+  const alias = join(defaultHome, 'alternate-home');
+  await symlink(secondaryHome, alias, 'junction');
+
+  const ctx = new Context();
+  const runtime = ctx.plugin(LlmRuntime);
+  let saved;
+  ctx.provide('credentials', {
+    readRecord: async () => saved,
+    modifyRecord: async (key, change) => {
+      assert.equal(key, 'dsh-codex/desktop-accounts');
+      const next = await change(saved);
+      if (next) saved = structuredClone(next);
+    },
+  });
+  const first = ctx.plugin(plugin, { codexHome: defaultHome, codexPath: executable });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const service = ctx.get('dshCodexAccountUsage');
+  assert.deepEqual(await service.desktopAccounts(), {
+    installed: true,
+    canManage: true,
+    accounts: [{ provider: 'codex', label: null, signedIn: true, modelCount: 1, removable: false }],
+  });
+  const add = (home, label) => service.changeDesktopAccount({ kind: 'add', home, label });
+  assert.equal(await add('relative-home', 'Invalid'), 'invalidHome');
+  assert.equal(await add(signedOutHome, 'Not logged in'), 'signedOut');
+  assert.equal(await add(defaultHome, 'Default'), 'duplicate');
+  assert.equal(await add(secondaryHome, 'Work'), 'ok');
+  assert.equal(await add(alias, 'Alias'), 'duplicate');
+  assert.equal(await add(duplicateHome, 'Duplicate'), 'duplicate');
+  assert.equal(await add(thirdHome, 'Personal'), 'ok');
+  assert.equal(await service.changeDesktopAccount({ kind: 'remove', provider: 'codex' }), 'notFound');
+  const { accounts } = await service.desktopAccounts();
+  const [, work, personal] = accounts;
+  assert.equal(work.label, 'Work');
+  assert.equal(work.modelCount, 1);
+  assert.equal(personal.label, 'Personal');
+  assert.notEqual(work.provider, personal.provider);
+  assert.deepEqual(ctx.llm.listProviders().map(p => p.id).sort(), ['codex', work.provider, personal.provider].sort());
+  await ctx.llm.prepareCall({ provider: work.provider, model: 'secondary-model' });
+  await assert.rejects(ctx.llm.prepareCall({ provider: work.provider, model: 'third-model' }), { code: 'UNKNOWN_MODEL' });
+  assert.doesNotMatch(JSON.stringify(saved), /sensitive-synthetic-token|synthetic-secondary|synthetic-third/);
+
+  await first.dispose();
+  assert.equal(ctx.llm.listProviders().length, 0);
+  const second = ctx.plugin(plugin, { codexHome: defaultHome, codexPath: join(defaultHome, 'missing') });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const restored = ctx.get('dshCodexAccountUsage');
+  assert.deepEqual(await restored.desktopAccounts(), { installed: false, canManage: true, accounts });
+  await auth(secondaryHome, 'different-login');
+  const changed = (await restored.desktopAccounts()).accounts.find(account => account.provider === work.provider);
+  assert.equal(changed.signedIn, false);
+  assert.equal(changed.modelCount, 0);
+  await assert.rejects(ctx.llm.prepareCall({ provider: work.provider, model: 'secondary-model' }), { code: 'AUTH' });
+  assert.equal(await restored.changeDesktopAccount({ kind: 'remove', provider: work.provider }), 'ok');
+  assert.ok(!ctx.llm.listProviders().some(provider => provider.id === work.provider));
+  assert.ok(ctx.llm.listProviders().some(provider => provider.id === personal.provider));
+  assert.match(await readFile(join(secondaryHome, 'auth.json'), 'utf8'), /different-login/);
+  await second.dispose();
+  await runtime.dispose();
 });
 
 test('prepared calls retain catalog capabilities when the CLI cache changes', async t => {

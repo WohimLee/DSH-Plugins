@@ -1,6 +1,6 @@
 {
   "name": "dsh-grok",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "使用 xAI API Key 将 Grok 语言模型接入 DSH 模型选择器。",
   "type": "module",

@@ -2,16 +2,31 @@ import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-ty
 import { z } from 'zod';
 
 export const service = 'dshGrokConnection';
+export const defaultAccountId = 'default';
+const accountId = z.union([z.literal(defaultAccountId), z.uuid()]);
+const apiKey = z.string().trim().min(1).max(4096);
 export const change = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('connect'), key: z.string().trim().min(1).max(4096) }),
-  z.strictObject({ kind: z.literal('disconnect') }),
+  z.strictObject({ kind: z.literal('connect'), key: apiKey }),
+  z.strictObject({ kind: z.literal('add'), key: apiKey, label: z.string().trim().min(1).max(80) }),
+  z.strictObject({ kind: z.literal('replace'), key: apiKey, id: accountId }),
+  z.strictObject({ kind: z.literal('disconnect'), id: accountId.optional() }),
 ]);
+const state = z.enum(['unbound', 'connected', 'unauthorized', 'unavailable', 'empty']);
+const count = z.number().int().nonnegative();
+const account = z.object({
+  id: accountId,
+  label: z.string().optional(),
+  state: state.exclude(['unbound']),
+  modelCount: count,
+});
 const view = z.object({
-  state: z.enum(['unbound', 'connected', 'unauthorized', 'unavailable', 'empty']),
-  modelCount: z.number().int().nonnegative(),
+  state,
+  modelCount: count,
   error: z.enum(['unauthorized', 'unavailable', 'empty', 'storage']).optional(),
+  accounts: z.array(account),
 });
 export type Change = z.infer<typeof change>;
+export type AccountView = z.infer<typeof account>;
 export type ConnectionView = z.infer<typeof view>;
 
 declare module '@deepseek-ai/dsh-typert-protocol' {

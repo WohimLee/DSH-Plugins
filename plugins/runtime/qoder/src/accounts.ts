@@ -4,9 +4,10 @@ import type { LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm';
 import { accessToken, qodercliAuth } from '@qoder-ai/qoder-agent-sdk';
 import type { AuthOptions, ModelInfo } from '@qoder-ai/qoder-agent-sdk';
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials';
-import { AccountStore, accountLabel, accountRoute } from './account-store.js';
-import type { AccountConfig, AccountEntry } from './account-store.js';
+import { AccountStore, accountLabel, accountRoute, desktopDirectory } from './account-store.js';
+import type { AccountConfig, AccountEntry, DesktopProfile } from './account-store.js';
 import type { AccountChange, AccountView } from './remote.js';
+import type { AccountAuth } from './runtime.js';
 
 interface CatalogEntry {
   key: string;
@@ -20,6 +21,11 @@ interface QoderModel extends LlmResolvedModelInfo {
 
 function positive(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function availableModelId(model: ModelInfo, enabled?: string[]): string | undefined {
+  const id = model.value?.trim();
+  if (id && model.isEnabled !== false && (!enabled || enabled.includes(id))) return id;
 }
 
 function resolveCatalogModel(id: string, provider: string, model: ModelInfo, auth: AuthOptions['type'], hasAttachments: boolean): QoderModel {
@@ -64,7 +70,7 @@ export class QoderAccounts {
   constructor(
     accounts: AccountConfig[] | undefined,
     private readonly resolveSecret: (ref: string) => Promise<string | undefined>,
-    private readonly readCatalog: (auth: AuthOptions) => Promise<ModelInfo[]>,
+    private readonly readCatalog: (auth: AccountAuth) => Promise<ModelInfo[]>,
     credentials: () => CredentialProvider | undefined,
     private readonly hasAttachments: () => boolean,
   ) {
@@ -81,8 +87,23 @@ export class QoderAccounts {
     this.accounts = accounts;
   }
 
-  async change(change: AccountChange): Promise<boolean> {
-    return this.store.change(change, change.kind === 'add' ? undefined : this.accounts.get(change.provider));
+  async change(change: Exclude<AccountChange, { kind: 'addDesktop' }>): Promise<boolean> {
+    const account = change.kind === 'add' ? undefined : this.accounts.get(change.provider);
+    if (change.kind === 'replace' && (!account || account.profile)) return false;
+    if (change.kind === 'add' || change.kind === 'replace') {
+      try {
+        const catalog = await this.readCatalog(accessToken(change.token));
+        if (!catalog.some(model => availableModelId(model, account?.models))) return false;
+      } catch {
+        return false;
+      }
+    }
+    return this.store.change(change, account);
+  }
+
+  async addDesktop(profile: DesktopProfile, remark: string): Promise<boolean> {
+    if ([...this.accounts.values()].some(account => account.profile?.configDir === profile.configDir)) return false;
+    return this.store.addDesktop(profile, remark);
   }
 
   get providers(): string[] {
@@ -94,10 +115,17 @@ export class QoderAccounts {
     return account ? `Qoder · ${accountLabel(account)}` : 'Qoder';
   }
 
-  async auth(provider: string): Promise<AuthOptions> {
+  async auth(provider: string): Promise<AccountAuth> {
     const account = this.accounts.get(provider);
     if (provider !== 'qoder' && !account) {
       throw new LlmError('找不到所选 Qoder 账号。', 'UNKNOWN_MODEL');
+    }
+    if (account?.profile) {
+      const profile = account.profile;
+      if (await desktopDirectory(profile.configDir).catch(() => undefined) !== profile.configDir) {
+        throw new LlmError('Qoder 桌面配置目录已不可用。', 'AUTH');
+      }
+      return { ...qodercliAuth(), profile };
     }
     const token = (await (account ? this.store.token(account) : this.resolveSecret('QODER_PERSONAL_ACCESS_TOKEN')))?.trim();
     if (token) return accessToken(token);
@@ -105,10 +133,12 @@ export class QoderAccounts {
     throw new LlmError('请在 DSH 设置 → Qoder 账号中绑定所选账号。', 'MISSING_CREDENTIAL');
   }
 
-  async listModels(provider: string, auth: AuthOptions): Promise<QoderModel[]> {
+  async listModels(provider: string, auth: AccountAuth): Promise<QoderModel[]> {
     const token = auth.type === 'accessToken' && typeof auth.accessToken === 'string' ? auth.accessToken : undefined;
     const hasAttachments = this.hasAttachments();
-    const key = (token ? createHash('sha256').update(token).digest('hex') : 'cli') + (hasAttachments ? ':image' : ':text');
+    const key = (token ? createHash('sha256').update(token).digest('hex')
+      : auth.profile ? auth.profile.identity + ':' + auth.profile.configDir : 'cli')
+      + (hasAttachments ? ':image' : ':text');
     const current = this.cache.get(provider);
     if (current?.key === key && current.expires > Date.now()) return current.models;
     const enabled = this.accounts.get(provider)?.models;
@@ -119,8 +149,8 @@ export class QoderAccounts {
         entry.expires = Date.now() + (catalog.length ? 60_000 : 5_000);
         const models = new Map<string, QoderModel>();
         for (const model of catalog) {
-          const id = model.value?.trim();
-          if (!id || model.isEnabled === false || (enabled && !enabled.includes(id))) continue;
+          const id = availableModelId(model, enabled);
+          if (!id) continue;
           models.set(id, resolveCatalogModel(id, provider, model, auth.type, hasAttachments));
         }
         return [...models.values()];
@@ -151,7 +181,7 @@ export class QoderAccounts {
   async statusOf(provider: string): Promise<AccountView> {
     const config = this.accounts.get(provider);
     const account = { provider, name: config ? accountLabel(config) : 'Qoder CLI', remark: config?.remark };
-    let browserLogin = false;
+    let browserLogin = config?.profile !== undefined;
     try {
       const auth = await this.auth(provider);
       browserLogin = auth.type === 'qodercli';

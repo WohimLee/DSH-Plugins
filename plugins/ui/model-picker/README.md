@@ -1,6 +1,8 @@
 # dsh-model-picker
 
-从左侧栏的线缆图标进入「模型管理」。连接卡片展示 Codex、Qoder、Grok（dsh-grok 0.1.1 起）和可用的 DeepSeek 接入。点击卡片打开独立的连接详情，可用关闭按钮或 Esc 返回。窄窗口自动改为单列。可用模型可按厂商展开。
+从左侧栏的线缆图标进入「模型管理」。页面默认显示 Overview，左栏依次列出 Overview、Add provider 和已连接的厂商。Overview 卡片与左栏共用连接状态，点击厂商或卡片进入对应详情。窄窗口自动改为单列，可用模型可按厂商展开。
+
+在 Add provider 选择厂商和连接方式。Desktop 显示安装及登录检测，API 显示对应凭据配置。详情的 Desktop 与 API 分区分别显示账号与适用的添加入口。Codex 0.1.10 与 Qoder 0.1.10 可通过独立、已登录的配置目录关联桌面账号。Codex 的 API 分区使用 OpenAI API Key，Qoder 使用 PAT，Grok 0.1.4 使用 xAI API Key。DeepSeek 原生登录由 DSH 账号菜单管理，命名 API 账号可从管理页添加。Grok 通过 API 接入。
 
 在 DSH 输入框的菜单中悬停「Models」（中文界面为「模型」）打开选择器。浮层优先贴主菜单右边，空间不足时贴左边。双列布局按厂商行数决定高度，鼠标移到厂商行即可切换等高的模型列表，较长的列表在右栏内滚动。触屏可点按入口和厂商。搜索覆盖所有已加载的厂商和账号，选中模型才改变当前会话的选择。选择结果与 `/model` 共用同一份会话状态。推理强度菜单读取当前账号与模型声明的档位。切换模型时保留仍受支持的显式档位，否则采用目标模型的默认值。没有声明档位时，输入框隐藏该菜单并省略选择参数。团队设置和其他菜单扩展由原生菜单管理。
 
@@ -28,7 +30,7 @@
 ```sh
 pnpm --filter dsh-model-picker check
 pnpm --filter dsh-model-picker pack --pack-destination /tmp
-dsh plugin --profile web add /tmp/dsh-model-picker-0.1.9.tgz
+dsh plugin --profile web add /tmp/dsh-model-picker-0.2.0.tgz
 ```
 
 Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filter dsh-model-picker test:host`，需要本机 Chrome 或 `DSH_TEST_BROWSER_EXECUTABLE`。测试使用合成输入和临时 profile。
@@ -37,9 +39,9 @@ Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filte
 
 适配器在账号就绪后发布可用模型，解绑后撤回相应路由，并通过 DSH 的模型目录事件通知界面刷新。可用路由自动进入模型管理页和模型选择器。
 
-需要提供连接表单的适配器可通过 `ctx.slots.inject` 注册 `modelPicker.connections`。它是 root 作用域的 list 插槽，贡献 ID 使用厂商标识。贡献组件可用可选的 `renderCard` 渲染连接摘要和独立详情，并监听 `refresh` 的变化以响应页面刷新。较早的贡献组件仍可渲染独立表单。账号凭据由适配器使用宿主支持的机制保存。
+需要提供连接表单的适配器可通过 `ctx.slots.inject` 注册 `modelPicker.connections`。它是 root 作用域的 list 插槽，贡献 ID 使用厂商标识。贡献组件通过 `renderCard` 提供摘要，可附上 `connection` 声明连接状态、账号数、各方式的详情与配置内容，并监听 `refresh` 响应刷新。账号凭据由适配器使用宿主支持的机制保存。
 
-Codex 使用 ChatGPT 的 Codex Dock 图标，Qoder 使用 macOS 应用主图标，Grok 使用 [App Store 的 Grok 应用图标](https://apps.apple.com/us/app/grok-ai/id6670324846)。打包时内嵌 96 像素 PNG。
+概览和厂商导航的图标按模型管理设计稿呈现。Grok 概览卡片使用应用图标。[App Store 的 Grok 应用图标](https://apps.apple.com/us/app/grok-ai/id6670324846)
 
 ## 源码组织评估
 

@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto';
+import { realpath, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { isAbsolute, join } from 'node:path';
 import { credentialKey, credentialKeyId, credentialKeyScope, credentialRef } from '@deepseek-ai/dsh-credentials';
 import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials';
 import { LlmError } from '@deepseek-ai/dsh-llm';
@@ -6,7 +9,7 @@ import type { AccountChange } from './remote.js';
 
 const scope = 'dsh-qoder';
 const prefix = 'qoder-account-';
-const managedId = /^a-[0-9a-f]{24}$/;
+const managedId = /^(?:a|d)-[0-9a-f]{24}$/;
 
 export interface AccountConfig {
   id: string;
@@ -20,13 +23,16 @@ export interface AccountEntry {
   remark: string;
   tokenEnv?: string;
   models?: string[];
+  profile?: DesktopProfile;
 }
 
-interface AccountRecord {
-  version: 1;
-  remark: string;
-  token?: string;
+export interface DesktopProfile {
+  configDir: string;
+  identity: string;
 }
+
+type AccountRecord = { version: 1; remark: string; token?: string }
+  | { version: 2; remark: string; profile: DesktopProfile };
 
 const legacy = [
   { id: 'personal', tokenEnv: 'QODER_PERSONAL_PAT' },
@@ -35,11 +41,33 @@ const legacy = [
 
 function readRecord(record?: CredentialRecord): AccountRecord | undefined {
   if (record?.kind !== 'grant' || !record.payload || typeof record.payload !== 'object') return;
-  const { version, remark, token } = record.payload as Partial<AccountRecord>;
-  if (version === 1 && typeof remark === 'string' && remark.length <= 80 &&
-      (token === undefined || (typeof token === 'string' && token.trim()))) {
-    return { version, remark, token };
+  const payload = record.payload as Partial<AccountRecord>;
+  if (typeof payload.remark !== 'string' || payload.remark.length > 80) return;
+  if (payload.version === 1 && (payload.token === undefined ||
+    (typeof payload.token === 'string' && payload.token.trim()))) {
+    return { version: 1, remark: payload.remark, token: payload.token };
   }
+  if (payload.version === 2 && typeof payload.profile?.configDir === 'string' &&
+    isAbsolute(payload.profile.configDir) && typeof payload.profile.identity === 'string' &&
+    /^[0-9a-f]{64}$/.test(payload.profile.identity)) {
+    return { version: 2, remark: payload.remark, profile: payload.profile };
+  }
+}
+
+export async function desktopDirectory(path: string): Promise<string> {
+  if (!isAbsolute(path) || /[\u0000-\u001f]/.test(path)) {
+    throw new LlmError('Qoder 桌面账号需要本机配置目录的绝对路径。', 'INVALID_REQUEST');
+  }
+  const directory = await realpath(path).catch(() => undefined);
+  const status = directory && await stat(directory).catch(() => undefined);
+  const uid = process.getuid?.();
+  const defaultDir = process.env.QODER_CONFIG_DIR || join(homedir(), '.qoder');
+  const defaultPath = await realpath(defaultDir).catch(() => undefined);
+  if (!directory || !status || !status.isDirectory() || directory === defaultPath ||
+    (uid !== undefined && (status.uid !== uid || (status.mode & 0o022) !== 0))) {
+    throw new LlmError('请使用独立、可访问且仅由当前用户写入的 Qoder 配置目录。', 'INVALID_REQUEST');
+  }
+  return directory;
 }
 
 export function accountRoute(id: string): string {
@@ -95,17 +123,39 @@ export class AccountStore {
         && !this.configured.some(account => account.id === credentialKeyId(entry.key)))
       .map(async entry => {
         const record = readRecord(await credentials.readRecord(entry.key));
-        return record?.token ? { id: credentialKeyId(entry.key), remark: record.remark } : undefined;
+        const id = credentialKeyId(entry.key);
+        if (record?.version === 1 && record.token && id.startsWith('a-')) return { id, remark: record.remark };
+        if (record?.version === 2 && id === this.profileId(record.profile)) {
+          return { id, remark: record.remark, profile: record.profile };
+        }
       }));
     return [...accounts, ...managed.filter(account => account !== undefined)];
   }
 
   async token(account: AccountEntry): Promise<string | undefined> {
     if (account.tokenEnv) return this.resolveSecret(account.tokenEnv);
-    return readRecord(await this.credentials()?.readRecord(credentialKey(scope, account.id)))?.token;
+    const record = readRecord(await this.credentials()?.readRecord(credentialKey(scope, account.id)));
+    return record?.version === 1 ? record.token : undefined;
   }
 
-  async change(change: AccountChange, account?: AccountEntry): Promise<boolean> {
+  private profileId(profile: DesktopProfile): string {
+    return 'd-' + profile.identity.slice(0, 24);
+  }
+
+  async addDesktop(profile: DesktopProfile, remark: string): Promise<boolean> {
+    const credentials = this.credentials();
+    const id = this.profileId(profile);
+    if (!credentials || this.configured.some(account => account.id === id)) return false;
+    let added = false;
+    await credentials.modifyRecord(credentialKey(scope, id), async current => {
+      if (current) return;
+      added = true;
+      return { kind: 'grant', payload: { version: 2, remark, profile } };
+    });
+    return added;
+  }
+
+  async change(change: Exclude<AccountChange, { kind: 'addDesktop' }>, account?: AccountEntry): Promise<boolean> {
     const credentials = this.credentials();
     if (!credentials) return false;
     if (change.kind === 'add') {
@@ -132,9 +182,15 @@ export class AccountStore {
     let changed = false;
     await credentials.modifyRecord(key, async current => {
       const record = readRecord(current);
-      if (!account.tokenEnv && !record?.token) return;
+      if (account.profile) {
+        if (change.kind !== 'remark' || record?.version !== 2) return;
+        changed = true;
+        return { kind: 'grant', payload: { ...record, remark: change.remark } };
+      }
+      const tokenFromRecord = record?.version === 1 ? record.token : undefined;
+      if (!account.tokenEnv && !tokenFromRecord) return;
       changed = true;
-      const token = change.kind === 'replace' ? change.token : record?.token;
+      const token = change.kind === 'replace' ? change.token : tokenFromRecord;
       const payload: AccountRecord = {
         version: 1,
         remark: change.kind === 'remark' ? change.remark : record?.remark ?? '',

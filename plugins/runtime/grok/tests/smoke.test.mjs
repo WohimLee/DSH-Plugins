@@ -129,3 +129,52 @@ test('refreshes route capabilities from the account and sends image bytes throug
   await assert.rejects(Array.fromAsync(adapter.stream(options)), { code: 'UNSUPPORTED_CONTENT' });
   assert.equal(wire.length, 1);
 });
+
+test('keeps prepared calls and model catalogs scoped to the selected account', async t => {
+  const { GrokAdapter } = await import('../lib/index.js');
+  const { grokProvider } = await import('../lib/catalog.js');
+  const { InMemoryCredentialStore, defaultProviderAuthContext } = await import('@earendil-works/pi-ai');
+  const { resolveRetryPolicy } = await import('@deepseek-ai/dsh-llm');
+  const defaultRoute = 'grok';
+  const workRoute = 'grok-account-234e4567-e89b-42d3-a456-426614174000';
+  const signals = new Map([[defaultRoute, new AbortController()], [workRoute, new AbortController()]]);
+  const catalogs = new Map();
+  for (const [provider, controller] of signals) {
+    const model = provider === defaultRoute ? 'personal-fixture' : 'work-fixture';
+    catalogs.set(provider, await readCatalog('fixture', controller.signal, async url =>
+      url.endsWith('/language-models')
+        ? Response.json({ models: [{ id: model, input_modalities: ['text'], output_modalities: ['text'] }] })
+        : Response.json({ data: [] })));
+  }
+  const profiles = new Map([...catalogs].map(([provider, catalog]) => [provider, {
+    provider, displayName: provider, piProvider: grokProvider(catalog, provider),
+    modelErrors: new Map(), configuredMaxTokens: new Map(), retryPolicy: resolveRetryPolicy(undefined, 'grok'),
+    streamIdleTimeoutMs: 3000, maxRequestImageBytes: 1_000_000, maxRequestImages: 10, imageOffloadCountQuantum: 1,
+    requestImageMaxBytes: 128_000, requestImagePixelBudget: 32_768,
+  }]));
+  const adapter = new GrokAdapter(provider => catalogs.get(provider) ?? [], provider => signals.get(provider).signal, {
+    profiles: () => profiles,
+    resolveApiKey: async provider => provider === defaultRoute ? 'personal-key' : 'work-key',
+    auth: { credentials: new InMemoryCredentialStore(), authContext: defaultProviderAuthContext() },
+  });
+  assert.deepEqual((await adapter.listModels(defaultRoute)).map(model => model.id), ['personal-fixture']);
+  assert.deepEqual((await adapter.listModels(workRoute)).map(model => model.id), ['work-fixture']);
+  await assert.rejects(adapter.prepareCall(workRoute, 'personal-fixture'), { code: 'UNKNOWN_MODEL' });
+  const personal = await adapter.prepareCall(defaultRoute, 'personal-fixture');
+  const work = await adapter.prepareCall(workRoute, 'work-fixture');
+  signals.get(defaultRoute).abort();
+  const oldBypass = process.env.NO_PROXY;
+  process.env.NO_PROXY = 'api.x.ai';
+  t.after(() => { if (oldBypass === undefined) delete process.env.NO_PROXY; else process.env.NO_PROXY = oldBypass; });
+  const requests = t.mock.method(globalThis, 'fetch', async request => {
+    assert.equal(request.headers.get('authorization'), 'Bearer work-key');
+    assert.equal((await request.json()).model, 'work-fixture');
+    return new Response('event: response.completed\ndata: {"type":"response.completed","response":{"id":"fixture","status":"completed","output":[]}}\n\n',
+      { headers: { 'content-type': 'text/event-stream' } });
+  });
+  const options = { maxTokens: 256, messages: [{ role: 'user', content: [{ type: 'text', text: 'Fixture question' }] }] };
+  await assert.rejects(Array.fromAsync(personal.stream({ ...options, provider: defaultRoute, model: 'personal-fixture' })),
+    { name: 'AbortError' });
+  await Array.fromAsync(work.stream({ ...options, provider: workRoute, model: 'work-fixture' }));
+  assert.equal(requests.mock.callCount(), 1);
+});

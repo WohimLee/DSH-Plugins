@@ -18,6 +18,7 @@ const codexHome = join(home, '.codex');
 const env = {
   PATH: process.env.PATH, HOME: home, USERPROFILE: home, DSH_HOME: home, CODEX_HOME: codexHome,
   TMPDIR: process.env.TMPDIR ?? tmpdir(), SYSTEMROOT: process.env.SYSTEMROOT, CI: 'true', NO_COLOR: '1',
+  NO_PROXY: '*',
   DEEPSEEK_API_KEY: 'fixture-key',
 };
 const exec = promisify(execFile);
@@ -25,6 +26,7 @@ const run = async (command, args, cwd = temp) => (await exec(command, args, { cw
 const dsh = args => run(process.execPath, [cli, ...args]);
 const binary = join(temp, 'codex-fixture');
 const qoder = join(temp, 'qoder-fixture');
+const fixtureFetch = join(temp, 'provider-api-fixtures.mjs');
 const patch = join(temp, 'model-picker.yml');
 let host, closed, browser, page, log = '';
 const platform = createServer((request, response) => {
@@ -112,6 +114,24 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   if (request.type === 'daemon.shutdown') reply(undefined);
 });
 `, { mode: 0o755 });
+  await writeFile(fixtureFetch, `
+const original = globalThis.fetch;
+globalThis.fetch = async (input, options = {}) => {
+  const url = new URL(input instanceof Request ? input.url : input);
+  const headers = new Headers(options.headers ?? (input instanceof Request ? input.headers : undefined));
+  if (url.href === 'https://api.openai.com/v1/models') {
+    return headers.get('authorization') === 'Bearer fixture-codex-api'
+      ? Response.json({ data: [{ id: 'gpt-5.3-codex' }, { id: 'gpt-unrelated' }] })
+      : new Response(null, { status: 401 });
+  }
+  if (url.href === 'https://api.deepseek.com/models') {
+    return headers.get('x-api-key') === 'fixture-deepseek-api'
+      ? Response.json({ data: [{ id: 'deepseek-flash', input_modalities: ['text'], api_capabilities: { anthropic_messages: {} } }] })
+      : new Response(null, { status: 401 });
+  }
+  return original(input, options);
+};
+`);
   await writeFile(patch, `- id: deepseek-account
   config:
     platformOrigin: ${origin}
@@ -141,7 +161,8 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   const files = await run('tar', ['-tzf', tarballs[0]]);
   for (const file of ['lib/index.js', 'lib/client.js', 'cordis.patch.yml', 'README.md']) assert.ok(files.includes(`package/${file}`));
   await dsh(['plugin', '--profile', 'web', 'add', ...tarballs, '--ignore-scripts']);
-  host = spawn(process.execPath, [cli, 'web', '--patch', patch, '--port', '0', '--no-open'], { cwd: temp, env });
+  host = spawn(process.execPath, ['--import', fixtureFetch, cli, 'web', '--patch', patch, '--port', '0', '--no-open'],
+    { cwd: temp, env });
   closed = new Promise(accept => host.on('close', accept));
   for (const stream of [host.stdout, host.stderr]) stream.on('data', chunk => { log = (log + chunk).slice(-30000); });
   let url;
@@ -186,17 +207,53 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   const available = management.getByRole('region', { name: 'Available models' });
   const qoderConnection = management.getByRole('region', { name: 'Qoder', exact: true });
   const deepseekConnection = management.getByRole('region', { name: 'DeepSeek', exact: true });
+  const nav = management.getByRole('navigation', { name: 'Model management' });
+  const overview = nav.getByRole('button', { name: 'Overview', exact: true });
+  const addProvider = nav.getByRole('button', { name: 'Add provider', exact: true });
+  const providerInput = management.getByRole('combobox', { name: 'Provider', exact: true });
+  const methodInput = management.getByRole('combobox', { name: 'Connection method', exact: true });
   const openCodex = codexConnection.getByRole('button', { name: 'View connection' });
-  const setupQoder = qoderConnection.getByRole('button', { name: 'Set up Qoder' });
-  const qoderManagement = management.getByRole('region', { name: 'Qoder accounts' });
-  await codexConnection.getByRole('status').filter({ hasText: 'Codex is not connected' }).waitFor();
-  await qoderConnection.getByText('Setup required').waitFor();
-  assert.equal(await qoderManagement.isVisible(), false);
+  const qoderAddForm = management.getByRole('form', { name: 'Add account' });
+  const setupQoder = async (method = 'api') => {
+    await addProvider.click();
+    await providerInput.selectOption('qoder');
+    await methodInput.selectOption(method);
+  };
+
+  await deepseekConnection.waitFor();
+  assert.equal(await overview.getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: /^(Codex|Qoder|Grok)$/ }).count(), 0);
+  assert.equal(await codexConnection.count(), 0);
+  assert.equal(await qoderConnection.count(), 0);
   const layout = () => management.locator('.dsh-connection-card').evaluateAll(cards => cards.map(card => ({
-    ...card.getBoundingClientRect().toJSON(), icon: card.querySelector('img')?.naturalWidth,
+    ...card.getBoundingClientRect().toJSON(), provider: card.querySelector('.dsh-connection-icon')?.dataset.provider,
   })));
+
+  await addProvider.click();
+  await providerInput.selectOption('codex');
+  await methodInput.selectOption('desktop');
+  await management.getByText('codex login', { exact: true }).waitFor();
+  await management.getByText('Installed', { exact: true }).waitFor();
+  await management.getByText('Signed out', { exact: true }).waitFor();
+  await methodInput.selectOption('api');
+  assert.equal(await management.getByText('Desktop app', { exact: true }).count(), 0);
+  await management.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await overview.evaluate(node => {
+    if (node.getAttribute('aria-current') !== 'page') throw new Error('Cancel must return to Overview');
+  });
+
+  await setupQoder('desktop');
+  await management.getByText('Desktop app', { exact: true }).waitFor();
+  assert.equal(await qoderAddForm.count(), 0);
+  await methodInput.selectOption('api');
+  await qoderAddForm.getByLabel('Personal access token').waitFor();
+  await overview.click();
+  assert.equal(await available.locator('summary').filter({ hasText: 'Codex' }).count(), 0);
+  const auth = join(codexHome, 'auth.json');
+  await writeFile(auth, JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
+  await codexConnection.getByRole('status').filter({ hasText: 'Local Codex sign-in detected' }).waitFor();
   const wide = await layout();
-  assert.deepEqual(wide.slice(0, 2).map(card => card.icon), [96, 96], 'bundled provider icons must load');
+  assert.deepEqual(wide.map(card => card.provider), ['codex', 'deepseek']);
   assert.equal(wide[0].top, wide[1].top, 'desktop cards share a row');
   await page.setViewportSize({ width: 560, height: 900 });
   const narrow = await layout();
@@ -204,24 +261,14 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await openCodex.focus();
   await page.keyboard.press('Enter');
-  await management.getByRole('region', { name: 'Codex connection' }).getByText('codex login', { exact: true }).waitFor();
-  assert.deepEqual(await layout(), wide, 'opening details preserves every card rectangle');
-  await page.keyboard.press('Escape');
-  await management.getByRole('dialog', { name: 'Codex' }).waitFor({ state: 'hidden' });
-  assert.ok(await openCodex.evaluate(node => node === document.activeElement), 'focus returns to the card opener');
-  const cardTitle = await codexConnection.getByRole('heading', { name: 'Codex' }).boundingBox();
+  await management.getByRole('heading', { name: 'Codex', exact: true, level: 1 }).waitFor();
+  assert.equal(await nav.getByRole('button', { name: 'Codex', exact: true }).getAttribute('aria-current'), 'page');
+  await management.getByRole('region', { name: 'Desktop', exact: true }).getByText('Signed in', { exact: true }).waitFor();
+  await overview.click();
+  const cardTitle = await codexConnection.getByRole('heading', { name: 'Codex', exact: true }).boundingBox();
   await page.mouse.click(cardTitle.x + cardTitle.width / 2, cardTitle.y + cardTitle.height / 2);
-  await management.getByRole('dialog', { name: 'Codex' }).getByRole('button', { name: 'Close details' }).click();
-  await management.getByRole('button', { name: 'Refresh connections' }).click();
-  await setupQoder.click();
-  await qoderManagement.waitFor();
-  assert.equal(await qoderManagement.getByRole('button', { name: 'Refresh accounts' }).count(), 0);
-  await qoderManagement.getByRole('button', { name: 'Add account' }).waitFor();
-  await page.keyboard.press('Escape');
-  assert.equal(await available.locator('summary').filter({ hasText: 'Codex' }).count(), 0);
-  const auth = join(codexHome, 'auth.json');
-  await writeFile(auth, JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
-  await codexConnection.getByRole('status').filter({ hasText: 'Local Codex sign-in detected' }).waitFor();
+  await management.getByRole('heading', { name: 'Codex', exact: true, level: 1 }).waitFor();
+  await overview.click();
   const connectedCodex = available.locator('summary').filter({ hasText: 'Codex' });
   await connectedCodex.click();
   const fixture = available.getByRole('listitem').filter({ hasText: 'Codex Fixture' });
@@ -236,7 +283,8 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await writeFile(cachePath, before);
   await fixture.getByText(/声明输入：text、image。/).waitFor();
   await rm(auth);
-  await codexConnection.getByRole('status').filter({ hasText: 'Codex is not connected' }).waitFor();
+  await codexConnection.waitFor({ state: 'detached' });
+  await nav.getByRole('button', { name: 'Codex', exact: true }).waitFor({ state: 'detached' });
   await connectedCodex.waitFor({ state: 'detached' });
   await writeFile(auth, JSON.stringify({ tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
   await connectedCodex.waitFor();
@@ -252,20 +300,19 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   await deepseekConnection.getByRole('button', { name: 'DeepSeek usage' }).hover();
   await deepseekConnection.getByRole('tooltip').getByText(/Bonus balance.*7\.00/).waitFor();
   await deepseekConnection.getByRole('tooltip').getByText(/Account balance.*23\.48/).waitFor();
-  await setupQoder.click();
-  await qoderManagement.getByRole('button', { name: 'Add account', exact: true }).click();
-  const managerForm = qoderManagement.getByRole('form', { name: 'Add account' });
-  await managerForm.getByLabel('Personal access token').fill('fixture-personal');
-  await managerForm.getByLabel('Remark (optional)').fill('Managed from sidebar');
-  await managerForm.getByRole('button', { name: 'Bind account' }).click();
-  const managedQoder = qoderManagement.getByRole('group', { name: 'Managed from sidebar' });
+  await setupQoder();
+  await qoderAddForm.getByLabel('Personal access token').fill('fixture-personal');
+  await qoderAddForm.getByLabel('Remark (optional)').fill('Managed from sidebar');
+  await qoderAddForm.getByRole('button', { name: 'Bind account' }).click();
+  await management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 }).waitFor();
+  const managedQoder = management.getByRole('group', { name: 'Managed from sidebar' });
   await managedQoder.waitFor();
-  await page.keyboard.press('Escape');
+  await overview.click();
   const connectedQoder = available.locator('summary').filter({ hasText: 'Qoder' });
   await connectedQoder.waitFor();
   const manageQoder = qoderConnection.getByRole('button', { name: 'Manage accounts' });
   await qoderConnection.getByText('Connected', { exact: true }).waitFor();
-  assert.equal(await qoderManagement.isVisible(), false);
+  assert.equal(await managedQoder.isVisible(), false);
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management.png') });
@@ -274,11 +321,38 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   }
   await manageQoder.click();
   await managedQoder.getByRole('button', { name: 'Unbind' }).click();
-  await qoderManagement.getByRole('group', { name: 'Managed from sidebar' }).waitFor({ state: 'detached' });
-  await page.keyboard.press('Escape');
+  await management.getByRole('heading', { name: 'Model management', exact: true, level: 1 }).waitFor();
+  await qoderConnection.waitFor({ state: 'detached' });
+  await nav.getByRole('button', { name: 'Qoder', exact: true }).waitFor({ state: 'detached' });
   await connectedQoder.waitFor({ state: 'detached' });
-  await qoderConnection.getByText('Setup required').waitFor();
-  console.log('PASS sidebar Model management: card layout, keyboard and pointer details, usage tooltip, icons, and live connection states.');
+  await addProvider.click();
+  await providerInput.selectOption('codex');
+  await methodInput.selectOption('api');
+  await management.getByLabel('OpenAI API key').fill('invalid-codex-key');
+  await management.getByLabel('Account name').fill('Codex API fixture');
+  await management.getByRole('button', { name: 'Connect', exact: true }).click();
+  await management.getByRole('alert').getByText('The provider rejected this API key.').waitFor();
+  await management.getByLabel('OpenAI API key').fill('fixture-codex-api');
+  await management.getByRole('button', { name: 'Connect', exact: true }).click();
+  await management.getByRole('heading', { name: 'Codex', exact: true, level: 1 }).waitFor();
+  const codexApi = management.getByRole('region', { name: 'API', exact: true });
+  await codexApi.getByText('Codex API fixture', { exact: true }).waitFor();
+  await codexApi.getByRole('button', { name: 'Remove', exact: true }).click();
+  await codexApi.getByText('Codex API fixture', { exact: true }).waitFor({ state: 'detached' });
+
+  await addProvider.click();
+  await providerInput.selectOption('deepseek');
+  await methodInput.selectOption('api');
+  await management.getByLabel('API key', { exact: true }).fill('fixture-deepseek-api');
+  await management.getByLabel('Account name').fill('DeepSeek API fixture');
+  await management.getByRole('button', { name: 'Connect', exact: true }).click();
+  await management.getByRole('heading', { name: 'DeepSeek', exact: true, level: 1 }).waitFor();
+  const deepseekApi = management.getByRole('region', { name: 'API', exact: true });
+  await deepseekApi.getByText('DeepSeek API fixture', { exact: true }).waitFor();
+  await deepseekApi.getByRole('button', { name: 'Remove', exact: true }).click();
+  await deepseekApi.getByText('DeepSeek API fixture', { exact: true }).waitFor({ state: 'detached' });
+  await overview.click();
+  console.log('PASS Model management: Overview, connected-only sidebar and cards, keyboard and pointer navigation, Desktop detection, API configuration, and live catalog updates.');
   await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
 
   const openSettings = async () => {

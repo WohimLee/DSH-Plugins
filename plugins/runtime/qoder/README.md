@@ -25,7 +25,7 @@ pnpm --filter dsh-qoder pack --pack-destination /tmp
 Web 使用对应版本的 DSH CLI 安装。安装参数 `--ignore-scripts` 跳过 SDK 自带的运行时下载脚本，插件使用已安装的 Qoder CLI。
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-qoder-0.1.9.tgz --ignore-scripts
+dsh plugin --profile web add /tmp/dsh-qoder-0.1.10.tgz --ignore-scripts
 ```
 
 Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile desktop`。若从 Desktop 插件页安装，在该 profile 的 `pnpm-workspace.yaml` 现有 `allowBuilds` 下添加 `'@qoder-ai/qoder-agent-sdk': false`，即可跳过该 SDK 的下载脚本。重启宿主后，打开 **设置 → Qoder** 查看账号状态。
@@ -42,8 +42,18 @@ Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile d
 
 ## 绑定账号
 
+要绑定其他桌面账号，先在运行 DSH 的机器上使用独立的配置目录登录 Qoder。
+
+```sh
+qodercli --config-dir /absolute/path/to/qoder-profile login
+```
+
+在 **模型管理 → Qoder → Desktop → 添加桌面账号** 填写该目录的绝对路径。插件核对登录账号并使用该目录读取模型、查询用量和发起推理。DSH 保存目录、备注及账号标识的摘要。若目录中的登录账号发生变化，需要解绑后重新绑定。解绑会移除 DSH 的模型路由，Qoder 目录和登录由 Qoder 自己管理。
+
+### 绑定 PAT
+
 1. 在每个账号的 [Qoder 账号集成设置](https://qoder.com/account/integrations) 创建个人访问令牌（PAT）。
-2. 在 DSH 打开 **设置 → Qoder → 添加账号**，填入该账号的 PAT。备注可留空，也可填写「个人」「工作」等名称。DSH 凭据服务保存 PAT 和备注。
+2. 在 DSH 打开 **设置 → Qoder → 添加账号**，填入该账号的 PAT。备注可留空，也可填写「个人」「工作」等名称。通过模型目录验证后，DSH 凭据服务保存 PAT 和备注。换绑验证失败时保留当前凭据。
 3. 状态显示「已连接」并列出可用模型数量后，即可从会话模型菜单选中相应账号的模型。切换 Qoder CLI 登录、模型目录变化或连接失败时，可在这里点「刷新账号」。
 
 账号卡片可随时修改备注、更换令牌或解绑。修改备注会更新模型菜单显示名称，已有会话继续使用同一账号。0.1.2 已绑定的账号会沿用原凭据引用和会话路由，可以直接补填备注。

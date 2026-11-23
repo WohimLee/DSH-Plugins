@@ -25,38 +25,48 @@ const run = async (command, args, cwd = temp) => (await exec(command, args, { cw
 let current, browser;
 const requests = [];
 const model = { id: 'grok-fixture', capabilities: { reasoning_effort: ['low', 'high'], default_reasoning_effort: 'high' }, input_modalities: ['text'], output_modalities: ['text'] };
+const workModel = { ...model, id: 'grok-work-fixture' };
+const modelsByKey = new Map([
+  ['Bearer fixture-grok-key', model],
+  ['Bearer fixture-grok-work-key', workModel],
+]);
 const reply = 'Hello from the Grok stream.';
+const workReply = 'Hello from the Grok work stream.';
+const fixturePrompt = 'Reply using the selected Grok API account.';
 function outputItem(content) {
   return { type: 'message', id: 'msg_fixture', status: 'completed', role: 'assistant', content };
 }
-function completion(item) {
-  return { id: 'resp_fixture', model: model.id, status: 'completed', output: [item],
+function completion(item, servedModel) {
+  return { id: 'resp_fixture', model: servedModel, status: 'completed', output: [item],
     usage: { input_tokens: 10, output_tokens: 3, total_tokens: 13 } };
 }
 const platform = createServer(async (request, response) => {
-  const auth = request.headers.authorization;
-  if (auth !== 'Bearer fixture-grok-key') return response.writeHead(401).end();
+  const servedModel = modelsByKey.get(request.headers.authorization);
+  if (!servedModel) return response.writeHead(401).end();
   if (request.url === '/v1/language-models' || request.url === '/v1/models') {
     response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(
-      request.url.endsWith('/language-models') ? { models: [model] } : { data: [{ id: model.id, context_length: 200_000 }] },
+      request.url.endsWith('/language-models') ? { models: [servedModel] } : { data: [{ id: servedModel.id, context_length: 200_000 }] },
     ));
     return;
   }
   if (request.url !== '/v1/responses') return response.writeHead(404).end();
   let body = '';
   for await (const chunk of request) body += chunk;
-  requests.push({ headers: request.headers, body: JSON.parse(body) });
+  const payload = JSON.parse(body);
+  if (payload.model !== servedModel.id) return response.writeHead(403).end();
+  requests.push({ headers: request.headers, body: payload });
   response.writeHead(200, { 'content-type': 'text/event-stream' });
+  const answer = servedModel === workModel ? workReply : reply;
   const added = { type: 'output_text', text: '', annotations: [] };
-  const done = { ...added, text: reply };
+  const done = { ...added, text: answer };
   const events = [
-    { type: 'response.created', response: { ...completion(outputItem([])), status: 'in_progress' } },
+    { type: 'response.created', response: { ...completion(outputItem([]), servedModel.id), status: 'in_progress' } },
     { type: 'response.output_item.added', output_index: 0, item: outputItem([]) },
     { type: 'response.content_part.added', output_index: 0, content_index: 0, part: added },
-    { type: 'response.output_text.delta', item_id: 'msg_fixture', output_index: 0, content_index: 0, delta: reply },
+    { type: 'response.output_text.delta', item_id: 'msg_fixture', output_index: 0, content_index: 0, delta: answer },
     { type: 'response.content_part.done', item_id: 'msg_fixture', output_index: 0, content_index: 0, part: done },
     { type: 'response.output_item.done', output_index: 0, item: outputItem([done]) },
-    { type: 'response.completed', response: completion(outputItem([done])) },
+    { type: 'response.completed', response: completion(outputItem([done]), servedModel.id) },
   ];
   response.end(events.map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''));
 });
@@ -104,14 +114,46 @@ async function management(page) {
   await page.getByRole('button', { name: 'Model management', exact: true }).click();
   const panel = page.getByRole('main', { name: 'Model management' });
   return {
-    details: panel.getByRole('region', { name: 'Grok connection details' }),
     connection: panel.getByRole('region', { name: 'Grok', exact: true }),
-    group: panel.getByRole('region', { name: 'Available models' }).locator('summary').filter({ hasText: 'Grok' }),
+    groups: panel.getByRole('region', { name: 'Available models' }).locator('summary').filter({ hasText: 'Grok' }),
   };
+}
+
+async function settings(page) {
+  await page.getByRole('button', { name: 'Account menu', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^Settings/ }).click();
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Settings' });
+  await dialog.getByRole('button', { name: 'Grok', exact: true }).click();
+  return dialog.getByRole('region', { name: 'Grok API accounts' });
+}
+
+async function send(page, target) {
+  await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
+  const composer = page.locator('[data-composer-card]');
+  await composer.locator('button[aria-haspopup="menu"]').filter({ hasText: /DeepSeek|Grok|Select model/i }).click();
+  await page.getByRole('menuitem', { name: /^Models(?: |$)/ }).hover();
+  const providers = page.locator('[data-provider-row]');
+  await providers.filter({ hasText: 'Grok' }).first().hover();
+  const named = providers.filter({ hasText: 'Grok · Work' });
+  if (target === workModel) {
+    if (await named.count()) await named.hover();
+    else await page.locator('[data-dsh-model-picker]').getByLabel('Account', { exact: true }).selectOption({ label: 'Work' });
+  }
+  await page.getByText(target.id, { exact: true }).click();
+  await composer.locator('[contenteditable=true]').fill(fixturePrompt);
+  await composer.locator('[contenteditable=true]').press('Enter');
+  await page.getByText(target === workModel ? workReply : reply, { exact: true }).first().waitFor({ timeout: 20_000 });
 }
 
 try {
   await mkdir(home);
+  const credentialsFixture = join(home, '.credentials.yaml');
+  await writeFile(credentialsFixture, `version: 1
+records:
+  dsh-grok/api-key:
+    kind: grant
+    payload: fixture-grok-key
+`, { mode: 0o600 });
   await new Promise((accept, reject) => {
     platform.once('error', reject);
     platform.listen(0, '127.0.0.1', accept);
@@ -131,6 +173,10 @@ globalThis.fetch = (input, options) => {
 `);
   const tarballs = [];
   for (const source of [directory, join(root, 'plugins/ui/model-picker')]) {
+    if (source !== directory && process.env.DSH_TEST_MODEL_PICKER_TARBALL) {
+      tarballs.push(resolve(process.env.DSH_TEST_MODEL_PICKER_TARBALL));
+      continue;
+    }
     const pkg = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
     const artifactDir = (source === directory ? process.env.DSH_TEST_ARTIFACT_DIR : process.env.DSH_TEST_MODEL_PICKER_ARTIFACT_DIR) || temp;
     if (artifactDir === temp) await run('pnpm', ['pack', '--pack-destination', temp], source);
@@ -145,87 +191,91 @@ globalThis.fetch = (input, options) => {
   browser = await chromium.launch(process.env.DSH_TEST_BROWSER_EXECUTABLE
     ? { executablePath: process.env.DSH_TEST_BROWSER_EXECUTABLE } : { channel: 'chrome' });
   const page = await openApp(url);
-  const { connection, details, group } = await management(page);
-  await connection.getByText('Grok is not connected').waitFor();
-  assert.equal(await group.count(), 0);
-
-  const setup = connection.getByRole('button', { name: 'Set up Grok' });
+  const { connection, groups } = await management(page);
+  await connection.getByText('Connected with an xAI API Key').waitFor();
+  await groups.first().waitFor();
   assert.equal(await connection.locator('img').evaluate(image => image.naturalWidth), 96);
   await connection.getByRole('button', { name: 'Grok usage' }).hover();
   await connection.getByRole('tooltip').getByText('View API usage in the xAI Console.').waitFor();
-  await details.waitFor({ state: 'hidden' });
-  await setup.click();
-  const keyInput = details.getByLabel('xAI API Key', { exact: true });
-  await keyInput.fill('invalid');
-  await details.getByRole('button', { name: 'Connect', exact: true }).click();
-  await details.getByRole('alert').filter({ hasText: 'xAI rejected' }).waitFor();
-  assert.equal(await group.count(), 0);
 
-  await keyInput.fill('fixture-grok-key');
-  await details.getByRole('button', { name: 'Connect', exact: true }).click();
-  await connection.getByText('Connected with an xAI API Key').waitFor();
-  await page.keyboard.press('Escape');
-  await group.waitFor();
-  await group.click();
-  await page.getByText(model.id, { exact: true }).waitFor();
-  await connection.getByRole('button', { name: 'View connection' }).click();
+  const api = await settings(page);
+  await api.getByText('Default account', { exact: true }).waitFor();
+  await api.getByRole('button', { name: 'Replace key for Default account' }).click();
+  const keyInput = api.getByLabel('xAI API Key', { exact: true });
   assert.equal(await keyInput.inputValue(), '');
-
   await keyInput.fill('invalid');
-  await details.getByRole('button', { name: 'Replace key', exact: true }).click();
-  await details.getByRole('alert').filter({ hasText: 'xAI rejected' }).waitFor();
-  assert.equal(await group.count(), 1);
-  await page.keyboard.press('Escape');
+  await api.getByRole('button', { name: 'Replace key', exact: true }).click();
+  await api.getByRole('alert').filter({ hasText: 'xAI rejected' }).waitFor();
+  await api.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const addProvider = page.getByRole('button', { name: 'Add provider', exact: true });
+  const hasProviderSetup = (await addProvider.count()) > 0;
+  let setup = api;
+  if (hasProviderSetup) {
+    await page.keyboard.press('Escape');
+    await addProvider.click();
+    await page.getByLabel('Provider', { exact: true }).selectOption('grok');
+    await page.getByLabel('Connection method', { exact: true }).selectOption('api');
+    setup = page.getByRole('region', { name: 'Grok API accounts' });
+  }
+  await setup.getByLabel('Account name', { exact: true }).fill('Work');
+  await setup.getByLabel('xAI API Key', { exact: true }).fill('fixture-grok-work-key');
+  await setup.getByRole('button', { name: 'Connect', exact: true }).click();
+  await setup.getByText('Work', { exact: true }).waitFor();
+  assert.equal(await setup.getByRole('listitem').count(), 2);
+  if (!hasProviderSetup) await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
-  const composer = page.locator('[data-composer-card]');
-  await composer.locator('button[aria-haspopup="menu"]').filter({ hasText: /DeepSeek|Select model/i }).click();
-  await page.getByRole('menuitem', { name: /^Models(?: |$)/ }).hover();
-  await page.locator('[data-provider-row]').filter({ hasText: 'Grok' }).hover();
-  await page.getByText(model.id, { exact: true }).click();
-  await composer.locator('[contenteditable=true]').fill('Say hello from the Grok stream.');
-  await composer.locator('[contenteditable=true]').press('Enter');
-  await page.getByText(reply, { exact: true }).first().waitFor({ timeout: 20_000 });
-  const inference = requests[0];
-  assert.equal(inference.body.model, model.id);
-  assert.equal(inference.body.stream, true);
-  assert.equal(inference.body.reasoning?.effort, 'high');
-  assert.equal(inference.headers.authorization, 'Bearer fixture-grok-key');
-  for (const [key, value] of Object.entries(attributionHeaders({ ...APP_IDENTITY, suffix: 'dsh-profile/web' }))) {
-    assert.equal(inference.headers[key], value);
+  await send(page, model);
+  const other = await openApp(url);
+  await send(other, workModel);
+  await other.close();
+  for (const [index, expected] of [model, workModel].entries()) {
+    const inference = requests.find(request => request.body.model === expected.id && request.body.input.some(
+      item => item.role === 'user' && item.content?.some?.(block => block.text === fixturePrompt),
+    ));
+    assert.ok(inference, expected.id);
+    assert.equal(inference.body.model, expected.id);
+    assert.equal(inference.body.stream, true);
+    assert.equal(inference.body.reasoning?.effort, 'high');
+    assert.equal(inference.headers.authorization, index === 0 ? 'Bearer fixture-grok-key' : 'Bearer fixture-grok-work-key');
+    for (const [key, value] of Object.entries(attributionHeaders({ ...APP_IDENTITY, suffix: 'dsh-profile/web' }))) {
+      assert.equal(inference.headers[key], value);
+    }
   }
 
-  await page.getByRole('button', { name: 'Account menu', exact: true }).click();
-  await page.getByRole('menuitem', { name: /^Settings/ }).click();
-  const settings = page.getByRole('dialog').filter({ hasText: 'Settings' });
-  await settings.getByRole('button', { name: 'Grok', exact: true }).click();
-  await settings.getByLabel('xAI API Key', { exact: true }).waitFor();
-  await settings.getByRole('button', { name: 'Replace key' }).waitFor();
+  const savedDocument = await readFile(credentialsFixture, 'utf8');
+  const namedRecord = savedDocument.match(/dsh-grok\/account-[a-f0-9-]+/)?.[0];
+  assert.ok(namedRecord);
+  assert.ok(savedDocument.includes('dsh-grok/api-key'));
   await page.close();
   await stopHost();
   const restartUrl = await launch(preload);
   const restarted = await openApp(restartUrl);
   const saved = await management(restarted);
-  await saved.connection.getByText('Connected with an xAI API Key').waitFor();
-  await saved.group.waitFor();
-  await saved.connection.getByText('1 model', { exact: true }).waitFor();
-  await saved.connection.getByRole('button', { name: 'View connection' }).click();
-  await saved.details.getByRole('button', { name: 'Disconnect', exact: true }).click();
-  await saved.connection.getByText('Grok is not connected').waitFor();
-  await saved.group.waitFor({ state: 'hidden' });
-  assert.ok(!(await readFile(join(home, '.credentials.yaml'), 'utf8')).includes('fixture-grok-key'));
+  await saved.groups.first().waitFor();
+  const savedApi = await settings(restarted);
+  await savedApi.getByText('Default account', { exact: true }).waitFor();
+  await savedApi.getByText('Work', { exact: true }).waitFor();
+  await savedApi.getByRole('button', { name: 'Disconnect Work', exact: true }).click();
+  await savedApi.getByText('Work', { exact: true }).waitFor({ state: 'hidden' });
+  const afterWork = await readFile(credentialsFixture, 'utf8');
+  assert.ok(!afterWork.includes(namedRecord));
+  assert.ok(afterWork.includes('dsh-grok/api-key'));
+  await savedApi.getByRole('button', { name: 'Disconnect Default account', exact: true }).click();
+  await savedApi.getByText('Default account', { exact: true }).waitFor({ state: 'hidden' });
+  await restarted.keyboard.press('Escape');
+  await saved.groups.first().waitFor({ state: 'hidden' });
+  if (hasProviderSetup) await saved.connection.waitFor({ state: 'hidden' });
+  const removed = await readFile(credentialsFixture, 'utf8');
+  assert.ok(!removed.includes('fixture-grok-key') && !removed.includes('fixture-grok-work-key'));
+
   const chinese = await openApp(restartUrl, 'zh-CN');
-  await chinese.getByRole('button', { name: '模型管理', exact: true }).click();
+  await chinese.getByRole('button', { name: '账号菜单', exact: true }).click();
+  await chinese.getByRole('menuitem', { name: /^设置/ }).click();
+  const dialog = chinese.getByRole('dialog').filter({ hasText: '设置' });
+  await dialog.getByRole('button', { name: 'Grok', exact: true }).click();
   await chinese.setViewportSize({ width: 560, height: 900 });
-  const grok = chinese.getByRole('region', { name: 'Grok', exact: true });
-  const codex = chinese.getByRole('region', { name: 'Codex', exact: true });
-  await grok.getByText('Grok 尚未连接').waitFor();
-  const [first, second] = await Promise.all([codex.boundingBox(), grok.boundingBox()]);
-  assert.equal(first.x, second.x);
-  assert.ok(second.y >= first.y + first.height);
-  await grok.getByRole('button', { name: '设置 Grok' }).click();
-  await chinese.getByRole('region', { name: 'Grok 连接详情' }).getByRole('button', { name: '连接', exact: true }).waitFor();
-  console.log('PASS isolated Web Grok connection, key validation, catalog, Responses streaming, restart and disconnect.');
+  await dialog.getByRole('region', { name: 'Grok API 账号' }).getByLabel('账号名称', { exact: true }).waitFor();
+  console.log('PASS isolated Web Grok legacy credential, separate API accounts, model and streaming isolation, restart and disconnect.');
 } catch (error) {
   if (current?.log) console.error(publicLog(current.log));
   throw error;

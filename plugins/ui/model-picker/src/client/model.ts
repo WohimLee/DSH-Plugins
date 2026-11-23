@@ -11,11 +11,13 @@ export interface ProviderGroup {
 export function groupProviders(routes: readonly Route[]): ProviderGroup[] {
   const groups = new Map<string, ProviderGroup>();
   for (const route of routes) {
-    const { id, name } = route.id === 'deepseek-account' || route.id === 'deepseek-official'
+    const { id, name } = route.id === 'deepseek-account' || route.id === 'deepseek-official' || route.id.startsWith('deepseek-api-account-')
       ? { id: 'deepseek', name: 'DeepSeek' }
       : route.id === 'qoder' || route.id.startsWith('qoder-account-')
         ? { id: 'qoder', name: 'Qoder' }
-        : route;
+        : route.id.startsWith('codex-account-') || route.id.startsWith('codex-api-account-') ? { id: 'codex', name: 'Codex' }
+          : route.id.startsWith('grok-account-') ? { id: 'grok', name: 'Grok' }
+            : route;
     const group = groups.get(id) ?? { id, name, routes: [] };
     group.routes.push(route);
     groups.set(id, group);
@@ -33,5 +35,6 @@ export function routeName(route: Route, t: PropsLocale<'modelPicker'>['t']): str
   if (route.id === 'deepseek-account') return t('deepseekAccount');
   if (route.id === 'deepseek-official') return t('deepseekKey');
   if (route.id === 'qoder') return t('defaultAccount');
-  return route.name.replace(/^Qoder · /, '');
+  if (route.id === 'codex' || route.id === 'grok') return t('defaultAccount');
+  return route.name.replace(/^(?:Qoder|Codex|Grok|DeepSeek) · /, '');
 }

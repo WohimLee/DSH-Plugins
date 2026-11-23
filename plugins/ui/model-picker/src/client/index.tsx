@@ -26,6 +26,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     footer?: string;
     action: string;
     details: ReactNode;
+    connection?: {
+      connected: boolean;
+      accountCount?: number;
+      busy?: boolean;
+      desktop?: ReactNode;
+      api?: ReactNode;
+      setup?: { desktop?: ReactNode; api?: ReactNode };
+    };
   }
   interface ModelPickerConnectionsOwner {
     renderCard?: (card: ModelPickerConnectionCard) => ReactNode;

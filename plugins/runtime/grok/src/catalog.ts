@@ -140,12 +140,12 @@ export async function readCatalog(key: string, lifetime: AbortSignal, transport 
   return [...unique.values()];
 }
 
-export function grokProvider(models: readonly Model<'openai-responses'>[]): ReturnType<typeof xaiProvider> {
+export function grokProvider(models: readonly Model<'openai-responses'>[], provider = route): ReturnType<typeof xaiProvider> {
   return {
     ...vendor,
-    id: route,
+    id: provider,
     name: 'Grok',
-    getModels: () => models,
+    getModels: () => provider === route ? models : models.map(model => ({ ...model, provider })),
     // Use xAI's Responses compatibility. Auth comes exclusively from the validated DSH connection.
     auth: {
       apiKey: {

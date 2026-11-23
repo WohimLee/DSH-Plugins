@@ -11,6 +11,11 @@ import type { AccountChange, AccountView, LoginAction, LoginView } from '../remo
 
 const messages = {
   en: {
+    desktopApp: 'Desktop app', installed: 'Installed', signedIn: 'Signed in',
+    signIn: 'Sign-in', signedOut: 'Signed out', checkUnavailable: 'Check unavailable',
+    addDesktop: 'Add desktop account', configDir: 'Qoder config directory', linkDesktop: 'Link desktop account',
+    desktopPathHint: 'Sign in with the desired Qoder account in a separate config directory, then enter its absolute path.',
+    desktopAddFailed: 'Could not link this profile. Check its path and sign-in, and use a different Qoder account.',
     title: 'Qoder accounts', intro: 'Use your Qoder CLI sign-in, or bind an account with a personal access token (PAT).',
     setup: 'Set up Qoder', manage: 'Manage accounts', setupRequired: 'Setup required', cliMissingShort: 'Qoder CLI is missing.',
     connectedAccountsOne: '{count} connected account', connectedAccounts: '{count} connected accounts',
@@ -27,6 +32,11 @@ const messages = {
     cannotBind: 'Account settings are unavailable in this session.', add: 'Add account', remark: 'Remark', optionalRemark: 'Remark (optional)', saveRemark: 'Save remark',
   },
   zh: {
+    desktopApp: '桌面应用', installed: '已安装', signedIn: '已登录',
+    signIn: '登录', signedOut: '未登录', checkUnavailable: '暂时无法检测',
+    addDesktop: '添加桌面账号', configDir: 'Qoder 配置目录', linkDesktop: '绑定桌面账号',
+    desktopPathHint: '先用独立配置目录登录所需的 Qoder 账号，然后填写该目录的绝对路径。',
+    desktopAddFailed: '未能绑定。请检查目录和登录状态，并使用未绑定的 Qoder 账号。',
     title: 'Qoder 账号', intro: '使用本机 Qoder CLI 登录，或使用个人访问令牌（PAT）绑定账号。',
     setup: '设置 Qoder', manage: '管理账号', setupRequired: '需要设置', cliMissingShort: '未找到 Qoder CLI。',
     connectedAccountsOne: '{count} 个已连接账号', connectedAccounts: '{count} 个已连接账号',
@@ -150,11 +160,13 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
     </div>}
     {busy && <p role="status">{t('loading')}</p>}
     {error && <p role="alert">{t('cannotBind')}</p>}
-    {accounts.some(account => account.browserLogin && account.state !== 'cliMissing' && account.state !== 'connected') &&
+    {accounts.some(account => account.provider === 'qoder' && account.browserLogin && account.state !== 'cliMissing' && account.state !== 'connected') &&
       <LoginGuide ctx={ctx} t={t} reload={reload} />}
     {accounts.some(account => account.state === 'cliMissing') && <a href="https://docs.qoder.com/cli/installation"
       target="_blank" rel="noreferrer">Qoder CLI ↗</a>}
     {!error && <AddAccount {...{ busy, t, update }} />}
+    {!error && accounts.some(account => account.provider === 'qoder' && account.state !== 'cliMissing') &&
+      <AddDesktopAccount {...{ busy, t, update }} />}
     {accounts.map(account => <AccountCard key={account.provider} {...{ account, busy, t, update }} />)}
   </section>;
 
@@ -165,12 +177,42 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
   const problem = accounts.find(account => !['connected', 'unbound'].includes(account.state));
   const description = error || connected ? undefined : problem?.state === 'cliMissing' ? t('cliMissingShort')
     : problem ? accountStatus(problem, t) : status === 'setupRequired' ? t('unbound') : undefined;
-  return renderCard({
+  const defaultAccount = accounts.find(account => account.provider === 'qoder');
+  const local = defaultAccount?.browserLogin ? defaultAccount : undefined;
+  const desktopAccounts = accounts.filter(account => account.browserLogin && account.provider !== 'qoder');
+  const apiAccounts = accounts.filter(account => !account.browserLogin);
+  const localAvailable = !!defaultAccount && defaultAccount.state !== 'cliMissing';
+  const desktop = (configure = false) => <div className="dsh-connection-method-content">
+    <dl className="dsh-desktop-detection">
+      <div><dt>{t('desktopApp')}</dt><dd className="dsh-connection-status" data-tone={localAvailable ? 'ready' : 'warning'}>
+        {t(localAvailable ? 'installed' : defaultAccount ? 'cliMissing' : 'checkUnavailable')}
+      </dd></div>
+      <div><dt>{t('signIn')}</dt><dd className="dsh-connection-status" data-tone={local?.state === 'connected' ? 'ready' : 'neutral'}>
+        {t(local?.state === 'connected' || local?.state === 'noModels' ? 'signedIn'
+          : local?.state === 'authFailed' ? 'signedOut' : 'checkUnavailable')}
+      </dd></div>
+    </dl>
+    {local?.state === 'connected' && <AccountCard account={local} {...{ busy, t, update }} />}
+    {local && localAvailable && local.state !== 'connected' && <LoginGuide {...{ ctx, t, reload }} />}
+    {defaultAccount?.state === 'cliMissing' && <a href="https://docs.qoder.com/cli/installation"
+      target="_blank" rel="noreferrer">Qoder CLI ↗</a>}
+    {desktopAccounts.map(account => <AccountCard key={account.provider} {...{ account, busy, t, update }} />)}
+    {!error && localAvailable && configure && <AddDesktopAccount {...{ busy, t, update, configure }} />}
+  </div>;
+  const api = (configure = false) => <div className="dsh-connection-method-content">
+    {error && <p role="alert">{t('cannotBind')}</p>}
+    {!error && configure && <AddAccount {...{ busy, t, update, configure }} />}
+    {apiAccounts.map(account => <AccountCard key={account.provider} {...{ account, busy, t, update }} />)}
+  </div>;
+  const card = {
     id: 'qoder', name: 'Qoder', status: t(status), tone: status === 'loading' ? 'neutral' : connected && !error ? 'ready' : 'warning',
     description, footer: connected && !error
       ? t(connectedCount === 1 ? 'connectedAccountsOne' : 'connectedAccounts', { count: connectedCount }) : undefined,
     action: connected ? t('manage') : t('setup'), details,
-  });
+    connection: { connected, busy: saving, accountCount: connectedCount, desktop: desktop(), api: api(),
+      setup: { desktop: !error && localAvailable ? desktop(true) : undefined, api: !error ? api(true) : undefined } },
+  } as const;
+  return renderCard(card);
 }
 
 function LoginGuide({ ctx, t, reload }: {
@@ -207,7 +249,8 @@ function LoginGuide({ ctx, t, reload }: {
   return <div>
     {view.state !== 'idle' && <p role="status">{t(view.state === 'failed' ? 'loginFailed' : view.state)}</p>}
     {view.state === 'waiting' && view.url && <p><a href={view.url} target="_blank" rel="noreferrer">{t('openLogin')} ↗</a></p>}
-    <button type="button" disabled={busy} onClick={() => { void request(active ? 'cancel' : 'start'); }}>
+    <button type="button" disabled={busy} data-provider-login={active ? undefined : ''}
+      onClick={() => { void request(active ? 'cancel' : 'start'); }}>
       {t(active ? 'cancel' : 'login')}
     </button>
   </div>;
@@ -219,15 +262,42 @@ type AccountActions = {
   t: Translate;
 };
 
-function AddAccount({ busy, update, t }: AccountActions) {
+function AddDesktopAccount({ busy, update, t, configure = false }: AccountActions & { configure?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [configDir, setConfigDir] = useState('');
+  const [remark, setRemark] = useState('');
+  const [failed, setFailed] = useState(false);
+  return <div>
+    {!configure && <button type="button" aria-expanded={open} disabled={busy} onClick={() => setOpen(!open)}>{t('addDesktop')}</button>}
+    {(open || configure) && <form className="dsh-connection-form" aria-label={t('addDesktop')} style={{ display: 'grid', gap: 8, marginTop: 8 }}
+      onSubmit={async event => {
+        event.preventDefault();
+        if (!configDir.trim() || busy) return;
+        const saved = await update({ kind: 'addDesktop', configDir: configDir.trim(), remark: remark.trim() });
+        setFailed(!saved);
+        if (saved) { setOpen(false); setConfigDir(''); setRemark(''); }
+      }}>
+      <p>{t('desktopPathHint')}</p>
+      <code>qodercli --config-dir /path/to/profile login</code>
+      <label>{t('configDir')} <input value={configDir} disabled={busy} maxLength={4096} autoComplete="off"
+        onChange={event => setConfigDir(event.currentTarget.value)} /></label>
+      <label>{t('optionalRemark')} <input value={remark} disabled={busy} maxLength={80}
+        onChange={event => setRemark(event.currentTarget.value)} /></label>
+      <div><button type="submit" data-emphasis="true" disabled={busy || !configDir.trim()}>{t('linkDesktop')}</button></div>
+      {failed && <p role="alert">{t('desktopAddFailed')}</p>}
+    </form>}
+  </div>;
+}
+
+function AddAccount({ busy, update, t, configure = false }: AccountActions & { configure?: boolean }) {
   const [open, setOpen] = useState(false);
   const [token, setToken] = useState('');
   const [remark, setRemark] = useState('');
   const [failed, setFailed] = useState(false);
 
   return <div>
-    <button type="button" aria-expanded={open} disabled={busy} onClick={() => setOpen(!open)}>{t('add')}</button>
-    {open && <form aria-label={t('add')} style={{ display: 'grid', gap: 8, marginTop: 8 }}
+    {!configure && <button type="button" aria-expanded={open} disabled={busy} onClick={() => setOpen(!open)}>{t('add')}</button>}
+    {(open || configure) && <form className="dsh-connection-form" aria-label={t('add')} style={{ display: 'grid', gap: 8, marginTop: 8 }}
       onSubmit={async event => {
         event.preventDefault();
         if (!token.trim() || busy) return;
@@ -244,7 +314,7 @@ function AddAccount({ busy, update, t }: AccountActions) {
         disabled={busy} onChange={event => setToken(event.currentTarget.value)} /></label>
       <label>{t('optionalRemark')} <input value={remark} disabled={busy} maxLength={80}
         onChange={event => setRemark(event.currentTarget.value)} /></label>
-      <div><button type="submit" disabled={busy || !token.trim()}>{t('save')}</button></div>
+      <div><button type="submit" data-emphasis="true" disabled={busy || !token.trim()}>{t('save')}</button></div>
       {failed && <p role="alert">{t('failed')}</p>}
     </form>}
   </div>;
@@ -257,6 +327,11 @@ function AccountCard({ account, busy, update, t }: AccountActions & { account: A
   const [failed, setFailed] = useState(false);
 
   useEffect(() => { setRemark(account.remark ?? ''); }, [account.remark]);
+  const remove = <button type="button" disabled={busy} onClick={async () => {
+    const removed = await update({ kind: 'unbind', provider });
+    setFailed(!removed);
+    if (removed) setToken('');
+  }}>{t('remove')}</button>;
 
   return <fieldset style={{ border: '1px solid var(--dsw-alias-border-l1, GrayText)', borderRadius: 8, padding: 12 }}>
     <legend>{name}</legend>
@@ -273,7 +348,7 @@ function AccountCard({ account, busy, update, t }: AccountActions & { account: A
           onChange={event => setRemark(event.currentTarget.value)} /></label>
         <button type="submit" disabled={busy || remark.trim() === account.remark}>{t('saveRemark')}</button>
       </form>
-      <form style={{ marginTop: 8 }} onSubmit={async event => {
+      {account.browserLogin ? remove : <form style={{ marginTop: 8 }} onSubmit={async event => {
         event.preventDefault();
         if (!token.trim() || busy) return;
         const saved = await update({ kind: 'replace', provider, token: token.trim() });
@@ -284,13 +359,9 @@ function AccountCard({ account, busy, update, t }: AccountActions & { account: A
           disabled={busy} onChange={event => setToken(event.currentTarget.value)} /></label>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button type="submit" disabled={busy || !token.trim()}>{t(state === 'unbound' ? 'save' : 'replace')}</button>
-          {state !== 'unbound' && <button type="button" disabled={busy} onClick={async () => {
-            const removed = await update({ kind: 'unbind', provider });
-            setFailed(!removed);
-            if (removed) setToken('');
-          }}>{t('remove')}</button>}
+          {state !== 'unbound' && remove}
         </div>
-      </form>
+      </form>}
       {failed && <p role="alert">{t('failed')}</p>}
     </>}
   </fieldset>;

@@ -25,7 +25,8 @@ export function createReadUsage(ctx: Context): ReadUsage {
       if (!result.ok || result.value?.status !== 'ready') return null;
       return { wallets: result.value.value, bonus: result.value.bonusWallets };
     }
-    if (provider !== 'codex' && provider !== 'qoder' && !provider.startsWith('qoder-account-')) return null;
+    if (provider !== 'codex' && provider !== 'qoder'
+      && !provider.startsWith('codex-account-') && !provider.startsWith('qoder-account-')) return null;
     const result = await ctx.remote.dshModelPickerUsage.read(provider, signal);
     return result.ok ? result.value : null;
   };
