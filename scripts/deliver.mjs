@@ -6,6 +6,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, matchesGlob, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import semver from 'semver';
 import { parse } from 'yaml';
@@ -18,14 +19,14 @@ const profileDir = join(desktopHome, 'profiles', 'desktop');
 const readJson = path => JSON.parse(readFileSync(path, 'utf8'));
 const digest = data => createHash('sha256').update(data).digest('hex');
 
-function run(program, args, { cwd = ROOT, env = process.env, stream = false, binary = false, log } = {}) {
+function run(program, args, { cwd = ROOT, env = process.env, binary = false, log } = {}) {
   const fd = log ? openSync(log, 'a', 0o600) : undefined;
   let result;
   try {
     if (fd !== undefined) writeFileSync(fd, `\n$ ${[program, ...args].join(' ')}\n`);
     result = spawnSync(program, args, {
       cwd, env,
-      stdio: log ? ['ignore', fd, fd] : stream ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+      stdio: log ? ['ignore', fd, fd] : ['ignore', 'pipe', 'pipe'],
       encoding: binary ? undefined : 'utf8', maxBuffer: 64 * 1024 * 1024,
     });
   } finally {
@@ -357,11 +358,46 @@ async function install(receipt) {
   process.exitCode = 2;
 }
 
+async function verifyCi(receipt) {
+  if (receipt.workflows.length === 0) return [];
+  const repo = receipt.remote.match(/^(?:git@github\.com:|https:\/\/github\.com\/)([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1];
+  if (!repo) throw new Error('Cannot identify the GitHub repository from origin.');
+  const endpoint = `repos/${repo}/actions/runs?branch=main&event=push&head_sha=${receipt.integrated}&per_page=100`;
+  const deadline = Date.now() + 10 * 60_000;
+  while (true) {
+    let body;
+    try {
+      body = run('curl', ['--fail', '--silent', '--show-error', '--max-time', '20', `https://api.github.com/${endpoint}`]);
+    } catch (error) {
+      if (!/returned error: (401|403|404)/.test(error.message)) throw error;
+      body = run('gh', ['api', endpoint]);
+    }
+    const { workflow_runs: runs } = JSON.parse(body);
+    const waiting = [];
+    const passed = [];
+    for (const name of receipt.workflows) {
+      const result = runs.find(run => run.name === name && run.head_sha === receipt.integrated);
+      if (!result || result.status !== 'completed') {
+        waiting.push(name);
+      } else if (result.conclusion !== 'success') {
+        throw new Error(`${name}: ${result.conclusion} (${result.html_url})`);
+      } else {
+        passed.push({ name, commit: result.head_sha, conclusion: result.conclusion, url: result.html_url });
+      }
+    }
+    if (waiting.length === 0) return passed;
+    save(receipt, { reason: `等待 GitHub Actions: ${waiting.join(', ')}`, ci: passed });
+    if (Date.now() >= deadline) throw new Error(`GitHub Actions are still pending: ${waiting.join(', ')}. Retry finish to resume verification.`);
+    await delay(15_000);
+  }
+}
+
 async function finish(receipt, evidencePath) {
   stage(receipt, '核对远端');
   await verifyFresh(receipt);
-  const evidence = readJson(resolve(evidencePath));
   if (pluginsPending(receipt)) {
+    if (!evidencePath && !receipt.desktop) throw new Error('Provide the observed Desktop acceptance evidence.');
+    const evidence = evidencePath ? readJson(resolve(evidencePath)) : { desktop: receipt.desktop };
     stage(receipt, '核对安装');
     if (lockOwner() !== receipt.file) throw new Error('Run desktop before recording acceptance.');
     const { running, version } = desktopApp();
@@ -386,20 +422,17 @@ async function finish(receipt, evidencePath) {
     save(receipt, { desktop: evidence.desktop });
   }
   stage(receipt, '核对 CI');
-  if (!Array.isArray(evidence.ci) || !receipt.workflows.every(name => evidence.ci.some(run =>
-    run.name === name && run.commit === receipt.integrated && run.conclusion === 'success' &&
-    typeof run.url === 'string' && /^https:\/\/github\.com\/.+\/actions\/runs\/\d+(?:\?.*)?$/.test(run.url)
-  ))) {
-    throw new Error(`Record successful workflows for ${receipt.integrated}: ${receipt.workflows.join(', ')}.`);
-  }
-  save(receipt, { ci: evidence.ci });
+  const ci = await verifyCi(receipt);
+  await verifyFresh(receipt);
+  for (const pkg of receipt.packages) assertInstalled(pkg);
+  save(receipt, { ci });
   stage(receipt, '已交付');
   release(receipt);
 }
 
 const usage = `pnpm deliver start <已确认的任务基线提交>
 pnpm deliver desktop <凭证路径>
-pnpm deliver finish <凭证路径> <验收证据 JSON>
+pnpm deliver finish <凭证路径> [桌面验收证据 JSON]
 pnpm deliver block <凭证路径> <阻塞原因>
 pnpm deliver status <凭证路径>`;
 
@@ -409,7 +442,8 @@ async function main([command, arg, extra, ...rest]) {
     return;
   }
   const valid = ['start', 'desktop', 'finish', 'block', 'status'].includes(command);
-  if (!valid || !arg || rest.length || (['finish', 'block'].includes(command) ? !extra?.trim() : extra !== undefined)) {
+  if (!valid || !arg || rest.length || (command === 'block' && !extra?.trim()) ||
+      (!['finish', 'block'].includes(command) && extra !== undefined)) {
     throw new Error(usage);
   }
   if (command === 'status') {
