@@ -1,4 +1,4 @@
-export type Icon = 'folderAdd' | 'projectAdd' | 'project' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close';
+export type Icon = 'folderAdd' | 'projectAdd' | 'project' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close' | 'search';
 export function Glyph({ icon }: { icon: Icon }) {
   const paths: Record<Icon, string> = {
     edit: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM10 2h4l1 3 3 1 3 1-1 4 1 3-2 3-3 1-2 4h-4l-1-3-3-1-3-1 1-4-1-3 2-3 3-1 2-4Z',
@@ -6,6 +6,7 @@ export function Glyph({ icon }: { icon: Icon }) {
     unarchive: 'M3 11v9h18v-9M12 15V3m-5 5 5-5 5 5',
     archive: 'M3 4h18v5H3zM5 9v11h14V9M9 13h6',
     close: 'm5 5 14 14M19 5 5 19',
+    search: 'M15.5 15.5 21 21m-3-10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z',
     folderAdd: 'M2 6h7l2 2h11v11H2V6Zm10 5v5m-2.5-2.5h5',
     projectAdd: 'M3.5 8a2 2 0 0 1 2-2H9l2 2h7.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z M12 10.75v5.5m-2.75-2.75h5.5',
     project: 'M2 6h7l2 2h11v11H2V6Z',

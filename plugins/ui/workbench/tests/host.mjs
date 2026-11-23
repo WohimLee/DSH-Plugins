@@ -32,8 +32,9 @@ function run(command, args, cwd = temp) {
 }
 const command = args => run(process.execPath, [cli, ...args]);
 const recordMessage = (id, text) => writeFile(join(temp, 'activity'), JSON.stringify({ id, text }));
-async function startHost(port = '0') {
-  const child = spawn(process.execPath, [cli, 'web', '--port', port, '--no-open'], { cwd: temp, env, stdio: ['ignore', 'pipe', 'pipe'] });
+async function startHost(port = '0', patch) {
+  const child = spawn(process.execPath, [cli, 'web', ...(patch ? ['--patch', patch] : []), '--port', port, '--no-open'],
+    { cwd: temp, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '', exited = false;
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { log = (log + data).slice(-50000); });
   const closed = new Promise(accept => { child.on('close', () => { exited = true; accept(); }); });
@@ -82,7 +83,9 @@ try {
   await command(['plugin', '--profile', 'web', 'add', join(temp, 'dsh-workbench-probe-0.0.0.tgz'), artifact]);
   const config = await command(['--profile', 'web', '--dump-config']);
   assert.ok(config.includes('dsh-workbench:main'));
-  host = await startHost();
+  const searchPatch = join(temp, 'search.patch.yml');
+  await writeFile(searchPatch, "- id: session-query-sqlite\n  config:\n    path: ':memory:'\n    openAt: first-search\n");
+  host = await startHost('0', searchPatch);
   browser = await chromium.launch({ headless: true,
     ...(process.env.DSH_TEST_BROWSER_EXECUTABLE ? { executablePath: process.env.DSH_TEST_BROWSER_EXECUTABLE } : { channel: 'chrome' }),
   });
@@ -141,8 +144,14 @@ try {
   const project = tree.locator('[data-wb-kind="project"]').filter({ has: page.getByRole('button', { name: 'workspace', exact: true }) });
   const child = tree.locator('[data-wb-kind="project"]').filter({ has: page.getByRole('button', { name: 'child-project', exact: true }) });
   const header = page.locator('[data-window-drag]').filter({ has: page.locator('[data-workbench-brand]') });
+  const sidebarAction = page.locator('.wb-section-session');
+  const newSection = sidebarAction.getByRole('button', { name: 'New Section', exact: true });
+  const searchSessions = header.getByRole('button', { name: 'Search sessions', exact: true });
   await header.getByRole('button', { name: 'View activity' }).waitFor();
-  await header.getByRole('button', { name: 'New section', exact: true }).waitFor();
+  await searchSessions.waitFor();
+  await newSection.waitFor();
+  assert.equal(await header.getByRole('button', { name: 'New Section', exact: true }).count(), 0);
+  assert.equal(await sidebarAction.getByRole('button', { name: 'New session', exact: true }).count(), 0);
   await page.mouse.move(1200, 400);
   const titleBounds = row => row.locator('.wb-tree-label > span').first().boundingBox();
   const projectTitleBounds = await titleBounds(project);
@@ -288,12 +297,37 @@ try {
   await recordMessage('workbench-test-extra-9', 'Synthetic activity event');
   await ownRows(projectChildren).first().filter({ hasText: 'Workbench extra-9' }).waitFor();
   console.log('PASS real host user-message event advances the chat without inference.');
-  assert.equal(await tree.getByRole('button', { name: 'New section', exact: true }).count(), 0);
-  await page.locator('.wb-section-action').getByRole('button', { name: 'New section', exact: true }).click();
+  const searchDialog = page.getByRole('dialog', { name: 'Search sessions', exact: true });
+  const query = searchDialog.getByRole('searchbox', { name: 'Search sessions' });
+  await searchSessions.click();
+  await query.waitFor();
+  assert.equal(await query.evaluate(input => input === document.activeElement), true);
+  await query.fill('Review the edited files');
+  await searchDialog.getByRole('button', { name: /Workbench alpha/ }).waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'session-search.png') });
+  await query.fill('No session matches 9d64c3');
+  await searchDialog.getByText('No matching sessions.', { exact: true }).waitFor();
+  await query.press('Escape');
+  await searchDialog.waitFor({ state: 'detached' });
+  assert.equal(await searchSessions.evaluate(button => button === document.activeElement), true);
+  await searchSessions.click();
+  await query.waitFor();
+  await page.mouse.click(1200, 400);
+  await searchDialog.waitFor({ state: 'detached' });
+  await searchSessions.click();
+  await query.fill('workbench beta');
+  await searchDialog.getByRole('button', { name: /Workbench beta/ }).waitFor();
+  await query.press('Enter');
+  await searchDialog.waitFor({ state: 'detached' });
+  await beta.locator('[aria-current="true"]').waitFor();
+  await alpha.getByRole('button', { name: 'Workbench alpha', exact: true }).click();
+  console.log('PASS sidebar search opens content and title matches, handles no match, and restores focus on dismissal.');
+  assert.equal(await tree.getByRole('button', { name: 'New Section', exact: true }).count(), 0);
+  await newSection.click();
   await tree.getByRole('textbox', { name: 'Section name' }).waitFor();
   await page.locator('[data-workbench-rail]').getByRole('button', { name: 'Conversation', exact: true }).click();
   await tree.locator('[data-workbench-draft]').waitFor({ state: 'detached' });
-  await page.locator('.wb-section-action').getByRole('button', { name: 'New section', exact: true }).click();
+  await newSection.click();
   await page.getByRole('textbox', { name: 'Section name' }).fill('Engineering');
   await page.getByRole('textbox', { name: 'Section name' }).press('Enter');
   const engineering = tree.locator('.wb-tree-section').filter({ has: page.getByRole('button', { name: 'Engineering', exact: true }) });
@@ -796,8 +830,8 @@ try {
   await projectEditor.getByRole('button', { name: 'Cancel', exact: true }).click();
   console.log('PASS modal project creation, clean dismissal from all four controls, nested picker, and multiple source folders.');
 
-  const topNewSession = page.locator('.wb-section-session').getByRole('button', { name: 'New session', exact: true });
-  const topDraft = await openDraft(topNewSession, childDraft);
+  await child.hover();
+  const topDraft = await openDraft(childNewSession, childDraft);
   await renamedChat.click();
   await recentsLabel.click();
   assert.equal(await recentsLabel.getAttribute('aria-expanded'), 'false');
@@ -812,6 +846,13 @@ try {
   await tree.waitFor();
   await dismissSignIn();
   await recentsProject.waitFor();
+  await searchSessions.click();
+  await query.fill('Renamed child session');
+  await searchDialog.getByRole('button', { name: /Renamed child session/ }).waitFor();
+  await query.fill('No session matches 9d64c3');
+  await searchDialog.getByText('No matching sessions.', { exact: true }).waitFor();
+  await query.press('Escape');
+  await searchDialog.waitFor({ state: 'detached' });
   assert.equal(await tree.locator(`[data-row-key="session:${topDraft}"]`).count(), 0);
   await renamedChat.click({ button: 'right' });
   await rowMenu.getByRole('menuitem', { name: 'Edit', exact: true }).click();

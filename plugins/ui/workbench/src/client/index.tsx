@@ -75,6 +75,8 @@ function assemble(ctx: Context): void {
     name: 'sidebar.session.action', id: 'dsh-workbench:new-section', locale: 'workbench',
     inject: () => ({
       newSection: () => { activity.set(false); drafts.begin({ kind: 'section' }); },
+      search: (...args: Parameters<typeof ctx.sessions.search>) => ctx.sessions.search(...args),
+      openSession: ctx.uiWorkspace.openSession.bind(ctx.uiWorkspace),
       toggleActivity: () => activity.set(!activity.getSnapshot()),
       hooks: { sources, nativeView: view.native, activity, tree },
     }),

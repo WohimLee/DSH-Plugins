@@ -11,15 +11,11 @@ ${conversationStyles}
 .wb-control:disabled { opacity: .45; cursor: default; }
 .wb-control:focus-visible { outline: 2px solid var(--dsw-alias-accent-primary, #4c95f6); }
 .wb-section-session { display: flex; inline-size: 100%; min-inline-size: 0; }
-/* Style the native session trigger and preserve its shortcut hint and event handling. */
-html[data-dsh-workbench] .wb-section-session button:has(> span > span > svg) {
-  width: 100%; height: 32px; justify-content: flex-start; padding: 4px 6px; border: 0;
-  background: transparent; font-weight: 400;
+.wb-section-session .wb-new-section {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 6px;
+  text-align: start; border: 0; background: transparent;
 }
-html[data-dsh-workbench] .wb-section-session button > span > span:has(> svg) { justify-content: flex-start; gap: 8px; }
-html[data-dsh-workbench] .wb-section-session button:has(> span > span > svg):hover {
-  background: var(--dsw-alias-background-hover, #8882);
-}
+.wb-section-session .wb-new-section:hover { background: var(--dsw-alias-background-hover, #8882); }
 .wb-section-action { display: flex; align-items: center; gap: 2px; flex: none; }
 .wb-section-trigger { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; background: transparent; color: var(--dsw-alias-label-secondary, #999); }
 html[data-dsh-workbench] [data-window-drag]:has([data-workbench-brand]) { height: 48px; gap: 4px; }
@@ -28,6 +24,30 @@ html[data-dsh-workbench] [data-slot="sidebar.brand.name"] [data-workbench-brand]
   border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 7px; color: inherit;
   background: var(--dsw-alias-background-hover, #8882); padding: 7px 9px; font: inherit; min-inline-size: 0;
 }
+.wb-session-search {
+  inset-block: min(15vh, 120px) auto; box-sizing: border-box; width: min(500px, calc(100vw - 32px));
+  max-height: 70vh; max-height: 70dvh; overflow: auto; padding: 0;
+  color: var(--dsw-alias-label-primary, #eee); background: var(--dsw-specific-sidebar-fill, #252525);
+  border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 14px; box-shadow: 0 8px 26px #0005;
+  font-size: 13px; line-height: 19px;
+}
+.wb-session-search::backdrop { background: #0005; }
+.wb-search-field {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-primary, #8884);
+}
+.wb-search-field input { flex: 1; min-inline-size: 0; border: 0; padding: 4px; background: transparent; color: inherit; font: inherit; }
+.wb-search-field .wb-control { display: grid; place-items: center; background: transparent; }
+.wb-search-field .wb-control:hover { background: var(--dsw-alias-background-hover, #8882); }
+.wb-session-search ul { margin: 0; padding: 6px; list-style: none; }
+.wb-session-search li button {
+  display: grid; gap: 2px; width: 100%; box-sizing: border-box; padding: 7px 8px;
+  border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: start;
+}
+.wb-session-search li button:is(:hover, :focus-visible) { background: var(--dsw-alias-background-hover, #8882); cursor: pointer; }
+.wb-session-search li :is(span, small) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.wb-session-search :is(p, small) { color: var(--dsw-alias-label-secondary, #aaa); }
+.wb-session-search p { margin: 10px 12px; }
 .wb-panel-popup {
   position: fixed; z-index: 20; inset: auto auto 16px calc(var(--dsh-workbench-rail) + 6px);
   max-block-size: 60vh; max-inline-size: min(280px, 70vw); overflow: auto;
