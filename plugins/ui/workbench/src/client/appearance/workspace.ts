@@ -197,5 +197,9 @@ export const workspaceStyles = `
 .wb-folder-row:is(:hover, :focus-within) > .wb-folder-tooltip { display: block; }
 .wb-folder-list > button { width: 100%; padding: 12px; border-radius: 0; }
 .wb-edit-project .wb-remove-local { margin-right: auto; background: #dc454525; color: #ed635d; }
+.wb-remove-project footer { justify-content: end; }
+.wb-remove-project footer .wb-remove-local { margin-inline-end: 0; }
+.wb-remove-project p { margin: 0; }
+.wb-remove-project p + p { margin-top: 8px; }
 .wb-edit-project .wb-save-project { color: var(--dsw-specific-sidebar-fill, #27282b); background: var(--dsw-alias-label-primary, #eee); }
 `;

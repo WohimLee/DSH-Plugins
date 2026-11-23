@@ -6,7 +6,7 @@ import { Glyph } from './Glyph.js';
 
 export function EditProjectDialog({ initial, folders, root, commands, canPickDirectory, close, save, remove, t }: PropsLocale<'workbench'> & {
   initial: string; folders: readonly string[]; root: string; commands: WorkspaceCommands; canPickDirectory: boolean;
-  close: () => void; save: (name: string, folders: string[]) => Promise<void>; remove: () => Promise<void>;
+  close: () => void; save: (name: string, folders: string[]) => Promise<void>; remove: () => void;
 }) {
   const modal = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -60,7 +60,7 @@ export function EditProjectDialog({ initial, folders, root, commands, canPickDir
         </div>
         {error && <div role="alert">{t('actionFailed')}</div>}
         <footer><button className="wb-remove-local" type="button" disabled={busy}
-          onClick={() => { if (window.confirm(t('removeProjectConfirm'))) void commit(remove); }}>{t('removeLocal')}</button>
+          onClick={remove}>{t('removeLocal')}</button>
           <button type="button" disabled={busy} onClick={close}>{t('cancel')}</button>
           <button className="wb-save-project" disabled={!name.trim() || busy}>{t('save')}</button></footer>
       </form>

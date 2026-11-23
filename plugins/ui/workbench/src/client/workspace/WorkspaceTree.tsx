@@ -16,6 +16,7 @@ import { useTreeDrag } from './drag.js';
 import { DirectoryDialog } from './DirectoryDialog.js';
 import { InlineName } from './InlineName.js';
 import { RenameSessionDialog } from './RenameSessionDialog.js';
+import { RemoveProjectDialog } from './RemoveProjectDialog.js';
 import { RowMenu } from './RowMenu.js';
 import type { MenuEntry, MenuTarget } from './RowMenu.js';
 import type { Draft, Drafts } from './drafts.js';
@@ -24,6 +25,8 @@ import type { WorkspaceCommands } from './commands.js';
 const visibleLimit = 10;
 const rootSection = 'sections';
 type SessionId = ReturnType<Context['sessions']['list']['getSnapshot']>['ids'][number];
+type WorkspaceId = Parameters<WorkspaceCommands['removeProject']>[0];
+type RemovalTarget = { id: string; title: string; workspaceId?: WorkspaceId };
 type Actions = {
   updateTree: (change: (state: TreeState) => TreeState) => void;
   openSession: (session: SessionId) => void;
@@ -89,6 +92,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const [rename, setRename] = useState<{ id: string; name: string; commit: (title: string) => void }>();
   const [editId, setEditId] = useState<string>();
   const [sessionRename, setSessionRename] = useState<{ id: SessionId; title: string }>();
+  const [removal, setRemoval] = useState<RemovalTarget>();
   const sessions = useSessions(state => state);
   const workspaces = useWorkspaces(state => state);
   const onConversation = usePanelInfo(info => info.activePanelId === null);
@@ -98,6 +102,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const canCreateSession = useRemoteAccess('session/create');
   const canPrepareUngrouped = useRemoteAccess('workbenchSessions/prepareUngroupedDirectory');
   const canDeleteSession = useRemoteAccess('workbenchSessions/deleteSession');
+  const canRemoveWorkspace = useRemoteAccess('workspace/delete');
   const { bindScrollerRef } = useSectionScroller();
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<'saveFailed' | 'pinFailed' | 'invalidMove' | 'actionFailed' | 'deleteFailed'>();
@@ -119,6 +124,10 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const chatGroups = useMemo(() => sessionGroups(tree, [...projects.values()].map(item => ({
     id: item.workspaceId, sessionIds: item.sessionIds,
   })), sessions.ids.map(id => sessions.byId[id]), pins), [tree, projects, sessions, pins]);
+  const latestGroups = useRef(chatGroups);
+  const latestArchived = useRef(archived);
+  latestGroups.current = chatGroups;
+  latestArchived.current = archived;
   const sectionLabel = (section: Section) => section.id === defaultSection ? t('recents') : section.title || t('projects');
 
   const show = (id: string) => setCollapsed(previous => {
@@ -226,6 +235,12 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     }
   };
 
+  const forgetDeletedSessions = (ids: ReadonlySet<string>) => save(state => ({
+    ...state,
+    sessionProjects: Object.fromEntries(Object.entries(state.sessionProjects).filter(([id]) => !ids.has(id))),
+    unread: state.unread?.filter(id => !ids.has(id)),
+    sessions: Object.fromEntries(Object.entries(state.sessions).map(([project, group]) => [project, group.filter(id => !ids.has(id))])),
+  }));
   const deleteEntry = (session: (typeof sessions.byId)[SessionId]): MenuEntry => ({
     label: t('permanentDelete'), danger: true,
     run: canDeleteSession && !(statuses.get(session.id)?.running ?? session.running) ? () => {
@@ -236,12 +251,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       setDeletePending(false);
       void commands.deleteSession(id).then(result => {
         if (result === 'restart-required') { setDeletePending(true); return; }
-        save(state => {
-          const sessionProjects = { ...state.sessionProjects };
-          delete sessionProjects[id];
-          return { ...state, sessionProjects, unread: state.unread?.filter(item => item !== id),
-            sessions: Object.fromEntries(Object.entries(state.sessions).map(([project, ids]) => [project, ids.filter(item => item !== id)])) };
-        });
+        forgetDeletedSessions(new Set([id]));
       }).catch(() => setError('deleteFailed')).finally(() => deleting.current.delete(id));
     } : undefined,
   });
@@ -295,7 +305,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         open={() => openChat(session.id)}
         toggle={() => { void togglePin(session.id); }} t={t} useSessionAccess={useSessionAccess} />);
 
-  async function removeProject(id: Parameters<WorkspaceCommands['removeProject']>[0]) {
+  async function removeProject(id: WorkspaceId) {
     await commands.removeProject(id);
     updateTree(state => {
       if (!state.sourceFolders?.[id]) return state;
@@ -303,6 +313,34 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       delete sourceFolders[id];
       return { ...state, sourceFolders };
     });
+  }
+
+  function removalSessions(target: RemovalTarget): SessionId[] {
+    return (latestGroups.current.get(target.id) ?? []).map(id => id as SessionId)
+      .filter(id => target.workspaceId !== undefined || !latestArchived.current.has(id));
+  }
+
+  async function removeWithSessions(target: RemovalTarget, confirmed: SessionId[]) {
+    const approved = new Set(confirmed);
+    const deleted = new Set<SessionId>();
+    try {
+      for (const id of confirmed) {
+        if (!removalSessions(target).includes(id)) continue;
+        const result = await commands.deleteSession(id);
+        if (result === 'deleted') deleted.add(id);
+        else {
+          setDeletePending(true);
+          if (!latestArchived.current.has(id)) await commands.archiveSession(id);
+        }
+      }
+    } finally {
+      if (deleted.size) forgetDeletedSessions(deleted);
+    }
+    if (removalSessions(target).some(id => !approved.has(id))) return 'removeChanged' as const;
+    if (target.workspaceId !== undefined) await removeProject(target.workspaceId);
+    else if (!save(state => ({ ...state, ungroupedInRecents: true }))) return 'removeFailed' as const;
+    setEditId(undefined);
+    return undefined;
   }
 
   function projectMenu(project: (typeof workspaces.items)[number], id: string, parent: string): MenuEntry[] {
@@ -326,9 +364,8 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           if (results.some(result => result.status === 'rejected')) setError('actionFailed');
         });
       } },
-      { icon: 'close', divider: true, label: t('removeProject'), run: () => {
-        if (window.confirm(t('removeProjectConfirm'))) report(() => removeProject(project.workspaceId));
-      } },
+      { icon: 'close', divider: true, label: t('removeProject'), danger: true,
+        run: () => setRemoval({ id, title: project.title, workspaceId: project.workspaceId }) },
     ];
   }
 
@@ -339,11 +376,10 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       if (!save(state => ({ ...state, ungroupedWorkspaceId: workspaceId }))) throw new Error('Could not save the ungrouped workspace');
     }));
   };
+  const removeUngrouped = () => setRemoval({ id: ungrouped, title: t('ungrouped') });
   const showUngroupedMenu = (event: MouseEvent) => openMenu(event, t('ungroupedMenu'), [
     { label: t('newSession'), icon: 'new', run: canStartUngrouped ? startUngrouped : undefined },
-    { label: t('removeUngrouped'), icon: 'close', run: () => {
-      if (save(state => ({ ...state, ungroupedInRecents: true }))) recentsButton.current?.focus();
-    } },
+    { label: t('removeUngrouped'), icon: 'close', danger: true, run: removeUngrouped },
   ]);
   const showRecentsMenu = tree.ungroupedInRecents ? (event: MouseEvent) => openMenu(event, t('sectionMenu'), [
     { label: t('newUngrouped'), icon: 'new', run: canStartUngrouped ? startUngrouped : undefined },
@@ -353,6 +389,8 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         show(ungrouped);
       }
     } },
+    ...((chatGroups.get(ungrouped) ?? []).some(id => !archived.has(id as SessionId))
+      ? [{ label: t('deleteUngrouped'), icon: 'close' as const, danger: true, run: removeUngrouped }] : []),
   ]) : undefined;
 
   function projectRow(id: string, parent: string, depth: number): ReactNode {
@@ -386,6 +424,10 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   if (!wide) return <button type="button" className="wb-tree-action wb-tree-compact"
     aria-label={t('projects')} title={t('projects')} onClick={expandSidebar}><Glyph icon="project" /></button>;
 
+  const removalIds = removal ? removalSessions(removal) : [];
+  const removalBlocked = sessions.phase !== 'ready' || workspaces.phase !== 'ready'
+    || !!removal?.workspaceId && !canRemoveWorkspace || removalIds.length > 0 && !canDeleteSession;
+  const removalBusy = removalIds.some(id => deleting.current.has(id) || (statuses.get(id)?.running ?? sessions.byId[id]?.running));
   const projectNames = new Map<string, string>();
   if (activityOpen) for (const [project, ids] of chatGroups) {
     for (const id of ids) projectNames.set(id, projects.get(project)?.title ?? t('ungrouped'));
@@ -449,7 +491,8 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       t={t} cancel={() => { directory.cancel?.(); setDirectory(undefined); }} confirm={directory.confirm} />}
     {editingProject && <EditProjectDialog key={editId} t={t} initial={editingProject.title} root={editingProject.path}
       canPickDirectory={canPickDirectory} folders={tree.sourceFolders?.[editingProject.workspaceId] ?? [editingProject.path]} commands={commands}
-      close={() => setEditId(undefined)} remove={() => removeProject(editingProject.workspaceId)}
+      close={() => setEditId(undefined)}
+      remove={() => setRemoval({ id: editingProject.workspaceId, title: editingProject.title, workspaceId: editingProject.workspaceId })}
       save={async (title, paths) => {
         const id = editingProject.workspaceId;
         const previous = tree.sourceFolders?.[id];
@@ -468,6 +511,14 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           });
           throw error;
         }
+      }} />}
+    {removal && <RemoveProjectDialog t={t} name={removal.title} project={removal.workspaceId !== undefined}
+      count={removalIds.length} blocked={removalBlocked ? 'removeReady' : removalBusy ? 'removeBusy' : undefined}
+      close={() => setRemoval(undefined)}
+      remove={async () => {
+        const result = await removeWithSessions(removal, removalIds);
+        if (!result) requestAnimationFrame(() => recentsButton.current?.focus());
+        return result;
       }} />}
     {sessionRename && <RenameSessionDialog key={sessionRename.id} initial={sessionRename.title} t={t}
       close={() => setSessionRename(undefined)} save={title => commands.renameSession(sessionRename.id, title)} />}

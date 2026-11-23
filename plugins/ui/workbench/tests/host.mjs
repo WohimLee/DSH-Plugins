@@ -643,21 +643,13 @@ try {
   await ungroupedRow.hover();
   await ungroupedRow.getByRole('button', { name: 'Ungrouped chats menu' }).click();
   await ungroupedMenu.getByRole('menuitem', { name: 'Remove group' }).click();
-  await ungrouped.waitFor({ state: 'detached' });
-  await createdUngrouped.waitFor();
-  await access(locations.cold);
-  await page.reload();
-  await createdUngrouped.waitFor();
-  assert.equal(await ungrouped.count(), 0, 'removing the heading survives reload');
-  await cold.waitFor();
-  await live.waitFor();
-  await recentsLabel.click({ button: 'right' });
-  const recentsMenu = page.getByRole('menu', { name: 'Section menu', exact: true });
-  await recentsMenu.getByRole('menuitem', { name: 'New ungrouped session', exact: true }).waitFor();
-  await recentsMenu.getByRole('menuitem', { name: 'Show Ungrouped chats group' }).click();
+  const groupRemoval = page.getByRole('dialog', { name: /Remove group · Ungrouped chats/ });
+  await groupRemoval.getByText(/permanently deleted/).first().waitFor();
+  await groupRemoval.getByRole('button', { name: 'Cancel', exact: true }).click();
   await ungrouped.waitFor();
   await createdUngrouped.waitFor();
-  console.log('PASS ungrouped new session, blank reuse, removal with sessions retained, and restore after reload.');
+  await access(locations.cold);
+  console.log('PASS ungrouped creation, draft reuse and safe cancellation of group removal.');
   await cold.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
   const archivedCold = archive.locator('[data-row-key="archived:workbench-delete-cold"]');
@@ -690,6 +682,58 @@ try {
   assert.equal(await page.getByText('Delete fixture live', { exact: true }).count(), 0);
   assert.equal(await page.getByText('Delete fixture cold', { exact: true }).count(), 0);
   console.log('PASS cancel, archived session deletion, queued live-session deletion, catalog refresh and durable deletion after restart.');
+  // A previous Workbench release could already have flattened this group.
+  await page.evaluate(() => {
+    const key = 'dsh-workbench:workspace-tree:v1';
+    const state = JSON.parse(localStorage.getItem(key));
+    localStorage.setItem(key, JSON.stringify({ ...state, ungroupedInRecents: true }));
+  });
+  await page.reload();
+  await dismissSignIn();
+  await createdUngrouped.waitFor();
+  assert.equal(await ungrouped.count(), 0);
+  await recentsLabel.click({ button: 'right' });
+  const recentsMenu = page.getByRole('menu', { name: 'Section menu', exact: true });
+  await recentsMenu.getByRole('menuitem', { name: 'Delete ungrouped sessions', exact: true }).click();
+  await groupRemoval.getByRole('button', { name: 'Remove group', exact: true }).click();
+  await groupRemoval.waitFor({ state: 'detached' });
+  await createdUngrouped.waitFor({ state: 'detached' });
+  await ungrouped.waitFor({ state: 'detached' });
+  await dismissSignIn();
+
+  await renamedChat.click({ button: 'right' });
+  await rowMenu.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+  const archivedChild = archive.locator(`[data-row-key="archived:${childDraft}"]`);
+  await archivedChild.waitFor();
+  const childLabel = child.getByRole('button', { name: 'child-project', exact: true });
+  await childLabel.click({ button: 'right' });
+  await projectMenu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  await projectEditor.getByRole('button', { name: 'Remove local project', exact: true }).click();
+  const projectRemoval = page.getByRole('dialog', { name: /Remove project · child-project/ });
+  await projectRemoval.getByText(/Includes archived sessions/).waitFor();
+  assert.ok(Number(await projectRemoval.locator('b').textContent()) >= 1);
+  if (process.env.DSH_TEST_ARTIFACTS) await projectRemoval.screenshot({
+    path: join(process.env.DSH_TEST_ARTIFACTS, 'remove-project.png'),
+  });
+  await projectRemoval.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await projectEditor.waitFor();
+  await projectEditor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await childLabel.click({ button: 'right' });
+  await projectMenu.getByRole('menuitem', { name: 'Remove project', exact: true }).click();
+  await projectRemoval.getByRole('button', { name: 'Remove project', exact: true }).click();
+  await projectRemoval.waitFor({ state: 'detached' });
+  await childLabel.waitFor({ state: 'detached' });
+  assert.equal(await tree.locator(`[data-row-key="session:${childDraft}"]`).count(), 0);
+  await access(join(temp, 'workspace', 'child-project'));
+  await alpha.waitFor();
+
+  await host.stop();
+  host = await startHost(deletionPort);
+  await page.goto(host.url);
+  await alpha.waitFor();
+  assert.equal(await tree.locator(`[data-row-key="archived:${childDraft}"]`).count(), 0);
+  assert.equal(await tree.locator(`[data-row-key="archived:${ungroupedDraft}"]`).count(), 0);
+  console.log('PASS project and ungrouped removal confirms scope, retains directories, and clears queued sessions after restart.');
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'workbench.png'), fullPage: true });
