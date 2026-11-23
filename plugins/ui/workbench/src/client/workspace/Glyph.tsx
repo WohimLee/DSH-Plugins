@@ -1,7 +1,16 @@
-export type Icon = 'folderAdd' | 'projectAdd' | 'project' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close' | 'search';
+export type Icon = 'folderAdd' | 'projectAdd' | 'project' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close' | 'search'
+  | 'rename' | 'read' | 'unread' | 'fork' | 'share' | 'copy' | 'newWindow' | 'trash';
 export function Glyph({ icon }: { icon: Icon }) {
   const paths: Record<Icon, string> = {
     edit: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM10 2h4l1 3 3 1 3 1-1 4 1 3-2 3-3 1-2 4h-4l-1-3-3-1-3-1 1-4-1-3 2-3 3-1 2-4Z',
+    rename: 'm4 16-1 5 5-1L20 8a2.8 2.8 0 0 0-4-4L4 16Zm10-10 4 4',
+    read: 'M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Zm10-2.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5Z',
+    unread: 'M3 3l18 18M10 6.2c.6-.1 1.3-.2 2-.2 6.5 0 10 6 10 6s-1 1.7-2.9 3.3M6.2 7.5C3.5 9.3 2 12 2 12s3.5 6 10 6c1.6 0 3-.4 4.2-1',
+    fork: 'M6 8v8m12-8v2a3 3 0 0 1-3 3H9a3 3 0 0 0-3 3m0-12a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm12 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM6 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z',
+    share: 'M12 15V3m-4 4 4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7',
+    copy: 'M8 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2ZM15 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h1',
+    newWindow: 'M13 19H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v7M3 8h18m-3 7v6m-3-3h6',
+    trash: 'M4 6h16M9 6V3h6v3m-9 0 1 15h10l1-15M10 10v7m4-7v7',
     list: 'M8 6h13M8 12h13M8 18h13M3 6h.1M3 12h.1M3 18h.1',
     unarchive: 'M3 11v9h18v-9M12 15V3m-5 5 5-5 5 5',
     archive: 'M3 4h18v5H3zM5 9v11h14V9M9 13h6',

@@ -1,6 +1,6 @@
 {
   "name": "dsh-workbench",
-  "version": "0.5.16",
+  "version": "0.5.17",
   "private": true,
   "description": "为 DSH 提供常驻功能栏与 Codex 风格工作台布局，复用原生会话和扩展入口。",
   "type": "module",
@@ -98,7 +98,9 @@
     "@deepseek-ai/dsh-api-workspace-controller": "0.2.2-rc.5",
     "@deepseek-ai/dsh-api-workspace-files": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-locale": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-shortcuts": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-store": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-context-menu": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.5",

@@ -88,14 +88,18 @@ export const workspaceStyles = `
   outline-offset: -2px;
 }
 @media (hover: hover) {
-  .wb-tree-row:not(:hover):not(:focus-within) .wb-tree-actions .wb-tree-action:not([data-pinned]) {
-    inline-size: 0;
-    overflow: clip;
-    opacity: 0;
-    pointer-events: none;
+  .wb-tree-row[data-wb-kind="session"]:is(:hover, :has(:focus-visible)) > .wb-status-unread { display: none; }
+  .wb-tree-row:not(:hover):not(:focus-within),
+  .wb-tree-row[data-wb-kind="session"]:not(:hover):not(:has(:focus-visible)) {
+    & .wb-tree-actions .wb-tree-action:not([data-pinned]) {
+      inline-size: 0;
+      overflow: clip;
+      opacity: 0;
+      pointer-events: none;
+    }
+    & .wb-tree-actions { gap: 0; }
+    & .wb-tree-actions:not(:has([data-pinned])) { margin-inline-end: 0; }
   }
-  .wb-tree-row:not(:hover):not(:focus-within) .wb-tree-actions { gap: 0; }
-  .wb-tree-row:not(:hover):not(:focus-within) .wb-tree-actions:not(:has([data-pinned])) { margin-inline-end: 0; }
 }
 .wb-tree-show-more {
   margin-inline-start: calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px));
@@ -154,7 +158,7 @@ export const workspaceStyles = `
   inline-size: 100%; min-block-size: 24px; padding: 4px 9px; border: 0; border-radius: 6px;
   color: inherit; background: transparent; font: inherit; text-align: start; cursor: pointer;
 }
-.wb-row-menu button:is(:hover, :focus-visible):not(:disabled) { background: var(--dsw-alias-background-hover, #8882); }
+.wb-row-menu button:is(:hover, :focus-visible, [aria-expanded="true"]):not(:disabled) { background: var(--dsw-alias-background-hover, #8882); }
 .wb-row-menu button:disabled { opacity: .4; cursor: default; }
 .wb-row-menu button[data-danger]:enabled { color: #ee897d; }
 .wb-directory { inline-size: min(440px, 90vw); padding: 14px; }
@@ -175,6 +179,8 @@ export const workspaceStyles = `
 
 .wb-row-menu hr { border: 0; border-top: 1px solid #8884; margin: 5px 7px; }
 .wb-row-menu button span:first-of-type { flex: 1; }
+.wb-row-menu button svg { flex: none; }
+.wb-row-menu kbd { flex: none; color: var(--dsw-alias-label-secondary, #999); font: inherit; white-space: nowrap; }
 .wb-edit-project { padding: 0; width: min(500px, 92vw); }
 .wb-edit-project::backdrop { background: #0006; }
 .wb-edit-project form { padding: 20px; display: grid; gap: 13px; }

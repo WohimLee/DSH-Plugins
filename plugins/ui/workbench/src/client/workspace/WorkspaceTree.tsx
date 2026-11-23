@@ -69,14 +69,15 @@ function SessionItem({ session, running, selected, depth, pinned, busy, unread, 
   return <div className="wb-tree-row" data-row-key={'session:' + session.id} data-wb-kind="session"
     onContextMenu={menu} data-selected={selected || undefined} data-drop={drop} style={{ '--wb-depth': depth } as CSSProperties} {...dragProps}>
     <button type="button" className="wb-tree-label" aria-current={selected ? 'true' : undefined}
-      aria-label={session.displayTitle} title={session.displayTitle} onClick={open}>
+      aria-label={session.displayTitle} aria-description={unread ? t('unread') : undefined} title={session.displayTitle} onClick={open}>
       <span>{session.displayTitle}</span>
     </button>
+    {!running && <StatusMark running={false} unread={unread} t={t} />}
     <div className="wb-tree-actions">
       <Action label={t('sessionMenu')} icon="more" run={menu} />
       {allowed && <Action label={t(pinned ? 'unpinChat' : 'pinChat')} icon={pinned ? 'pinSolid' : 'pinOutline'} pinned={pinned} busy={busy} run={toggle} />}
     </div>
-    <StatusMark running={running} unread={unread} t={t} />
+    {running && <StatusMark running unread={false} t={t} />}
   </div>;
 }
 
@@ -239,7 +240,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     sessions: Object.fromEntries(Object.entries(state.sessions).map(([project, group]) => [project, group.filter(id => !ids.has(id))])),
   }));
   const deleteEntry = (session: (typeof sessions.byId)[SessionId]): MenuEntry => ({
-    label: t('permanentDelete'), danger: true,
+    label: t('permanentDelete'), icon: 'trash', danger: true,
     run: canDeleteSession && !(statuses.get(session.id)?.running ?? session.running) ? () => {
       const { id } = session;
       if (deleting.current.has(id) || !window.confirm(`${t('deleteConfirm')}\n\n${session.displayTitle}`)) return;
@@ -259,29 +260,37 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       ...[...projects.values()].map(project => ({ id: String(project.workspaceId), label: project.title }))];
     const setRead = () => save(state => ({ ...state,
       unread: state.unread?.includes(id) ? state.unread.filter(item => item !== id) : [...(state.unread ?? []), id] }));
+    const shortcut = (command: string) => id === active ? commands.shortcut(command) : undefined;
+    const link = commands.sessionLink(id);
     const entries: MenuEntry[] = [
-      { label: t('rename'), run: () => setSessionRename({ id, title: session.title ?? '' }) },
-      { label: t('edit'), run: () => report(async () => {
+      { label: t('rename'), icon: 'rename', shortcut: session.blank ? undefined : shortcut('session.rename'), run: () => setSessionRename({ id, title: session.title ?? '' }) },
+      { label: t('edit'), icon: 'edit', run: () => report(async () => {
         const initial = await commands.directory(id);
         setDirectory({ initial, confirm: async path => { await commands.setDirectory(id, path); setDirectory(undefined); } });
       }) },
-      { label: t(pins.has(id) ? 'unpinChat' : 'pinChat'), run: () => { void togglePin(id); } },
-      { label: t(tree.unread?.includes(id) ? 'markRead' : 'markUnread'), run: setRead },
-      { label: t('moveChat'), children: destination.filter(item => item.id !== parent).map(item => ({ label: item.label, run: () => {
+      { label: t(pins.has(id) ? 'unpinChat' : 'pinChat'), icon: pins.has(id) ? 'pinSolid' : 'pinOutline', run: () => { void togglePin(id); } },
+      { label: t(tree.unread?.includes(id) ? 'markRead' : 'markUnread'),
+        icon: tree.unread?.includes(id) ? 'read' : 'unread', run: setRead },
+      { label: t('moveChat'), icon: 'list', children: destination.filter(item => item.id !== parent).map(item => ({ label: item.label, run: () => {
         save(state => moveSession(state, id, item.id, chatGroups.get(item.id) ?? [], pins)); show(item.id);
       } })) },
-      { label: t('fork'), divider: true, run: session.blank ? undefined : () => report(async () => {
+      { label: t('fork'), icon: 'fork', divider: true, shortcut: session.blank ? undefined : shortcut('session.fork'), run: session.blank ? undefined : () => report(async () => {
         const child = await commands.forkSession(id);
         save(state => moveSession(state, child, parent, chatGroups.get(parent) ?? [], pins));
         openSession(child);
       }) },
-      { label: t('share'), divider: true },
-      { label: t('copy'), children: [
-        { label: t('copyTitle'), run: () => report(() => navigator.clipboard.writeText(session.displayTitle)) },
-        { label: t('copyId'), run: () => report(() => navigator.clipboard.writeText(id)) },
+      { label: t('share'), icon: 'share', divider: true },
+      { label: t('copy'), icon: 'copy', children: [
+        { label: t('copySessionLink'), icon: 'copy',
+          run: link ? () => report(() => navigator.clipboard.writeText(link)) : undefined },
+        { label: t('copyMarkdown'), icon: 'copy',
+          run: commands.canCopyMarkdown(id) ? () => report(() => commands.copyMarkdown(id)) : undefined },
+        { label: t('copyWorkingDirectory'), icon: 'copy', run: () => report(() => commands.copyDirectory(id)) },
+        { label: t('copyTitle'), icon: 'copy', run: () => report(() => navigator.clipboard.writeText(session.displayTitle)) },
+        { label: t('copyId'), icon: 'copy', run: () => report(() => navigator.clipboard.writeText(id)) },
       ] },
-      { label: t('newWindow'), divider: true },
-      { label: t('archiveChat'), divider: true, run: () => report(() => commands.archiveSession(id)) },
+      { label: t('newWindow'), icon: 'newWindow', divider: true },
+      { label: t('archiveChat'), icon: 'archive', divider: true, shortcut: shortcut('session.archive'), run: () => report(() => commands.archiveSession(id)) },
       deleteEntry(session),
     ];
     return entries;
@@ -482,7 +491,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       data-drop={drag.highlight?.id === rootSection ? 'after' : undefined}
       {...drag.row({ kind: 'section', id: rootSection, parent: rootSection }, false, true)} />
     {menu && <RowMenu key={menu.x + ':' + menu.y + menu.label} target={menu} close={closeMenu}
-      unavailable={t('actionUnavailable')} back={t('back')} />}
+      unavailable={t('actionUnavailable')} />}
     {directory && <DirectoryDialog initial={directory.initial} list={commands.listDirectory} pick={commands.pickDirectory}
       t={t} cancel={() => setDirectory(undefined)} confirm={directory.confirm} />}
     {createParent && <ProjectDialog key={createParent} mode="create" t={t} root={projects.get(createParent)?.path}

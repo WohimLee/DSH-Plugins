@@ -1,4 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type {} from '@deepseek-ai/dsh-client-shortcuts/client';
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client';
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol';
 
 export type SessionId = ReturnType<Context['sessions']['list']['getSnapshot']>['ids'][number];
@@ -9,7 +11,22 @@ function value<T>(result: RemoteResult<T>): T {
   return result.value;
 }
 
+const markdownCopyAction = 'session-log-download.export/copy';
+
 export function workspaceCommands(ctx: Context, signal: AbortSignal) {
+  const desktop = (globalThis as typeof globalThis & {
+    dshDesktop?: { sessionLinks?: { takePending?: unknown } };
+  }).dshDesktop;
+  const resolveMarkdownCopy = (sessionId: SessionId, copy: boolean) => {
+    const menu = ctx.get('contextMenus')?.resolve({ kind: 'sessionHeader', value: { sessionId } });
+    if (!menu) return false;
+    try {
+      const action = menu.source.getSnapshot().find(item => item.id === markdownCopyAction);
+      if (!action || action.disabled) return false;
+      if (copy) menu.select(action.id);
+      return true;
+    } finally { menu.dispose(); }
+  };
   // The local Desktop renderer exposes the same window-owned chooser used by DSH.
   const desktopPicker = (globalThis as typeof globalThis & {
     __DSH_DIRECTORY_PICKER__?: { pick(): Promise<string | null> };
@@ -20,6 +37,23 @@ export function workspaceCommands(ctx: Context, signal: AbortSignal) {
   };
   return {
     desktopPicker,
+    shortcut(id: string): { label: string; aria: string } | undefined {
+      const shortcut = ctx.get('shortcuts')?.catalog.getSnapshot().find(item => item.id === id);
+      return shortcut?.aria && shortcut.keys.length
+        ? { label: shortcut.keys.join(' '), aria: shortcut.aria } : undefined;
+    },
+    canCopyMarkdown: (id: SessionId) => resolveMarkdownCopy(id, false),
+    async copyMarkdown(id: SessionId) {
+      if (!resolveMarkdownCopy(id, true)) throw new Error('Session Markdown export is unavailable');
+    },
+    sessionLink(id: SessionId) {
+      return typeof desktop?.sessionLinks?.takePending === 'function'
+        ? 'dsh://session/' + encodeURIComponent(id) : undefined;
+    },
+    async copyDirectory(id: SessionId) {
+      const directory = value(await ctx.remote.workbenchSessions.directory(id, signal));
+      await navigator.clipboard.writeText(directory);
+    },
     async replyPreview(id: SessionId, request: AbortSignal): Promise<string> {
       const result = value(await ctx.remote.session.projections({ sessionId: id }, AbortSignal.any([signal, request])));
       const outline = result?.values.turnOutline;
