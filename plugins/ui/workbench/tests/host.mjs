@@ -586,6 +586,13 @@ try {
   await page.emulateMedia({ colorScheme: 'dark' });
   await darkTheme.waitFor({ state: 'attached' });
   const theme = await page.addStyleTag({ content: 'body { --dsh-content-font-size: 15px !important; --dsh-code-font-size: 15px !important; }' });
+  const duration = page.getByRole('button', { name: /^Completed in / });
+  await duration.waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await duration.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'completed-duration-typography.png') });
+  }
+  assert.equal(await duration.locator('span').first().evaluate(label => getComputedStyle(label).fontSize), '14px',
+    'completed timing uses the Workbench reference size with a 15px host preference');
   const composer = page.locator('[data-composer-card]');
   const draft = composer.locator('[data-composer-input]');
   const placeholder = composer.locator('[data-composer-placeholder]');

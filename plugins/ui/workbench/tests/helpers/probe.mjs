@@ -49,7 +49,7 @@ export async function apply(ctx, config) {
         ['step/end', { turn: 1, step: 1 }],
         ['workspace/changes', { turn: 1 }],
       ] : []),
-      ['turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } }],
+      ['turn/end', { turn: 1, reason: suffix === 'alpha' ? { kind: 'completed' } : { kind: 'aborted', reason: { kind: 'user' } } }],
     ]);
     await ctx.sessionController.rename({ sessionId, title: 'Workbench ' + suffix });
   }

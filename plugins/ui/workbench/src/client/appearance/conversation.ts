@@ -20,6 +20,10 @@ html[data-dsh-workbench] [data-conversation-content] {
   font-size: var(--wb-message-size);
   line-height: var(--wb-message-leading);
 }
+/* On rc.5 only completed timing labels have nested duration spans. */
+html[data-dsh-workbench] [data-conversation-content] [data-turn-process]:is([data-has-duration], :has(> span > span)) {
+  font-size: 14px;
+}
 html[data-dsh-workbench] body[data-ds-dark-theme] [data-conversation-content] [data-message-bubble] {
   --dsw-specific-bubble: var(--dsw-static-blue-900);
 }
