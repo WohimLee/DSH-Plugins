@@ -1,6 +1,6 @@
 {
   "name": "dsh-workbench",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "private": true,
   "description": "为 DSH 提供常驻功能栏与 Codex 风格工作台布局，复用原生会话和扩展入口。",
   "type": "module",
