@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,16 +32,10 @@ try {
   const home = join(temp, 'home'); await mkdir(home);
   const env = { PATH: process.env.PATH, HOME: home, USERPROFILE: home, DSH_HOME: home, QODER_CONFIG_DIR: join(home, '.qoder'),
     TMPDIR: process.env.TMPDIR ?? tmpdir(), SYSTEMROOT: process.env.SYSTEMROOT, CI: 'true', NO_COLOR: '1' };
-  let cli = process.env.DSH_TEST_CLI;
-  if (!cli) {
-    // Install the exact development runtime outside the workspace.
-    const runtime = join(temp, 'runtime'); await mkdir(runtime);
-    await writeFile(join(runtime, 'package.json'), '{"private":true,"type":"module"}');
-    await run('pnpm', ['add', '--ignore-scripts', '--save-exact', `@deepseek-ai/dsh@${devDependencies['@deepseek-ai/dsh']}`], { cwd: runtime, env });
-    cli = join(runtime, 'node_modules/@deepseek-ai/dsh/lib/bin.js');
-  }
-  cli = resolve(cli);
+  const override = process.env.DSH_TEST_CLI;
+  const cli = resolve(override ?? join(root, 'node_modules/@deepseek-ai/dsh/lib/bin.js'));
   const runtimeVersion = (await run(process.execPath, [cli, '--version'], { cwd: temp, env })).trim();
+  if (!override) assert.equal(runtimeVersion, devDependencies['@deepseek-ai/dsh']);
   await run(process.execPath, [cli, 'plugin', '--profile', 'web', 'add', tarball, '--ignore-scripts'], { cwd: temp, env });
   const config = await run(process.execPath, [cli, '--profile', 'web', '--dump-config'], { cwd: temp, env });
   assert.ok(config.includes('dsh-qoder:main'));
