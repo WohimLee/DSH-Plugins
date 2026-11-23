@@ -12,6 +12,7 @@
 | 脚手架或构建工具 | check:templates | DSH 安装与加载 |
 | Bundle、宿主接口 | test:host 和受影响功能 | Desktop 交互 |
 | Client 行为 | 工厂注册、实际渲染/交互与卸载 | 仅类型检查 |
+| Client 视觉校准 | 实际渲染尺寸或样式、同条件的视觉对照、受影响的真实入口 | 只检查 CSS 源码、截图或隔离 Web 中的任何一项 |
 
 check:templates 在临时目录生成四类插件，执行类型检查、构建、打包、入口 import、Client 工厂注册与组件渲染，检查产物文件和卸载清理。test:host 在此基础上通过真实 DSH CLI 安装 tarball，检查配置树、Web 启动与 Client 资源交付。网络、安装、启动失败都应如实报告。
 
@@ -25,3 +26,9 @@ check:templates 在临时目录生成四类插件，执行类型检查、构建�
 Host 工具覆盖有效/无效输入、失败与取消；资源型插件覆盖重复加载、卸载和资源释放；Client 覆盖入口、交互、重载和清理；Skill 覆盖发布内容、provider 发现和加载。新增外部集成使用边界替身和合成数据，需要真实账户的验证单独说明。
 
 选能证明验收的最低检查层。已有成功证据未因改动失效时可复用；失败先定位，不盲目重跑到绿、不放宽断言掩盖问题。
+
+## 界面视觉校准
+
+按[视觉校准技能](../.agents/skills/dshp-visual-calibration/SKILL.md)确定参考和采样条件。把稳定的布局、排版、主题和交互约束加到所属插件的宿主测试。已知回归可复现时，优先证明旧候选失败、新候选通过。同一张图可以保留为走查证据，维护快照前先确认需要保护的视觉关系及渲染环境是否稳定。
+
+Workbench 可用 `pnpm --filter dsh-workbench test:host` 在隔离宿主运行。通过 `DSH_TEST_ARTIFACT_DIR` 指向待交付 tarball 所在目录，设置 `DSH_TEST_ARTIFACTS` 保存 2× 截图。Desktop 交付按[本机桌面交付](development.md#本机桌面交付)走实际页面和受影响状态，分别记录隔离宿主与日常 Desktop 的结果。
