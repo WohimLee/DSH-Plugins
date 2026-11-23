@@ -176,6 +176,43 @@ test('does not expose upstream diagnostics after authentication and verification
   assert.equal(missing.at(-1).reason.failure.code, 'INVALID_REQUEST');
 });
 
+test('reports a Qoder queue failure from the terminal result instead of an unknown assistant error', async () => {
+  const errorAssistant = { ...assistant([{ type: 'text', text: 'synthetic private diagnostic' }]), isApiErrorMessage: true };
+  const queueResult = result({ subtype: 'error_during_execution', is_error: true, errors: ['Model queue recovery attempts exceeded'] });
+  for (const failure of [
+    queueResult,
+    { ...queueResult, errors: [], error_message: queueResult.errors[0] },
+    result({ is_error: true, result: queueResult.errors[0] }),
+  ]) {
+    const adapter = new plugin.QoderAdapter({ cliPath: process.execPath }, async () => ({
+      events: source([errorAssistant, failure]), async close() {},
+    }), liteModels, async () => undefined);
+    try {
+      const chunks = await collect(adapter.stream(request));
+      assert.deepEqual(chunks, [{ type: 'finish', reason: { kind: 'error', failure: {
+        code: 'QODER_MODEL_QUEUE_EXHAUSTED', message: 'Qoder 模型排队未能完成。请稍后重试，或在输入框切换模型后再发。',
+      } } }]);
+    } finally { adapter.dispose(); }
+  }
+});
+
+test('keeps structured errors authoritative and never classifies ordinary model output as a queue failure', async () => {
+  const text = 'Model queue recovery attempts exceeded';
+  const read = messages => collect(readResponse(source(messages), new Map(), new AbortController().signal));
+  const errorResult = result({ subtype: 'error_during_execution', is_error: true, errors: [text] });
+  const errorAssistant = { ...assistant([{ type: 'text', text: `API Error: ${text}` }]), isApiErrorMessage: true };
+  await assert.rejects(read([errorAssistant, { ...errorResult, error_code: 401 }]), { code: 'AUTH' });
+  await assert.rejects(read([{ ...errorAssistant, error: 'rate_limit' }, result()]), { code: 'RATE_LIMIT' });
+  await assert.rejects(read([errorAssistant, { ...errorResult, errors: [] }]), { code: 'QODER_MODEL_QUEUE_EXHAUSTED' });
+  await assert.rejects(read([errorAssistant]), { code: 'QODER_MODEL_QUEUE_EXHAUSTED' });
+  await assert.rejects(read([{ ...errorResult, errors: ['Unrelated private diagnostic'] }]), {
+    code: 'UNKNOWN', message: 'Qoder 未能完成模型请求。',
+  });
+  const output = await read([assistant([{ type: 'text', text }]), result()]);
+  assert.equal(output.find(chunk => chunk.type === 'text-delta').text, text);
+  assert.equal(output.at(-1).reason.kind, 'stop');
+});
+
 test('uses the selected model’s advertised efforts for the main Qoder call', async () => {
   const policies = [];
   const adapter = new plugin.QoderAdapter({ cliPath: process.execPath }, async (_path, _input, options) => {
