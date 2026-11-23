@@ -78,7 +78,6 @@ export const workspaceStyles = `
   color: var(--dsw-alias-label-secondary, #999);
 }
 .wb-tree-action[data-pinned] { color: var(--dsw-alias-label-primary, #eee); }
-.wb-tree-action[data-pinned] svg { fill: currentColor; }
 .wb-tree-action[aria-disabled="true"] { cursor: default; }
 .wb-tree-action:hover:not([aria-disabled="true"]):hover {
   background: var(--dsw-alias-background-active, #8883);

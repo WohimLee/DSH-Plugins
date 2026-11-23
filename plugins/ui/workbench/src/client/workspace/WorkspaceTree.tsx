@@ -74,7 +74,7 @@ function SessionItem({ session, running, selected, depth, pinned, busy, unread, 
     </button>
     <div className="wb-tree-actions">
       <Action label={t('sessionMenu')} icon="more" run={menu} />
-      {allowed && <Action label={t(pinned ? 'unpinChat' : 'pinChat')} icon="pin" pinned={pinned} busy={busy} run={toggle} />}
+      {allowed && <Action label={t(pinned ? 'unpinChat' : 'pinChat')} icon={pinned ? 'pinSolid' : 'pinOutline'} pinned={pinned} busy={busy} run={toggle} />}
     </div>
     <StatusMark running={running} unread={unread} t={t} />
   </div>;
@@ -402,7 +402,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         </button>
         <div className="wb-tree-actions">
           <Action label={t(project ? 'projectMenu' : 'ungroupedMenu')} icon="more" run={showProjectMenu} />
-          {project && canAdd && <Action label={t('addSubproject')} icon="folderAdd" run={event => { event.currentTarget.focus(); setCreateParent(id); }} />}
+          {project && canAdd && <Action label={t('addSubproject')} icon="projectAdd" run={event => { event.currentTarget.focus(); setCreateParent(id); }} />}
           {(project ? canCreateSession : canStartUngrouped) && <Action label={t('newSession')} icon="new" run={project ? () => {
             show(id);
             commands.startSession(project.workspaceId);
@@ -455,7 +455,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           </button>
           <div className="wb-tree-actions">
             {showSectionMenu && <Action label={t('sectionMenu')} icon="more" run={showSectionMenu} />}
-            {canAdd && <Action label={t('addProject')} icon="folderAdd"
+            {canAdd && <Action label={t('addProject')} icon="projectAdd"
                run={event => { event.currentTarget.focus(); setCreateParent(section.id); }} />}
             {isDefault && canCreateSession && <Action label={t('newSession')} icon="new"
               run={() => commands.startSession()} />}
