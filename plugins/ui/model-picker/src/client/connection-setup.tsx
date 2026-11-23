@@ -185,4 +185,3 @@ export function ApiAccounts({ t, state, change, refresh, configure = false, keyL
     {error && <p role="alert">{t(error)}</p>}
   </div>;
 }
-
