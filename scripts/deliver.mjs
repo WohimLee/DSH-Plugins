@@ -231,9 +231,6 @@ async function prepare(receipt, baseRef) {
       console.error(error.message);
     }
   }
-  stage(receipt, pluginsPending(receipt) ? '待安装' : '待核对 CI', pluginsPending(receipt)
-    ? '运行 desktop 子命令后继续安装和验收。'
-    : '本次交付没有待安装的桌面插件产物。');
 }
 
 const pluginsPending = receipt => receipt.packages?.length > 0;
@@ -426,8 +423,8 @@ async function finish(receipt, evidencePath) {
   await verifyFresh(receipt);
   for (const pkg of receipt.packages) assertInstalled(pkg);
   save(receipt, { ci });
-  stage(receipt, '已交付');
   release(receipt);
+  stage(receipt, '已交付');
 }
 
 const usage = `pnpm deliver start <已确认的任务基线提交>
@@ -459,7 +456,8 @@ async function main([command, arg, extra, ...rest]) {
       receipt = { file: join(dir, 'receipt.json'), createdAt: new Date().toISOString() };
       stage(receipt, '预检');
       await prepare(receipt, arg);
-      process.exitCode = 2;
+      if (pluginsPending(receipt)) await install(receipt);
+      else await finish(receipt);
       return;
     }
     const file = resolve(arg);

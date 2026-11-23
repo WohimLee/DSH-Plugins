@@ -76,9 +76,9 @@ pnpm deliver start <已确认的任务基线提交>
 
 基线为任务开始时确认、且同时在任务 HEAD 和远端 `main` 历史中的提交。先核对待合入提交均属本次交付。脚本从最新 `origin/main` 创建临时检出并合并任务 HEAD，运行检查，按实际改动选出 Desktop 插件。它从同一集成提交构建、检查并打包，传入隔离宿主测试，再以普通快进推送和核对远端。每次交付在 `~/.dsh-plugin-artifacts/delivery.*/` 留存 `receipt.json`、构建日志和每个包的唯一 tarball。记录区分任务提交、集成提交、包版本和 SHA-256。主工作树有其他会话的改动时仍可运行。主工作树所有者按常规流程快进本地 `main`。
 
-1. `start` 给出凭证路径。待安装时，负责人接着运行 `pnpm deliver desktop <凭证路径>`。它复查远端及 Desktop 版本，并为该凭证保留独占安装时段。日常 Desktop 已退出时，脚本用内置 CLI 安装并启动。Desktop 已打开时，负责人立即用电脑操作，在插件页热更新凭证列出的 tarball。若同包的更新已合入，脚本要求重建。合并冲突留在凭证记录的临时工作树，负责人解决后将解决结果整理到任务分支，再从 `start` 运行。
+1. `start` 给出凭证路径并自动进入安装阶段。没有待安装的插件时，自动核对 CI。安装开始时复查远端及 Desktop 版本，并为该凭证保留独占安装时段。需要恢复安装时运行 `pnpm deliver desktop <凭证路径>`。日常 Desktop 已退出时，脚本用内置 CLI 安装并启动。Desktop 已打开时，负责人立即用电脑操作，在插件页热更新凭证列出的 tarball。若同包的更新已合入，脚本要求重建。合并冲突留在凭证记录的临时工作树，负责人解决后将解决结果整理到任务分支，再从 `start` 运行。
 2. 按[本机桌面交付](#本机桌面交付)核对安装来源、开关和运行状态，操作本次需求的实际入口。开启未启用的插件并等到组件运行。需要重启时先确认日常 Desktop 当前任务已结束。依赖另一仓库的宿主改动时，要等包含该修复的宿主构建安装到日常 Desktop，随后走通实际入口。
-3. 按下例记录实际操作和观察结果，每个待安装的包留一条。证据文件随凭证保留。无需安装插件的交付可直接运行 `finish`，省略证据文件。
+3. 按下例记录实际操作和观察结果，每个待安装的包留一条。证据文件随凭证保留。无需安装插件的交付自动进入下一步，恢复时可运行 `finish` 并省略证据文件。
 
 ```json
 {
@@ -106,25 +106,9 @@ pnpm deliver start <已确认的任务基线提交>
 
 后交付者先同步最新集成基线，确认待构建提交包含前一项已验收的改动（可用 `git merge-base --is-ancestor <前项提交> HEAD` 核对）。从包含两项改动的干净源码重新构建、检查并打包。安装后走通本次入口，再复验前一项受影响的入口。将源码提交、包版本、可区分本次构建的 tarball 路径或摘要、Desktop 版本和两项结果记回清单。
 
-1. 确认本次涉及的插件、实际 Desktop 版本与包的 `engines.dsh`，运行目标包检查和相关测试。只打包本次要交付的插件，核实包内运行文件属于本次交付。每次构建使用独立的产物目录，同版本更新也能区分新旧包。下面以 Workbench 为例。
-
-   ```sh
-   mkdir -p "$HOME/.dsh-plugin-artifacts"
-   artifact_dir=$(mktemp -d "$HOME/.dsh-plugin-artifacts/workbench.XXXXXX")
-   pnpm --filter dsh-workbench pack --pack-destination "$artifact_dir"
-   ```
-
-2. **Desktop 已打开**时，Agent 在实际窗口进入 Plugins → Add plugin → Install a third-party plugin，输入上一步生成的 `.tgz` 绝对路径，安装完成后按需点击 Enable now。已安装同版本时也使用本次的新包。此路径支持应用内更新，可保留正在使用的窗口。
-3. **Desktop 已完全退出**且已初始化日常 profile 时，可使用该应用内置的 CLI。macOS 默认路径见下例。其他安装路径使用实际应用附带的命令。在日常环境执行，注意隔离测试用的 `DSH_HOME`。成功后启动 Desktop。
-
-   ```sh
-   desktop_cli="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"
-   "$desktop_cli" plugin --profile desktop add "$artifact_dir"/*.tgz
-   "$desktop_cli" plugin --profile desktop list
-   ```
-
-4. 在桌面插件页核对启用状态，再走一次本次改动的实际入口。例如项目编辑改动，应在项目菜单点 Edit，看到新版弹窗，再点空白处确认关闭。使用同版本号时，以新行为或已安装文件与本次 tarball 的比对辨别构建；仅在磁盘上比对文件仍需另行验证运行行为。
-5. 在交付说明中写明实际安装的插件、Desktop 版本、验证操作和结果。安装失败时诊断并重试适用路径；本机没有 Desktop、版本不兼容或交互仍无法验证时，分别列出已完成步骤与具体阻塞。用户要求暂缓安装、只交付代码或使用指定环境时，遵循该次要求。
+1. 使用交付凭证中的 tarball。Desktop 已打开时依次进入 Plugins → Add plugin → Install a third-party plugin，输入 tarball 的绝对路径，安装后按需点击 Enable now。更新同版本时也使用本次的新包。应用内更新可保留正在使用的窗口。
+2. 在插件详情核对实际安装来源、开关和组件运行状态。走一次本次改动的入口。例如项目编辑改动，从项目菜单点 Edit，看到新版弹窗，再点空白处确认关闭。同包接续时复验上一项受影响的入口。
+3. 用 `finish` 记录实际结果。安装失败时诊断并重试适用路径。受本机 Desktop 版本、锁屏或外部账号限制时，用 `block` 记录具体阻塞和恢复条件。
 
 ## 并行开发与集成
 
