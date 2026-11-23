@@ -8,6 +8,9 @@ import type { SessionId } from '../workspace/commands.js';
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap { 'workbench.agent.record': { kind: 'single'; scope: 'session' } }
 }
+declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
+  interface SidebarRightTabParamsMap { 'workbench-subagents': { workbenchAgentId: SessionId } }
+}
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap { workbenchRecord: unknown }
 }
@@ -42,25 +45,26 @@ export function agentCatalog(state: SessionListState, root: SessionId, statuses:
   return { rows, pending, failed };
 }
 
-export function useAgentCatalog(state: SessionListState, root: SessionId, statuses: SessionStatusSnapshot, refresh: Refresh, enabled = true) {
-  const catalog = useMemo(() => enabled ? agentCatalog(state, root, statuses) : { rows: [], pending: [], failed: [] }, [state, root, statuses, enabled]);
+export function useAgentCatalog(state: SessionListState, root: SessionId, statuses: SessionStatusSnapshot, refresh: Refresh) {
+  const catalog = useMemo(() => agentCatalog(state, root, statuses), [state, root, statuses]);
   const requested = useRef(new Set<SessionId>());
-  useEffect(() => { requested.current.clear(); }, [root, enabled]);
+  useEffect(() => { requested.current.clear(); }, [root]);
   useEffect(() => {
-    if (!enabled) return;
     const ids = [root, ...catalog.rows.filter(row => row.mode !== 'external').map(row => row.id)];
     for (const id of ids) {
       if (requested.current.has(id)) continue;
       requested.current.add(id);
       void refresh(id).catch(() => {});
     }
-  }, [root, enabled, catalog, refresh]);
+  }, [root, catalog, refresh]);
   return catalog;
 }
 
 export function AgentIcon({ id }: { id: string }) {
   const hash = Array.from(id).reduce((n, char) => (n * 31 + char.charCodeAt(0)) >>> 0, 0);
-  return <span aria-hidden="true" style={{ color: 'hsl(' + hash % 360 + ' 65% 64%)' }}>{['✿', '◆', '✸', '❖'][hash % 4]}</span>;
+  return <span className="wb-agent-icon" aria-hidden="true" style={{ color: 'hsl(' + hash % 360 + ' 65% 64%)' }}>
+    {['✿', '◆', '✸', '❖'][(hash >>> 8) % 4]}
+  </span>;
 }
 
 function ChatView({ renderSlot }: ConversationViewsProps) { return <>{renderSlot('conversation.session', { view: 'chat' })}</>; }
@@ -116,8 +120,12 @@ export function SubagentsTab(props: TabProps) {
   const state = useSessions(value => value);
   const statuses = props.useSessionStatus(value => value);
   const { rows, failed, pending } = useAgentCatalog(state, sessionId, statuses, refresh);
-  const [selected, select] = useState<SessionId>();
-  const row = rows.find(item => item.id === selected);
+  const { navigation } = props.useTabInfo().tab;
+  const [selection, setSelection] = useState<{ revision: number; id?: SessionId }>();
+  const requested = navigation.params && 'workbenchAgentId' in navigation.params ? navigation.params.workbenchAgentId : undefined;
+  const selected = selection && selection.revision === navigation.revision ? selection.id : requested;
+  const select = (id?: SessionId) => setSelection({ revision: navigation.revision, id });
+  const row = rows.find(item => item.id === selected && item.mode !== 'external');
   if (row) return <Detail key={row.id} {...props} row={row} back={() => select(undefined)} />;
   return <div className="wb-agent-list">
     {failed.length > 0 && <button className="wb-control" onClick={() => { for (const id of failed) void refresh(id).catch(() => {}); }}>{t('retryCatalog')}</button>}

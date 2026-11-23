@@ -9,7 +9,7 @@ import { HeaderControls } from './HeaderControls.js';
 
 import { AgentRecord, SubagentsTab, agentsKind, type Refresh } from './Subagents.js';
 import type { TreeStore } from '../workspace/store.js';
-import type { WorkspaceCommands } from '../workspace/commands.js';
+import type { SessionId, WorkspaceCommands } from '../workspace/commands.js';
 
 const guideKey = '@deepseek-ai/dsh-client-ui-sidebar-right/guide';
 function GuideTitle({ t }: PropsLocale<'workbench'>) { return <span>{t('newTab')}</span>; }
@@ -59,7 +59,7 @@ export function registerRightPanels(ctx: Context, tree: TreeStore, commands: Wor
   }, ({ children, hero }) => hero ? children : <div data-workbench-summary-frame>{children}</div>));
   ctx.slots.inject(header, () => ctx.slots.register({
     name: header, id: 'dsh-workbench:header', order: -6, locale: 'workbench',
-    inject: () => ({ openResource: (address: string) => ctx.sidebarRight.openResource(address), refresh, openAgents: () => ctx.sidebarRight.openTab(agentsKind),
+    inject: () => ({ openResource: (address: string) => ctx.sidebarRight.openResource(address), refresh, openAgent: (id: SessionId) => ctx.sidebarRight.openTab(agentsKind, { params: { workbenchAgentId: id } }),
       openChat: ctx.uiWorkspace.openSession.bind(ctx.uiWorkspace), reveal: commands.reveal, watchChanges, hooks: { nativeShare, tabKinds, tree } }),
   }, HeaderControls));
 }
