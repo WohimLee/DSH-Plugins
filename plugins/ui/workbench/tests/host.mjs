@@ -622,7 +622,8 @@ try {
     await composer.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'composer-typography.png') });
     await bubble.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'user-message-bubble.png') });
   }
-  await draft.fill('');
+  await draft.press('ControlOrMeta+A');
+  await draft.press('Backspace');
   await placeholder.waitFor();
   const changedFiles = page.locator('[data-changed-files]');
   const changesTitle = changedFiles.getByText('Edited 5 files', { exact: true });
