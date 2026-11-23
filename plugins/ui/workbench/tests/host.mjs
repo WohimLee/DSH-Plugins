@@ -597,14 +597,44 @@ try {
   const toolSummary = page.locator('[data-conversation-content] [data-step-process]')
     .getByRole('button', { name: /^Read files/ });
   await toolSummary.waitFor();
+  const summaryLabel = toolSummary.getByText(/^Read files/);
   if (process.env.DSH_TEST_ARTIFACTS) {
     await toolSummary.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'tool-summary-typography.png') });
+    const sample = await paragraph.evaluateHandle(node => {
+      const span = document.createElement('span');
+      span.dataset.workbenchTypefaceSample = '';
+      span.textContent = '我会先核对 Harness 主检出和几个开发工作树。';
+      node.append(document.createElement('br'), span);
+      return span;
+    });
+    try {
+      const client = await page.context().newCDPSession(page);
+      await client.send('DOM.enable');
+      await client.send('CSS.enable');
+      const { root } = await client.send('DOM.getDocument');
+      const { nodeId } = await client.send('DOM.querySelector', {
+        nodeId: root.nodeId, selector: '[data-workbench-typeface-sample]',
+      });
+      console.log('Conversation platform fonts:', await client.send('CSS.getPlatformFontsForNode', { nodeId }));
+      await client.detach();
+      await page.locator('[data-workbench-typeface-sample]').screenshot({
+        path: join(process.env.DSH_TEST_ARTIFACTS, 'assistant-typeface.png'),
+      });
+    } finally {
+      await sample.evaluate(span => { span.previousSibling.remove(); span.remove(); });
+      await sample.dispose();
+    }
   }
-  const toolSummaryTypography = await toolSummary.getByText(/^Read files/).evaluate(label => {
-    const { fontSize, lineHeight, fontWeight } = getComputedStyle(label);
-    return { text: label.textContent, fontSize, lineHeight, fontWeight };
+  const toolSummaryTypography = await summaryLabel.evaluate(label => {
+    const { fontFamily, fontSize, lineHeight, fontWeight } = getComputedStyle(label);
+    return { text: label.textContent, fontFamily, fontSize, lineHeight, fontWeight };
   });
   console.log('Tool summary typography:', toolSummaryTypography);
+  const assistantFont = await paragraph.evaluate(node => getComputedStyle(node).fontFamily);
+  console.log('Assistant font family:', assistantFont);
+  assert.match(assistantFont, /^-apple-system, (?:BlinkMacSystemFont|"?system-ui"?), "Segoe UI", sans-serif$/);
+  assert.equal(toolSummaryTypography.fontFamily, assistantFont);
+  assert.equal(toolSummaryTypography.fontWeight, '430');
   assert.equal(toolSummaryTypography.fontSize, '14px',
     'tool summary uses the Workbench reference size with a 15px host preference');
   assert.equal(await toolSummary.getAttribute('aria-expanded'), 'false');

@@ -1,20 +1,21 @@
 export const conversationStyles = `
 /* Workbench zoom scales this baseline independently of the host's text size. */
 html[data-dsh-workbench] [data-conversation-content] {
+  --wb-conversation-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --wb-message-size: 13px;
   --wb-message-leading: 24px;
 }
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] {
-  --dsw-font-markdown-base: var(--wb-message-size) / var(--wb-message-leading) var(--dsw-font-family);
-  --dsw-font-markdown-h1: 600 calc(var(--wb-message-size) + 5px) / 1.4 var(--dsw-font-family);
-  --dsw-font-markdown-h2: 600 calc(var(--wb-message-size) + 3px) / 1.4 var(--dsw-font-family);
-  --dsw-font-markdown-h3: 600 calc(var(--wb-message-size) + 1px) / 1.4 var(--dsw-font-family);
-  --dsw-font-markdown-h4: 600 var(--wb-message-size) / var(--wb-message-leading) var(--dsw-font-family);
+  --dsw-font-markdown-base: var(--wb-message-size) / var(--wb-message-leading) var(--wb-conversation-font);
+  --dsw-font-markdown-h1: 600 calc(var(--wb-message-size) + 5px) / 1.4 var(--wb-conversation-font);
+  --dsw-font-markdown-h2: 600 calc(var(--wb-message-size) + 3px) / 1.4 var(--wb-conversation-font);
+  --dsw-font-markdown-h3: 600 calc(var(--wb-message-size) + 1px) / 1.4 var(--wb-conversation-font);
+  --dsw-font-markdown-h4: 600 var(--wb-message-size) / var(--wb-message-leading) var(--wb-conversation-font);
   --dsw-font-markdown-base-strong: var(--dsw-font-markdown-h4);
   --wb-table-size: 12px;
   --wb-table-leading: 23px;
-  --dsw-font-markdown-table: var(--wb-table-size) / var(--wb-table-leading) var(--dsw-font-family);
-  --dsw-font-markdown-table-head: 600 var(--wb-table-size) / var(--wb-table-leading) var(--dsw-font-family);
+  --dsw-font-markdown-table: var(--wb-table-size) / var(--wb-table-leading) var(--wb-conversation-font);
+  --dsw-font-markdown-table-head: 600 var(--wb-table-size) / var(--wb-table-leading) var(--wb-conversation-font);
 }
 [data-conversation-content] [data-message-bubble] {
   font-size: var(--wb-message-size);
@@ -25,7 +26,9 @@ html[data-dsh-workbench] [data-conversation-content] [data-turn-process]:is([dat
   font-size: 14px;
 }
 html[data-dsh-workbench] [data-conversation-content] [data-step-process] button[data-process-activity] {
+  font-family: var(--wb-conversation-font);
   font-size: 14px;
+  font-weight: 430;
 }
 html[data-dsh-workbench] body[data-ds-dark-theme] [data-conversation-content] [data-message-bubble] {
   --dsw-specific-bubble: var(--dsw-static-blue-900);
