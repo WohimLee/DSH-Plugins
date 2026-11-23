@@ -12,7 +12,7 @@
     },
     "desktop": {
       "status": "verified",
-      "evidence": "2026-11-23，macOS Desktop 0.2.2-rc.5，插件页安装并启用 0.1.9，实测 Qoder CLI 账号用量、详情关闭与焦点恢复，以及 Grok 连接表单。桌面宿主 PATH 未找到 Codex CLI，Codex 卡片显示用量暂不可用。锁屏后输入框的选择器待 Desktop 复验，已通过隔离 Web。\n2026-11-20，0.1.7 已在日常 Desktop 验证管理页和输入框显示 Astra 的图片能力。\n2026-11-20，macOS Desktop 0.2.2-rc.5，通过插件页安装 0.1.6，管理页显示 Codex 登录与可用模型。在 GPT-6.2-Astra 会话的原生 Effort 菜单核对六个实际档位及当前 high。隔离 Web 验证跨模型切换时隐藏无档位模型的菜单并清除旧值。\n2026-11-19，macOS Desktop 0.2.2-rc.5，使用桌面 CLI 同名更新至 0.1.6，搭配 dsh-qoder 0.1.5。实测线缆入口、两个应用图标、点击切换详情及刷新，检测到本机 Codex 登录与 Qoder CLI 缺失。"
+      "evidence": "2026-11-23，日常 macOS Desktop 0.2.2-rc.5 已安装启用 0.2.0 的集成最终包。实测默认 Overview、双列卡片、从厂商直达详情、Codex 与 Qoder 真实登录检测、取消返回、未连接 Grok 隐藏及 API 表单、DeepSeek 原生连接与新增 API 入口。\n2026-11-23，macOS Desktop 0.2.2-rc.5，插件页安装并启用 0.1.9，实测 Qoder CLI 账号用量、详情关闭与焦点恢复，以及 Grok 连接表单。桌面宿主 PATH 未找到 Codex CLI，Codex 卡片显示用量暂不可用。锁屏后输入框的选择器待 Desktop 复验，已通过隔离 Web。\n2026-11-20，0.1.7 已在日常 Desktop 验证管理页和输入框显示 Astra 的图片能力。\n2026-11-20，macOS Desktop 0.2.2-rc.5，通过插件页安装 0.1.6，管理页显示 Codex 登录与可用模型。在 GPT-6.2-Astra 会话的原生 Effort 菜单核对六个实际档位及当前 high。隔离 Web 验证跨模型切换时隐藏无档位模型的菜单并清除旧值。\n2026-11-19，macOS Desktop 0.2.2-rc.5，使用桌面 CLI 同名更新至 0.1.6，搭配 dsh-qoder 0.1.5。实测线缆入口、两个应用图标、点击切换详情及刷新，检测到本机 Codex 登录与 Qoder CLI 缺失。"
     },
     "headless": {
       "status": "unsupported"
