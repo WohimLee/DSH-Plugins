@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { PanelMenu } from './PanelMenu.js';
 import { PluginsNavigation } from './PluginsNavigation.js';
 import { ScheduledNavigation } from './ScheduledNavigation.js';
+import { installSidebarResize } from '../appearance/sidebar.js';
 import type { NativeScheduleText } from './scheduled-native.js';
 import type { ScheduledTasks } from './scheduled-source.js';
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
@@ -31,24 +32,7 @@ export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsL
   const rail = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const frame = rail.current?.closest<HTMLElement>('[data-slot="root"] > div');
-    if (!frame) return;
-    const property = '--wb-host-sidebar-track';
-    const syncWidth = () => {
-      // AppFrame writes the live track before painting, including during a drag.
-      const track = frame.style.gridTemplateColumns.match(/^\d+(?:\.\d+)?px(?= )/)?.[0];
-      const expanded = !frame.hasAttribute('data-sidebar-collapsed') && !frame.hasAttribute('data-sidebar-drawer');
-      const width = expanded ? track : undefined;
-      if (frame.style.getPropertyValue(property) === (width ?? '')) return;
-      if (width) frame.style.setProperty(property, width);
-      else frame.style.removeProperty(property);
-    };
-    syncWidth();
-    const observer = new MutationObserver(syncWidth);
-    observer.observe(frame, { attributes: true, attributeFilter: ['style', 'data-sidebar-collapsed', 'data-sidebar-drawer'] });
-    return () => {
-      observer.disconnect();
-      frame.style.removeProperty(property);
-    };
+    if (frame) return installSidebarResize(frame);
   }, []);
   const [unpinned, setUnpinned] = useState<readonly string[]>([]);
   const panels = usePanels(snapshot => snapshot);

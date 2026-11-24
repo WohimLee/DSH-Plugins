@@ -17,19 +17,22 @@ html[data-dsh-workbench] {
   --wb-sidebar-inset: 16px;
   --wb-sidebar-header-height: 44px;
   --wb-sidebar-top: 6px;
-  --wb-frame-fill: light-dark(#f0f1f3, #28292c);
-  --wb-sidebar-fill: light-dark(#f6f6f7, #222325);
-  --wb-canvas: light-dark(#ffffff, #191a1c);
-  --wb-seam: light-dark(#dddee2, #303134);
-  --wb-frame-seam: light-dark(#dcdde0, #353639);
-  --wb-selection: light-dark(#e5e6ea, #353639);
+  --wb-frame-fill: light-dark(#f0f1f3, #292c2e);
+  --wb-sidebar-fill: light-dark(#f6f6f7, #202122);
+  --wb-canvas: light-dark(#ffffff, #18191a);
+  --wb-summary-fill: light-dark(#f7f7f8, #2b2c2e);
+  --wb-seam: light-dark(#dddee2, #333537);
+  --wb-frame-seam: light-dark(#dcdde0, #353739);
+  --wb-selection: light-dark(#e5e6ea, #303236);
   --wb-hover: light-dark(#eeeff1, #242528);
+  --wb-section-label: light-dark(#626569, #93969a);
+  --wb-summary-label: light-dark(#585b60, #b0b3b8);
   --wb-nav-font: var(--dsh-font-family-text, -apple-system), BlinkMacSystemFont, "Segoe UI", sans-serif;
   --wb-page-inset: clamp(18px, 4.2vw, 45px);
 }
 html[data-dsh-workbench][data-platform="darwin"] { --wb-sidebar-top: 0px; }
 ${managed} {
-  --wb-secondary-width: calc(var(--wb-host-sidebar-track, 280px) + var(--wb-sidebar-inset));
+  --wb-secondary-width: var(--wb-resized-sidebar-width, calc(var(--wb-host-sidebar-track, 280px) + var(--wb-sidebar-inset)));
   --dsw-alias-bg-base: var(--wb-canvas);
   --dsw-alias-border-l3: var(--wb-seam);
   --dsw-specific-sidebar-fill: var(--wb-sidebar-fill);
@@ -69,7 +72,7 @@ ${managed} :is(${homeTitle}, ${sidebarTitle}) { font: 600 18px/24px var(--wb-nav
 ${managed} ${sidebarAction},
 ${managed} .wb-tree-row[data-wb-kind="project"] .wb-tree-label,
 ${managed} .wb-scheduled-row > span { font: 400 14px/20px var(--wb-nav-font); }
-${managed} ${sidebarGroup} { font: 500 14px/20px var(--wb-nav-font); color: var(--dsw-alias-label-secondary); }
+${managed} ${sidebarGroup} { font: 500 14px/20px var(--wb-nav-font); color: var(--wb-section-label); }
 ${managed} :is([data-plugin-group] h3, .dsh-model-management-section h2) {
   font-family: var(--wb-nav-font);
   font-size: 14px;

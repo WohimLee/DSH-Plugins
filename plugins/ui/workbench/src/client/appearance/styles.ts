@@ -29,16 +29,15 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
 }
 .wb-plugins-navigation { display: none; }
 @media (min-width: 824px) {
-  /* Home and management pages use the same native track and extra inset. */
-  ${expandedHome} > ${sidebarColumn} {
-    box-sizing: border-box; inline-size: calc(100% + var(--wb-sidebar-inset));
+  ${expandedHome} {
+    grid-template-columns: var(--wb-secondary-width) var(--wb-host-content-tracks) !important;
   }
   ${expandedHome} > ${sidebarColumn} > [data-slot="sidebar"] > div {
     inline-size: 100% !important;
   }
-  ${expandedHome} > ${sidebarColumn} + div,
   ${expandedHome} > [data-side="sidebar"] {
-    margin-inline-start: var(--wb-sidebar-inset);
+    left: var(--wb-secondary-width) !important;
+    -webkit-app-region: no-drag;
   }
   ${toolFrame}:not([data-sidebar-drawer]) {
     --dsh-windows-sidebar-width: 0px !important;

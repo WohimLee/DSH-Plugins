@@ -13,12 +13,12 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-export type Icon = 'folderAdd' | 'projectAdd' | 'project' | 'projectOpen' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close' | 'search'
+export type Icon = 'folderAdd' | 'circleAdd' | 'project' | 'projectOpen' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close' | 'search'
   | 'rename' | 'read' | 'unread' | 'fork' | 'share' | 'copy' | 'newWindow' | 'trash';
 
 const folderOutline = 'M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z';
 const strokeWidths: Partial<Record<Icon, number>> = {
-  folderAdd: 1.65, projectAdd: 1.65, project: 1.65, projectOpen: 1.65,
+  folderAdd: 1.65, project: 1.65, projectOpen: 1.65,
   more: 3, new: 1.75, pinOutline: 1.75,
 };
 
@@ -39,7 +39,7 @@ export function Glyph({ icon }: { icon: Icon }) {
     close: 'm5 5 14 14M19 5 5 19',
     search: 'M15.5 15.5 21 21m-3-10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z',
     folderAdd: folderOutline + 'M12 10v6M9 13h6',
-    projectAdd: 'M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1M2 13h10M9 16l3-3-3-3',
+    circleAdd: 'M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20ZM12 8v8M8 12h8',
     project: folderOutline + 'M2 10h20',
     projectOpen: 'm6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2',
     section: 'm6 9 6 6 6-6',

@@ -384,11 +384,11 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   };
   const removeUngrouped = () => setRemoval({ id: ungrouped, title: t('ungrouped') });
   const showUngroupedMenu = (event: MouseEvent) => openMenu(event, t('ungroupedMenu'), [
-    { label: t('newSession'), icon: 'new', run: canStartUngrouped ? startUngrouped : undefined },
+    { label: t('newSession'), icon: 'folderAdd', run: canStartUngrouped ? startUngrouped : undefined },
     { label: t('removeUngrouped'), icon: 'close', danger: true, run: removeUngrouped },
   ]);
   const showRecentsMenu = tree.ungroupedInRecents ? (event: MouseEvent) => openMenu(event, t('sectionMenu'), [
-    { label: t('newUngrouped'), icon: 'new', run: canStartUngrouped ? startUngrouped : undefined },
+    { label: t('newUngrouped'), icon: 'folderAdd', run: canStartUngrouped ? startUngrouped : undefined },
     { label: t('restoreUngrouped'), icon: 'list', run: () => {
       if (save(state => ({ ...state, ungroupedInRecents: false }))) {
         show(defaultSection);
@@ -413,8 +413,8 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         </button>
         <div className="wb-tree-actions">
           <Action label={t(project ? 'projectMenu' : 'ungroupedMenu')} icon="more" run={showProjectMenu} />
-          {project && canAdd && <Action label={t('addSubproject')} icon="projectAdd" run={event => { event.currentTarget.focus(); setCreateParent(id); }} />}
-          {(project ? canCreateSession : canStartUngrouped) && <Action label={t('newSession')} icon="new" run={project ? () => {
+          {project && canAdd && <Action label={t('addSubproject')} icon="folderAdd" run={event => { event.currentTarget.focus(); setCreateParent(id); }} />}
+          {(project ? canCreateSession : canStartUngrouped) && <Action label={t('newSession')} icon="folderAdd" run={project ? () => {
             show(id);
             commands.startSession(project.workspaceId);
           } : startUngrouped} />}
@@ -451,7 +451,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         { label: t('rename'), run: () => setRename({ id: section.id, name: label, commit: title => {
           if (save(state => ({ ...state, sections: state.sections.map(item => item.id === section.id ? { ...item, title } : item) }))) setRename(undefined);
         } }) },
-        { label: t('addProject'), run: canAdd ? () => setCreateParent(section.id) : undefined },
+        { label: t('addProject'), icon: 'folderAdd', run: canAdd ? () => setCreateParent(section.id) : undefined },
         { label: t('removeSection'), danger: true, run: () => {
           if (window.confirm(t('removeSectionConfirm'))) save(state => ({ ...state, sections: state.sections.filter(item => item.id !== section.id) }));
         } },
@@ -466,9 +466,9 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           </button>
           <div className="wb-tree-actions">
             {showSectionMenu && <Action label={t('sectionMenu')} icon="more" run={showSectionMenu} />}
-            {canAdd && <Action label={t('addProject')} icon="projectAdd"
+            {canAdd && <Action label={t('addProject')} icon="folderAdd"
                run={event => { event.currentTarget.focus(); setCreateParent(section.id); }} />}
-            {isDefault && canCreateSession && <Action label={t('newSession')} icon="new"
+            {isDefault && canCreateSession && <Action label={t('newSession')} icon="folderAdd"
               run={() => commands.startSession()} />}
           </div>
         </div>}

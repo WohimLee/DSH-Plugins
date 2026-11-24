@@ -75,11 +75,12 @@ html[data-dsh-workbench] [data-window-drag]:has([data-workbench-brand]) { height
 [data-workbench-summary-frame] > [data-conversation-scroll] { min-inline-size: 0; }
 .wb-pinned-summary {
   position: absolute; z-index: 5; inset: calc(100% + 8px) 0 auto auto;
-  display: grid; gap: 4px; inline-size: min(300px, calc(100vw - 32px));
-  max-block-size: min(70vh, 600px); box-sizing: border-box; overflow: auto; padding: 12px 16px;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px;
+  inline-size: min(300px, calc(100vw - 32px));
+  max-block-size: min(70vh, 600px); box-sizing: border-box; overflow: hidden auto; padding: 12px 16px;
   font-size: 13px; line-height: 18px;
-  color: var(--dsw-alias-label-primary, #eee); background: var(--dsw-specific-sidebar-fill, #252525);
-  border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 16px; box-shadow: 0 6px 22px #0004;
+  color: var(--dsw-alias-label-primary, #eee); background: var(--wb-summary-fill);
+  border: 1px solid var(--wb-seam); border-radius: 16px; box-shadow: 0 6px 22px #0004;
   -webkit-app-region: no-drag;
 }
 [data-workbench-summary-frame] > .wb-pinned-summary { inset: 8px 8px auto auto; max-inline-size: calc(100% - 16px); }
@@ -90,13 +91,13 @@ html[data-dsh-workbench] [data-window-drag]:has([data-workbench-brand]) { height
   }
 }
 .wb-summary-group + .wb-summary-group {
-  border-top: 1px solid var(--dsw-alias-border-primary, #8884);
+  border-top: 1px solid var(--wb-seam);
   margin-block-start: 2px; padding-block-start: 6px;
 }
 .wb-summary-heading {
   display: flex; align-items: center; gap: 5px; width: 100%; min-block-size: 28px;
   padding: 2px 4px; border: 0; text-align: start; background: transparent;
-  color: var(--dsw-alias-label-secondary, #aaa); font: inherit;
+  color: var(--wb-summary-label); font: inherit;
 }
 .wb-summary-heading > span, .wb-pinned-summary h3 {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -108,7 +109,7 @@ html[data-dsh-workbench] [data-window-drag]:has([data-workbench-brand]) { height
 }
 .wb-summary-items { min-inline-size: 0; padding-inline: 4px; }
 .wb-pinned-summary h3, .wb-summary-empty {
-  margin: 3px 0 0; font: inherit; color: var(--dsw-alias-label-secondary, #aaa);
+  margin: 3px 0 0; font: inherit; color: var(--wb-summary-label);
 }
 .wb-pinned-summary small { font-size: 12px; color: var(--dsw-alias-label-secondary, #aaa); white-space: nowrap; }
 .wb-agent-icon { inline-size: 16px; text-align: center; font-size: 14px; }

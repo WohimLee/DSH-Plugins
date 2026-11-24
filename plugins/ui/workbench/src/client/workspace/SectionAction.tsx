@@ -39,7 +39,7 @@ export function SectionAction({ children, wide, t, newSection, inline, toggleAct
   </div>;
   return <div className="wb-section-session" ref={findHeader}>
     <button type="button" className="wb-control wb-new-section" onClick={newSection}>
-      <Glyph icon="folderAdd" />{t('addSection')}
+      <Glyph icon="circleAdd" />{t('addSection')}
     </button>
     {header ? createPortal(actions, header) : actions}
     {searchOpen && <SessionSearch t={t} sessions={sessions} workspaces={workspaces.items} archived={workspaces.archivedSessionIds}

@@ -164,10 +164,15 @@ try {
   assert.equal(await header.getByRole('button', { name: 'New Section', exact: true }).count(), 0);
   assert.deepEqual(await sidebarAction.getByRole('button').allTextContents(), ['New Section']);
   assert.equal(await searchSessions.textContent(), '');
+  assert.equal(await recentsLabel.evaluate(button => getComputedStyle(button).color), 'rgb(147, 150, 154)');
   await page.mouse.move(1200, 400);
   const newSectionOutline = await folderOutline(newSection);
+  assert.deepEqual(newSectionOutline, {
+    path: 'M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20ZM12 8v8M8 12h8',
+    width: 16, stroke: '1.7px', decorative: 'true',
+  });
   const addProjectOutline = await folderOutline(recents.getByRole('button', { name: 'Add project', exact: true }));
-  await saveFolderScreenshot(newSection, 'folder-new-section');
+  await saveFolderScreenshot(newSection, 'new-section-circle-plus');
   const titleBounds = row => row.locator('.wb-tree-label > span').first().boundingBox();
   const projectTitleBounds = await titleBounds(project);
   const chatTitleBounds = await titleBounds(alpha);
@@ -180,19 +185,24 @@ try {
     const sidebar = column.getBoundingClientRect();
     const main = column.nextElementSibling.getBoundingClientRect();
     const handle = column.parentElement.querySelector('[data-side="sidebar"]').getBoundingClientRect();
-    return [rail.width, sidebar.width, main.x, handle.x];
+    return [rail.width, sidebar.width, main.x, handle.x + handle.width / 2];
   });
   assert.deepEqual(await sidebarGeometry(), [52, 296, 348, 348], 'default expanded sidebar and drag handle at 100%');
   assert.deepEqual(await tree.evaluate(element => {
     const sidebar = element.closest('[data-slot="sidebar"]').parentElement;
     const rail = document.querySelector('[data-workbench-rail]');
     return [getComputedStyle(rail).backgroundColor, getComputedStyle(sidebar).backgroundColor];
-  }), ['rgb(40, 41, 44)', 'rgb(34, 35, 37)']);
-  await page.mouse.move(352, 200);
-  await page.mouse.down();
-  await page.mouse.move(372, 200, { steps: 5 });
+  }), ['rgb(41, 44, 46)', 'rgb(32, 33, 34)']);
+  const sidebarHandle = page.locator('[data-side="sidebar"]');
+  const startSidebarDrag = async () => {
+    const box = await sidebarHandle.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, 200);
+    await page.mouse.down();
+  };
+  await startSidebarDrag();
+  await page.mouse.move(368, 200, { steps: 5 });
+  assert.deepEqual(await sidebarGeometry(), [52, 316, 368, 368], 'the divider follows the pointer before release');
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '300px');
   assert.deepEqual(await sidebarGeometry(), [52, 316, 368, 368], 'drag moves the sidebar and separator by the same amount');
   const firstSidebarRow = async locator => {
     const bounds = await locator.boundingBox();
@@ -204,24 +214,30 @@ try {
   };
   const homeSidebarRow = await firstSidebarRow(newSection);
   const homeRail = page.locator('[data-workbench-rail]');
-  for (const [label, selector] of [
-    ['Plugins', '[data-workbench-plugins-navigation] > button'],
-    ['Scheduled', '[data-workbench-scheduled-new]'],
-  ]) {
-    await homeRail.getByRole('button', { name: label, exact: true }).click();
-    const first = page.locator(selector).first();
-    await first.waitFor();
-    assert.equal(await first.evaluate(button => button.closest('nav').getBoundingClientRect().width), 316, label);
-    assert.deepEqual(await firstSidebarRow(first), homeSidebarRow, label);
+  for (const [pointerX, width] of [[120, 238], [760, 468]]) {
+    await startSidebarDrag();
+    await page.mouse.move(pointerX, 200, { steps: 7 });
+    await page.mouse.up();
+    const end = width + 52;
+    assert.deepEqual(await sidebarGeometry(), [52, width, end, end], 'drag clamps at the measured bounds');
+    for (const [label, selector] of [
+      ['Plugins', '[data-workbench-plugins-navigation] > button'],
+      ['Scheduled', '[data-workbench-scheduled-new]'],
+    ]) {
+      await homeRail.getByRole('button', { name: label, exact: true }).click();
+      const first = page.locator(selector).first();
+      await first.waitFor();
+      assert.equal(await first.evaluate(button => button.closest('nav').getBoundingClientRect().width), width, label);
+      assert.deepEqual(await firstSidebarRow(first), homeSidebarRow, label);
+    }
+    await homeRail.getByRole('button', { name: 'Conversation', exact: true }).click();
+    await newSection.waitFor();
+    assert.deepEqual(await sidebarGeometry(), [52, width, end, end], 'switching preserves the user-resized track');
   }
-  await homeRail.getByRole('button', { name: 'Conversation', exact: true }).click();
-  await newSection.waitFor();
-  assert.deepEqual(await sidebarGeometry(), [52, 316, 368, 368], 'switching preserves the user-resized track');
-  await page.mouse.move(372, 200);
-  await page.mouse.down();
-  await page.mouse.move(352, 200, { steps: 5 });
+  await startSidebarDrag();
+  await page.mouse.move(348, 200, { steps: 5 });
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '280px');
+  assert.deepEqual(await sidebarGeometry(), [52, 296, 348, 348]);
   for (const row of [project, alpha]) {
     assert.deepEqual(await row.locator('.wb-tree-label').evaluate(label => {
       const style = getComputedStyle(label);
@@ -545,14 +561,14 @@ try {
   assert.deepEqual(projectNameOutline, closedOutline);
   assert.deepEqual(sourceFolderOutline, closedOutline);
   assert.deepEqual(await folderOutline(createProject.locator('.wb-project-name')), closedOutline);
-  assert.deepEqual(newSectionOutline, addSourceOutline);
   assert.deepEqual(await folderOutline(createProject.getByRole('button', { name: 'Add', exact: true })), addSourceOutline);
   assert.deepEqual(addSubprojectOutline, addProjectOutline);
+  assert.deepEqual(addProjectOutline, addSourceOutline);
+  assert.deepEqual(await folderOutline(project.getByRole('button', { name: 'New session', exact: true })), addSourceOutline);
   for (const outline of [openOutline, closedOutline, addSourceOutline, addProjectOutline]) {
     assert.deepEqual([outline.width, outline.stroke, outline.decorative], [16, '1.65px', 'true']);
   }
   assert.match(addSourceOutline.path, /M12 10v6M9 13h6/);
-  assert.match(addProjectOutline.path, /M2 13h10M9 16l3-3-3-3/);
   await projectName.fill('child-project');
   assert.equal(await createButton.isDisabled(), true);
   await addRoot(join(temp, 'workspace'));
@@ -863,6 +879,24 @@ try {
     const changes = getComputedStyle(element.querySelector('.wb-summary-changes'));
     return [heading.fontSize, heading.fontWeight, changes.fontSize, changes.lineHeight];
   }), ['13px', '400', '14px', '20px']);
+  const summaryHeadingFit = () => summary.evaluate(card => {
+    const heading = card.querySelector('.wb-summary-heading');
+    const label = heading.querySelector('span');
+    const previous = label.textContent;
+    label.textContent = 'bugfix-2026-11-23-qoder-model-request-with-a-long-checkout-name';
+    try {
+      return {
+        cardFits: card.clientWidth === card.scrollWidth,
+        titleEllipsized: label.scrollWidth > label.clientWidth && getComputedStyle(label).textOverflow === 'ellipsis',
+        fill: getComputedStyle(card).backgroundColor,
+        titleColor: getComputedStyle(heading).color,
+      };
+    } finally {
+      label.textContent = previous;
+    }
+  });
+  const expectedSummaryFit = { cardFits: true, titleEllipsized: true, fill: 'rgb(43, 44, 46)', titleColor: 'rgb(176, 179, 184)' };
+  assert.deepEqual(await summaryHeadingFit(), expectedSummaryFit);
   const childProjectKey = await child.getAttribute('data-row-key');
   assert.ok(childProjectKey?.startsWith('project:'));
   // Feed the persisted folder configuration through the normal cross-window refresh.
@@ -904,6 +938,7 @@ try {
   assert.ok(Math.abs(narrowOpenedComposer.x - narrowComposer.x) < 1,
     `the narrow summary leaves the composer in place (${narrowComposer.x} → ${narrowOpenedComposer.x})`);
   assert.ok(narrowPanel.x >= 0 && narrowPanel.x + narrowPanel.width <= 1180, 'the narrow summary fits in the window');
+  assert.deepEqual(await summaryHeadingFit(), expectedSummaryFit);
   if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-open-narrow.png') });
   await page.setViewportSize({ width: 1440, height: 1000 });
   const agentGroup = summary.locator('[data-summary-group="agents"]');
@@ -1213,7 +1248,7 @@ try {
     return [getComputedStyle(element).backgroundColor, getComputedStyle(main).backgroundColor,
       headingStyle.fontSize, headingStyle.lineHeight, headingStyle.fontWeight];
   }, { body, heading });
-  const expectedManagementChrome = ['rgb(34, 35, 37)', 'rgb(25, 26, 28)', '21px', '27.3px', '550'];
+  const expectedManagementChrome = ['rgb(32, 33, 34)', 'rgb(24, 25, 26)', '21px', '27.3px', '550'];
   const basicList = page.locator('[data-plugin-group="basic"] > ul');
   await basicList.waitFor();
   assert.deepEqual(await readManagementChrome(pluginsNavigation, '[data-plugin-panel]', '[data-plugin-header-part="title"]'), expectedManagementChrome);
