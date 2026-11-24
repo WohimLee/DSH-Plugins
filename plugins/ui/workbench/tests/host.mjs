@@ -585,7 +585,7 @@ try {
   if (process.env.DSH_TEST_ARTIFACTS) await userImage.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'user-image-compact.png') });
   console.log('PASS compact user image and full-resolution lightbox, with the assistant image retaining its native variant.');
   const sessionHeader = page.locator('[data-slot="conversation.session.header"] nav').getByText('Workbench alpha', { exact: true });
-  assert.equal(await sessionHeader.evaluate(title => getComputedStyle(title).fontSize), '12.5px');
+  assert.equal(await sessionHeader.evaluate(title => getComputedStyle(title).fontSize), '13px');
   const paragraph = page.locator('[data-conversation-content]').getByText('Activity preview fixture', { exact: true });
   assert.deepEqual(await paragraph.evaluate(text => {
     const measure = () => {
@@ -741,8 +741,34 @@ try {
   await theme.evaluate(node => node.remove());
   console.log('PASS composer, Edited files card and hover diff typography at 100% with 15px host preferences, plus dark and light user bubbles.');
   const tabs = page.locator('[data-conversation-tabs]');
-  await tabs.getByRole('tab', { name: 'Trajectory' }).click();
-  await tabs.getByRole('tab', { name: 'Chat', exact: true }).click();
+  const chatTab = tabs.getByRole('tab', { name: 'Chat', exact: true });
+  const trajectoryTab = tabs.getByRole('tab', { name: 'Trajectory' });
+  const headerGeometry = await tabs.evaluate(strip => {
+    const row = strip.parentElement;
+    const header = strip.closest('header[data-window-drag]');
+    const title = header.querySelector('[data-slot="conversation.session.header"] nav');
+    const rule = getComputedStyle(row, '::before');
+    return {
+      titleAboveTabs: title.getBoundingClientRect().bottom < row.getBoundingClientRect().top,
+      rule: rule.borderTopWidth,
+      tabsHeight: strip.getBoundingClientRect().height,
+    };
+  });
+  assert.deepEqual(headerGeometry, { titleAboveTabs: true, rule: '1px', tabsHeight: 37 });
+  await trajectoryTab.click();
+  assert.equal(await trajectoryTab.getAttribute('aria-selected'), 'true');
+  assert.deepEqual(await trajectoryTab.evaluate(tab => {
+    const underline = getComputedStyle(tab, '::after');
+    return [underline.height, underline.backgroundColor === getComputedStyle(tab).color];
+  }), ['2px', true]);
+  await chatTab.press('Enter');
+  assert.equal(await chatTab.getAttribute('aria-selected'), 'true');
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await page.locator('header[data-window-drag]').filter({ has: tabs }).screenshot({
+      path: join(process.env.DSH_TEST_ARTIFACTS, 'session-header.png'),
+    });
+  }
+  console.log('PASS Session title above the divider, native view tabs with underline, and keyboard switching.');
   await beta.getByRole('button', { name: 'Workbench beta', exact: true }).click();
   await beta.locator('[aria-current="true"]').waitFor();
   console.log('PASS switching to native session beta.');
@@ -1123,26 +1149,66 @@ try {
   const homeButton = rail.getByRole('button', { name: 'Conversation', exact: true });
   const sidebar = page.locator('[data-slot="sidebar"]');
   const globalPanel = page.locator('[data-global-panel]');
-  const checkToolPage = async () => {
+  const checkToolPage = async (navigationWidth = 0) => {
     await tree.waitFor({ state: 'hidden' });
     await sidebar.locator('[data-slot="sidebar.session.action"]').waitFor({ state: 'hidden' });
     await globalPanel.waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-side="sidebar"]:visible').count(), 0);
-    assert.ok(await globalPanel.evaluate(panel => Math.abs(panel.getBoundingClientRect().left -
-      panel.closest('[data-slot="root"] > div').getBoundingClientRect().left) < 2));
+    await page.waitForFunction(width => {
+      const panel = document.querySelector('[data-global-panel]');
+      return panel && Math.abs(panel.getBoundingClientRect().left -
+        panel.closest('[data-slot="root"] > div').getBoundingClientRect().left - width) < 2;
+    }, navigationWidth);
     assert.ok(await rail.isVisible());
     await accountMenu.click({ trial: true });
   };
   assert.equal(await rail.getByRole('button', { name: 'New session', exact: true }).count(), 0);
   assert.equal(await rail.locator('.dsh-workbench-divider').count(), 0);
-  for (const label of ['Plugins', 'Automation tasks']) {
-    await rail.getByRole('button', { name: label, exact: true }).click();
-    await checkToolPage();
-    await homeButton.click();
-    await tree.waitFor({ state: 'visible' });
-    await children(child).locator('[data-row-key="session:workbench-test-beta"]').waitFor();
+  await rail.getByRole('button', { name: 'Plugins', exact: true }).click();
+  const pluginsNavigation = page.locator('[data-workbench-plugins-navigation]');
+  await pluginsNavigation.waitFor();
+  await checkToolPage(283.5);
+  const basicList = page.locator('[data-plugin-group="basic"] > ul');
+  await basicList.waitFor();
+  assert.equal(await basicList.evaluate(list => getComputedStyle(list).gridTemplateColumns.split(' ').length), 2);
+  const basicPlugins = pluginsNavigation.locator('[data-workbench-plugin-group="basic"]');
+  await basicPlugins.click();
+  await pluginsNavigation.locator('[data-workbench-plugin-group="basic"][aria-current="true"]').waitFor();
+  await page.locator('[data-plugin-group="basic"]').waitFor();
+  await pluginsNavigation.locator('[data-workbench-plugin-group="overview"]').click();
+  await page.locator('[data-plugin-header-part="title"]').waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'plugins-page.png') });
+  await homeButton.click();
+  await tree.waitFor({ state: 'visible' });
+
+  await rail.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await checkToolPage();
+  const schedule = page.getByTestId('task-manager-page');
+  const catalog = schedule.getByRole('list', { name: 'Task catalog' });
+  const fixtureNames = ['Workbench layout fixture one', 'Workbench layout fixture two'];
+  for (const name of fixtureNames) {
+    await schedule.getByRole('button', { name: 'Choose a creation method' }).click();
+    await page.getByRole('menuitem', { name: 'Create manually' }).click();
+    const form = schedule.getByRole('complementary', { name: 'Create manually' });
+    await form.getByLabel('Automation task name').fill(name);
+    await form.getByLabel('Automation task instruction').fill('Isolated layout fixture. No run is requested.');
+    await form.getByRole('button', { name: 'Create', exact: true }).click();
+    await catalog.getByRole('button', { name, exact: true }).waitFor();
+    await schedule.getByRole('button', { name: 'Close details' }).click();
   }
-  console.log('PASS Home-only sidebar and simplified rail on Plugins and Automation tasks.');
+  const firstTask = catalog.getByRole('button', { name: fixtureNames[0], exact: true });
+  const subsequentTask = catalog.getByRole('button', { name: fixtureNames[1], exact: true });
+  assert.equal((await firstTask.boundingBox()).height, 49);
+  assert.equal(Math.abs((await subsequentTask.boundingBox()).y - (await firstTask.boundingBox()).y), 49);
+  if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'scheduled-page.png') });
+  await firstTask.press('Enter');
+  await schedule.getByRole('complementary', { name: 'Task details' }).waitFor();
+  await schedule.getByRole('button', { name: 'Pause', exact: true }).click();
+  await schedule.getByRole('button', { name: 'Resume', exact: true }).waitFor();
+  await homeButton.click();
+  await tree.waitFor({ state: 'visible' });
+  await children(child).locator('[data-row-key="session:workbench-test-beta"]').waitFor();
+  console.log('PASS native Plugins navigation, Scheduled row spacing and native task detail/pause, and return to the same Home session.');
   assert.equal(await page.locator('[data-sidebar-scrollport] > nav:visible').count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Toggle project sidebar' }).count(), 0);
   await rail.getByRole('button', { name: 'More panels' }).click();

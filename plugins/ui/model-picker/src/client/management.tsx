@@ -4,7 +4,7 @@ import type { ModelPickerConnectionCard, PropsLocale, PropsRenderSlots } from '@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CodexApi, CodexApiChange, CodexDesktop } from '../remote.js';
 import { groupProviders } from './model.js';
-import { ConnectionCard, ProviderIcon } from './connection-card.js';
+import { ConnectionRow, ProviderIcon } from './connection-card.js';
 import { ApiAccounts, CodexDesktopAccounts, DesktopDetection } from './connection-setup.js';
 import { CardUsage } from './card-usage.js';
 import { ManagementIcon, ProviderGlyph } from './icons.js';
@@ -70,6 +70,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef(false);
+  const pendingCatalog = useRef<string>();
   const setupStarted = useRef(false);
   const readUsage = useMemo(() => createReadUsage(ctx), [ctx]);
   const refreshConnections = useCallback(() => setRefresh(value => value + 1), []);
@@ -157,7 +158,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
 
   cards.set('codex', {
     id: 'codex', name: 'Codex', action: t('viewConnection'),
-    status: t(signedInCodex ? 'codexConnected' : codexConnected ? 'connected' : 'codexDisconnected'),
+    status: t(codexConnected ? 'connected' : 'codexDisconnected'),
     tone: codexConnected ? 'ready' : 'warning',
     description: signedInCodex ? t('codexLocal') : undefined,
     footer: codexModels ? modelLabel(t, countModels(codexModels)) : undefined,
@@ -219,6 +220,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
   const key = setup ? 'add' : page.kind === 'overview' ? 'overview' : page.id;
   const currentConnected = page.kind !== 'provider' || connected.includes(page.id);
   const visibleCard = page.kind === 'provider' ? cards.get(page.id) : undefined;
+  const visibleGroup = visibleCard && snapshot.groups.find(group => group.id === visibleCard.id);
   const adding = setup ? cards.get(setup.id) : undefined;
   const setupBusy = !!setup && (changing || adding?.connection?.busy === true);
   const addedCount = adding?.connection?.accountCount ?? (adding?.tone === 'ready' ? 1 : undefined);
@@ -263,6 +265,17 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
     if (!pendingFocus.current) return;
     pendingFocus.current = false;
     if (body.current) body.current.scrollTop = 0;
+    const id = pendingCatalog.current;
+    pendingCatalog.current = undefined;
+    if (id && body.current) {
+      const catalog = body.current.querySelector<HTMLDetailsElement>(`[data-model-catalog="${CSS.escape(id)}"]`);
+      const summary = catalog?.querySelector('summary');
+      if (catalog && summary) {
+        catalog.open = true;
+        summary.focus();
+        return;
+      }
+    }
     heading.current?.focus();
   }, [key]);
 
@@ -275,6 +288,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
 
   return <main className="dsh-model-management" aria-label={t('management')}>
     <nav className="dsh-model-management-nav" aria-label={t('management')}>
+      <h2>{t('models')}</h2>
       <button type="button" disabled={setupBusy} aria-current={key === 'overview' ? 'page' : undefined}
         onClick={() => navigate(defaultPage)}>
         <ManagementIcon name="overview" />{t('overview')}
@@ -325,13 +339,24 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
         </> : page.kind === 'provider' && visibleCard ? <>
           <header className="dsh-model-management-header dsh-provider-header">
             <div><ProviderIcon id={page.id} /><div>
-              <h1 tabIndex={-1} ref={heading}>{visibleCard.name}</h1><p>{t('connectionAccounts')}</p>
+              <h1 tabIndex={-1} ref={heading}>{visibleCard.name}</h1>
+              <p>{t('connectionAccounts')}{visibleCard.footer && <> · {visibleCard.footer}</>}</p>
             </div></div>
             <button type="button" disabled={checking} onClick={refreshConnections}>
               <ManagementIcon name="refresh" />{t('refreshConnections')}
             </button>
           </header>
           <div className="dsh-connection-method-stack" key={visibleCard.id}>
+            <section className="dsh-connection-usage-summary" aria-label={t('usage')}>
+              <h2>{t('usage')}</h2>
+              <CardUsage group={visibleGroup} name={visibleCard.name} {...{ readUsage, refresh, t, language }}
+                includeDeepSeekAccount={visibleCard.id === 'deepseek' && snapshot.deepseekSignedIn}
+                unavailable={visibleCard.id === 'grok' ? t('usageInXaiConsole') : t('unavailable')} />
+            </section>
+            {visibleGroup && <button type="button" className="dsh-model-catalog-jump" onClick={() => {
+              pendingCatalog.current = visibleGroup.id;
+              navigate(defaultPage);
+            }}><ManagementIcon name="layers" />{t('viewAvailableModels')}</button>}
             {methods.map(method => <section className="dsh-connection-method" key={method} aria-label={t(method)}>
               <header><MethodHeading method={method} t={t} />
                 {visibleCard.connection?.setup?.[method] && <button type="button" data-emphasis="true"
@@ -352,16 +377,9 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
           <section className="dsh-model-management-section" aria-label={t('desktopConnections')}>
             <h2>{t('desktopConnections')}</h2>
             {connected.length === 0 && <p role="status">{t(checking ? 'checkingConnection' : 'noConnections')}</p>}
-            <div className="dsh-connection-grid">
-              {connected.map(id => {
-                const card = cards.get(id)!;
-                const group = snapshot.groups.find(item => item.id === id);
-                return <ConnectionCard key={id} {...card} open={() => navigate({ kind: 'provider', id })}
-                  usage={<CardUsage group={group} name={card.name} {...{ readUsage, refresh, t, language }}
-                    includeDeepSeekAccount={id === 'deepseek' && snapshot.deepseekSignedIn}
-                    unavailable={id === 'grok' ? t('usageInXaiConsole') : t('unavailable')} />} />;
-              })}
-            </div>
+            {connected.length > 0 && <div className="dsh-connection-list">
+              {connected.map(id => <ConnectionRow key={id} {...cards.get(id)!} open={() => navigate({ kind: 'provider', id })} />)}
+            </div>}
           </section>
           <section className="dsh-model-management-section" aria-label={t('availableCatalog')}>
             <h2>{t('availableCatalog')}</h2>
@@ -369,7 +387,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
             {snapshot.failures.map(failure => <p role="status" key={failure.id}>{failure.name} · {failure.message}</p>)}
             {!snapshot.catalogError && !checking && snapshot.groups.length === 0 && snapshot.failures.length === 0 && <p>{t('empty')}</p>}
             {snapshot.groups.length > 0 && <div className="dsh-model-management-catalog">
-              {snapshot.groups.map(group => <details key={group.id}>
+              {snapshot.groups.map(group => <details key={group.id} data-model-catalog={group.id}>
                 <summary><ManagementIcon name="layers" /><span>{group.name}</span>
                   <span>{modelLabel(t, countModels(group))}</span><ManagementIcon name="chevron" />
                 </summary>

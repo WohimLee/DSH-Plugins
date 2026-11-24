@@ -4,6 +4,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const zh = {
   viewActivity: '查看动态', priority: '优先', today: '今天', noActivity: '暂无会话动态',
   navigation: '工作台导航', conversation: '对话', newSession: '新建会话', morePanels: '更多面板', pinLauncher: '固定到功能栏', cancel: '取消', create: '创建',
+  scheduled: '计划任务', pluginsOverview: '概览', pluginsBuiltIn: '内置插件设置', pluginsExperimental: '实验性插件', pluginsInstalled: '已安装插件',
   sessionSource: '会话来源', codexProjects: 'Codex 项目', unassignedCodex: '未归入项目', unknownDirectory: '未知工作目录',
   externalArchived: '已归档', externalEmpty: '没有已同步的 Codex 项目或会话。', externalOpenFailed: '无法在本机 Codex 中打开此会话。',
   projects: '项目', recents: 'Recents', archived: 'Archived', unarchiveChat: '取消归档', ungrouped: '未分组会话', addSection: '新建分区', sectionName: '分区名称',
@@ -51,6 +52,7 @@ const zh = {
 const en: Record<keyof typeof zh, string> = {
   viewActivity: 'View activity', priority: 'Priority', today: 'Today', noActivity: 'No session activity yet.',
   navigation: 'Workbench navigation', conversation: 'Conversation', newSession: 'New session', morePanels: 'More panels', pinLauncher: 'Pin to activity bar', cancel: 'Cancel', create: 'Create',
+  scheduled: 'Scheduled', pluginsOverview: 'Overview', pluginsBuiltIn: 'Built-in settings', pluginsExperimental: 'Experimental', pluginsInstalled: 'Installed',
   sessionSource: 'Session source', codexProjects: 'Codex projects', unassignedCodex: 'Unassigned chats', unknownDirectory: 'Unknown working directory',
   externalArchived: 'Archived', externalEmpty: 'No synced Codex projects or chats.', externalOpenFailed: 'Could not open this chat in local Codex.',
   projects: 'Projects', recents: 'Recents', archived: 'Archived', unarchiveChat: 'Unarchive session', ungrouped: 'Ungrouped chats', addSection: 'New Section', sectionName: 'Section name',

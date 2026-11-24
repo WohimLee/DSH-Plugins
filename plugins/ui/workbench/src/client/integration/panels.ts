@@ -13,7 +13,8 @@ export function panelSource(ctx: Context): HostObservable<readonly PanelEntry[]>
   const sync = () => {
     const next = ctx.slots.entriesOfSlot('sidebar.panellist').map(({ options }) => ({
       id: options.id as MainPanelId,
-      label: typeof options.label === 'function' ? options.label() : options.label ?? options.id!,
+      label: options.id === 'schedules' ? ctx.locale.bind('workbench')('scheduled')
+        : typeof options.label === 'function' ? options.label() : options.label ?? options.id!,
       order: options.order ?? 0,
     })).sort((a, b) => a.order - b.order);
     if (snapshot.length === next.length && snapshot.every((entry, index) =>

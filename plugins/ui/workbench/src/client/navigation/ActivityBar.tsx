@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PanelMenu } from './PanelMenu.js';
+import { PluginsNavigation } from './PluginsNavigation.js';
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
@@ -9,6 +10,7 @@ import type {} from '../messages.js';
 
 interface ActivityInjected {
   selectPanel: (id: MainPanelId | null) => void;
+  openPluginsList: () => boolean;
   hooks: { panels: HostObservable<readonly PanelEntry[]> };
 }
 export type ActivityBarProps = PropsRuntime<'shell.overlay'> & PropsRenderFactories & PropsLocale<'workbench'> & InjectFace<ActivityInjected>;
@@ -20,23 +22,27 @@ function HomeIcon() {
   </svg>;
 }
 
-export function ActivityBar({ usePanels, usePanelInfo, selectPanel, renderFactorySlot, t }: ActivityBarProps) {
+export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsList, renderFactorySlot, t }: ActivityBarProps) {
   const [unpinned, setUnpinned] = useState<readonly string[]>([]);
   const panels = usePanels(snapshot => snapshot);
   const hasMore = panels.some(panel => panel.id !== 'plugins');
   const selected = usePanelInfo(info => info.activePanelId);
-  return <nav className="dsh-workbench-rail" aria-label={t('navigation')} data-workbench-rail>
-    <button type="button" className="dsh-workbench-button" aria-label={t('conversation')} title={t('conversation')}
-      aria-current={selected === null ? 'page' : undefined} onClick={() => selectPanel(null)}><HomeIcon /></button>
-    <div className="dsh-workbench-panel-buttons">
-      {panels.filter(panel => !hasMore || !unpinned.includes(panel.id)).map(({ id, label }) => <button key={id} type="button" className="dsh-workbench-button"
-        data-workbench-panel={id} aria-label={label} title={label} aria-current={selected === id ? 'page' : undefined}
-        onClick={() => selectPanel(id)}>{renderFactorySlot('sidebar.panel.icon', { id, size: 19, active: selected === id }, {
-          fallback: <span aria-hidden="true">◇</span>,
-        })}</button>)}
-      {hasMore && <PanelMenu panels={panels} selected={selected} unpinned={unpinned} selectPanel={selectPanel}
-        setUnpinned={(id, pinned) => setUnpinned(current => pinned ? current.filter(entry => entry !== id) : [...new Set([...current, id])])}
-        t={t} />}
-    </div>
-  </nav>;
+  const plugins = selected === 'plugins' && panels.find(panel => panel.id === 'plugins');
+  return <>
+    <nav className="dsh-workbench-rail" aria-label={t('navigation')} data-workbench-rail>
+      <button type="button" className="dsh-workbench-button" aria-label={t('conversation')} title={t('conversation')}
+        aria-current={selected === null ? 'page' : undefined} onClick={() => selectPanel(null)}><HomeIcon /></button>
+      <div className="dsh-workbench-panel-buttons">
+        {panels.filter(panel => !hasMore || !unpinned.includes(panel.id)).map(({ id, label }) => <button key={id} type="button" className="dsh-workbench-button"
+          data-workbench-panel={id} aria-label={label} title={label} aria-current={selected === id ? 'page' : undefined}
+          onClick={() => selectPanel(id)}>{renderFactorySlot('sidebar.panel.icon', { id, size: 19, active: selected === id }, {
+            fallback: <span aria-hidden="true">◇</span>,
+          })}</button>)}
+        {hasMore && <PanelMenu panels={panels} selected={selected} unpinned={unpinned} selectPanel={selectPanel}
+          setUnpinned={(id, pinned) => setUnpinned(current => pinned ? current.filter(entry => entry !== id) : [...new Set([...current, id])])}
+          t={t} />}
+      </div>
+    </nav>
+    {plugins && <PluginsNavigation label={plugins.label} openList={openPluginsList} t={t} />}
+  </>;
 }

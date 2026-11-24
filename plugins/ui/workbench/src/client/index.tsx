@@ -56,6 +56,12 @@ function assemble(ctx: Context): void {
     name: 'shell.overlay', id: 'dsh-workbench:activity', order: -100, locale: 'workbench',
     inject: () => ({
       selectPanel: ctx.layout.selectPanel.bind(ctx.layout),
+      openPluginsList: () => {
+        const navigation = ctx.get('pluginNavigation') as { openList(): void } | undefined;
+        if (!navigation) return false;
+        navigation.openList();
+        return true;
+      },
       hooks: { panels },
     }),
   }, ActivityBar));

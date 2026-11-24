@@ -1,5 +1,4 @@
 import type { ModelPickerConnectionCard } from '@deepseek-ai/dsh-client-ui-slots';
-import type { ReactNode } from 'react';
 import { ManagementIcon, ProviderGlyph } from './icons.js';
 import grokIcon from './icons/grok.png';
 
@@ -10,24 +9,18 @@ export function ProviderIcon({ id }: { id: string }) {
     </span>;
 }
 
-export function ConnectionCard({ id, name, status, tone, description, footer, action, usage, open }:
-  ModelPickerConnectionCard & { usage: ReactNode; open: () => void }) {
-  return <section className="dsh-connection-card" aria-label={name}>
-    <header><ProviderIcon id={id} /><h3>{name}</h3></header>
+export function ConnectionRow({ id, name, status, tone, description, footer, action, open }:
+  ModelPickerConnectionCard & { open: () => void }) {
+  const subtitle = description ?? footer;
+  return <section className="dsh-connection-row" aria-label={name} data-provider={id}>
+    <header><ProviderIcon id={id} /><div><h3>{name}</h3>
+      {subtitle && <p className="dsh-connection-description">{subtitle}</p>}
+    </div></header>
     <p className="dsh-connection-status" data-tone={tone} role="status">
       {tone !== 'neutral' && <ManagementIcon name={tone === 'ready' ? 'check' : 'alert'} />}{status}
     </p>
-    {description && <p className="dsh-connection-description">{description}</p>}
-    <footer>
-      <span className="dsh-connection-footer-label">
-        {footer && <><ManagementIcon name={id === 'codex' || id === 'deepseek' ? 'layers' : 'key'} />{footer}</>}
-      </span>
-      <div className="dsh-connection-actions">
-        {usage}
-        <button type="button" className="dsh-connection-open" onClick={open}>
-          {action}<ManagementIcon name="next" size={13} />
-        </button>
-      </div>
-    </footer>
+    <button type="button" className="dsh-connection-open" aria-label={action} onClick={open}>
+      <ManagementIcon name="next" size={14} />
+    </button>
   </section>;
 }

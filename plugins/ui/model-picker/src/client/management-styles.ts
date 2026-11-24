@@ -2,13 +2,13 @@ export const managementStyles = `
 .dsh-model-management {
   --connection-text: var(--dsw-alias-label-primary, CanvasText);
   --connection-muted: var(--dsw-alias-label-secondary, GrayText);
-  --connection-border: light-dark(#e2e3ea, #30323b);
-  --connection-canvas: light-dark(#fff, #17181b);
-  --connection-nav: light-dark(#f7f7fa, #1c1d22);
+  --connection-border: var(--dsw-alias-border-primary, light-dark(#e2e3e5, #303134));
+  --connection-canvas: light-dark(#fff, #191a1c);
+  --connection-nav: var(--dsw-specific-sidebar-fill, light-dark(#f7f7f8, #222325));
   --connection-card: light-dark(#f8f8fb, #202228);
   --connection-accent: light-dark(#56369b, #d0bffa);
   --connection-accent-bg: light-dark(#eeebf9, #2d2840);
-  --connection-hover: light-dark(#eeeff3, #2a2c34);
+  --connection-hover: var(--dsw-alias-background-hover, light-dark(#eeeff0, #252629));
   display: grid;
   grid-template-columns: 164px minmax(0, 1fr);
   height: 100%;
@@ -43,29 +43,46 @@ html[data-platform="darwin"] .dsh-model-management {
   gap: 23px;
   max-width: 960px;
   margin-inline: auto;
-  container-type: inline-size;
 }
 .dsh-model-management :is(h1, h2, h3, p) { margin: 0; }
 .dsh-model-management h1 { font-size: 20px; font-weight: 500; line-height: 28px; letter-spacing: normal; }
 .dsh-model-management h2 { font-size: 15px; font-weight: 600; }
-.dsh-model-management h3 { font-size: 15px; font-weight: 640; }
+.dsh-model-management h3 { font-size: 15px; font-weight: 600; }
 .dsh-model-management :is(p, summary, li) { font-size: 13px; }
+.dsh-model-management-nav > h2 { margin: 0 9px 10px; font-size: 14px; line-height: 20px; }
 .dsh-model-management-header {
   display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
 }
 .dsh-model-management-section { display: grid; gap: 10px; }
-.dsh-connection-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
-.dsh-connection-card, .dsh-connection-method, .dsh-connection-setup {
+.dsh-connection-list { border-block-start: 1px solid var(--connection-border); }
+.dsh-connection-row {
+  position: relative; display: grid; align-items: center;
+  grid-template-columns: minmax(0, 1fr) fit-content(42%) auto; gap: 10px;
+  min-height: 60px; box-sizing: border-box; padding: 8px 6px;
+  border-block-end: 1px solid var(--connection-border);
+}
+.dsh-connection-row:hover { background: var(--connection-hover); }
+.dsh-connection-row header { display: flex; align-items: center; gap: 10px; overflow-wrap: anywhere; }
+.dsh-connection-row h3 { font-size: 13px; line-height: 19px; }
+.dsh-connection-row .dsh-connection-description { color: var(--connection-muted); font-size: 12px; line-height: 17px; }
+.dsh-connection-row .dsh-connection-status {
+  display: flex; align-items: center; gap: 5px; justify-self: end;
+  font-size: 12px; line-height: 17px; overflow-wrap: anywhere;
+}
+.dsh-model-management .dsh-connection-open {
+  color: var(--connection-muted); border: 0; padding: 0;
+}
+.dsh-connection-open::after { content: ''; position: absolute; inset: 0; cursor: pointer; }
+.dsh-connection-open:focus-visible { outline: none; }
+.dsh-connection-open:focus-visible::after {
+  outline: 2px solid var(--dsw-alias-accent-primary, var(--connection-accent)); outline-offset: -2px;
+}
+.dsh-connection-method, .dsh-connection-setup {
   min-width: 0;
   border: 1px solid var(--connection-border);
   border-radius: 10px;
   background: var(--connection-card);
 }
-.dsh-connection-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 13px 13px 0; }
-.dsh-connection-card:has(.dsh-connection-open:hover) { border-color: var(--connection-muted); }
-.dsh-connection-open::after { content: ''; position: absolute; inset: 0; border-radius: 10px; cursor: pointer; }
-.dsh-connection-open:focus-visible::after { outline: 2px solid var(--connection-accent); outline-offset: 2px; }
-.dsh-connection-card header { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; }
 .dsh-connection-icon { display: block; object-fit: contain; flex: none; }
 .dsh-connection-fallback, .dsh-method-icon {
   display: grid; place-items: center; flex: none; width: 33px; height: 33px;
@@ -73,20 +90,21 @@ html[data-platform="darwin"] .dsh-model-management {
 }
 .dsh-connection-fallback[data-provider="codex"] { background: light-dark(#e9e8ff, #33325e); }
 .dsh-connection-fallback[data-provider="qoder"] { background: #e6e9ef; color: #272a36; }
-.dsh-connection-card .dsh-connection-status { display: flex; align-items: center; gap: 6px; font-weight: 550; margin-bottom: 5px; }
+.dsh-connection-row .dsh-connection-icon {
+  width: 31px; height: 31px; box-sizing: border-box;
+}
+.dsh-connection-row .dsh-connection-fallback {
+  background: var(--connection-card); color: var(--connection-muted); border: 1px solid var(--connection-border);
+}
 .dsh-connection-status[data-tone="neutral"] { color: var(--connection-muted); }
 .dsh-connection-status[data-tone="ready"] { color: light-dark(#216744, #93d6b2); }
 .dsh-connection-status[data-tone="warning"] { color: light-dark(#80520d, #f0c88a); }
-.dsh-connection-card .dsh-connection-description { color: var(--connection-muted); margin-bottom: 4px; font-size: 12px; }
-.dsh-connection-card footer {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px;
-  width: 100%; padding-block: 9px; margin-top: auto; border-top: 1px solid var(--connection-border);
-}
-.dsh-connection-card > p:last-of-type { padding-bottom: 9px; }
-.dsh-connection-footer-label { display: flex; align-items: center; gap: 6px; color: var(--connection-muted); font-size: 12px; }
-.dsh-connection-grid > :not(.dsh-connection-card) { grid-column: 1 / -1; order: 1; }
 .dsh-connection-actions, .dsh-connection-usage-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
-.dsh-connection-usage-controls { position: relative; z-index: 1; }
+.dsh-connection-usage-summary {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px;
+  padding: 6px 8px; border-block: 1px solid var(--connection-border);
+}
+.dsh-model-catalog-jump { justify-self: start; }
 .dsh-connection-usage-controls select {
   color: inherit; background: var(--connection-card); border: 1px solid var(--connection-border);
   border-radius: 7px; min-height: 32px; padding-inline: 6px; font: inherit; font-size: 12px; max-width: min(100%, 148px);
@@ -139,7 +157,7 @@ html[data-platform="darwin"] .dsh-model-management {
 }
 .dsh-connection-usage:is(:hover, :focus-within) .dsh-connection-usage-tooltip { display: grid; gap: 3px; }
 .dsh-connection-text-details { display: grid; gap: 8px; padding: 16px 18px; overflow-wrap: anywhere; }
-.dsh-connection-status svg, .dsh-connection-footer-label svg { flex: none; }
+.dsh-connection-status svg { flex: none; }
 .dsh-model-management button {
   display: inline-flex; align-items: center; gap: 6px; min-height: 32px;
   font: inherit; font-size: 12px; padding: 5px 9px;
@@ -149,7 +167,8 @@ html[data-platform="darwin"] .dsh-model-management {
 .dsh-model-management button:not(:disabled):hover { background: var(--connection-hover); }
 .dsh-model-management .dsh-model-management-nav button[aria-current="page"],
 .dsh-model-management .dsh-model-management-nav button[aria-current="page"]:hover {
-  background: var(--connection-accent-bg); color: var(--connection-accent); font-weight: 600;
+  background: var(--dsw-alias-background-active, light-dark(#e6e7e9, #353639));
+  color: var(--connection-text);
 }
 .dsh-model-management button:disabled { opacity: .6; }
 .dsh-model-management input {
@@ -168,8 +187,8 @@ html[data-platform="darwin"] .dsh-model-management {
 .dsh-model-management-route ul { margin: 4px 0 0; padding-inline-start: 18px; }
 .dsh-model-management-route li { padding-block: 5px; overflow-wrap: anywhere; }
 .dsh-model-management-route li p { margin-top: 3px; white-space: pre-line; color: var(--connection-muted); }
-@container (max-width: 510px) {
-  .dsh-connection-grid { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 824px) {
+  .dsh-model-management { grid-template-columns: 283.5px minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
   .dsh-model-management-body { padding-inline: 20px; }
@@ -185,9 +204,11 @@ html[data-platform="darwin"] .dsh-model-management {
     border-inline-end: 0; border-block-end: 1px solid var(--connection-border);
   }
   .dsh-model-management .dsh-model-management-nav button { width: auto; gap: 5px; padding-inline: 7px; }
+  .dsh-model-management-nav > h2 { flex-basis: 100%; margin: 0 7px 3px; }
   .dsh-model-management .dsh-model-management-nav > p { display: none; }
   .dsh-model-management-body { padding-block-start: 16px; }
   .dsh-connection-setup-fields { grid-template-columns: minmax(0, 1fr); }
+  .dsh-connection-row, .dsh-connection-row header { gap: 6px; }
 }
 @media (pointer: coarse) {
   .dsh-model-management :is(button, summary, select),

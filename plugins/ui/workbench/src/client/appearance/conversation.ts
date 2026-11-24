@@ -68,26 +68,47 @@ html[data-dsh-workbench] [data-changes-hover-preview] [data-review-view] {
 }
 
 [data-slot="conversation.session.header"] nav :is(button, span) {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 18px;
 }
 
-/* Only a populated header has view tabs. Preserve blank-session and drawer geometry. */
-@media (min-width: 824px) {
-  html[data-dsh-workbench] header[data-window-drag]:has([data-conversation-tabs]) {
-    min-height: 64px;
-    padding-top: 6px;
-  }
-  [data-slot="conversation.session.header"] div:has(> [data-conversation-tabs]) {
-    margin-top: 6px;
-    gap: 10px 16px;
-  }
-  [data-conversation-tabs][role="tablist"] { min-height: 22px; gap: 12px 24px; }
-  [data-conversation-tabs] > [role="tab"] {
-    min-height: 28px;
-    margin-top: -6px;
-    padding-block: 6px;
-  }
+/* Use the host title, window-drag region and view controls. The rule only
+   applies once a Session has views, so the blank composer keeps its layout. */
+html[data-dsh-workbench] header[data-window-drag]:has([data-conversation-tabs]) {
+  --wb-session-title-height: 36px;
+  --wb-session-header-start: 20px;
+  --wb-session-header-end: 28px;
+  grid-template-rows: minmax(var(--wb-session-title-height), auto) auto;
+  min-height: 0;
+  padding: 0 var(--wb-session-header-end) 0 var(--wb-session-header-start);
+}
+html[data-dsh-workbench][data-platform="darwin"] header[data-window-drag]:has([data-conversation-tabs]) {
+  --wb-session-title-height: max(36px, var(--dsh-frame-top-clearance, 0px));
+}
+[data-slot="conversation.session.header"] div:has(> [data-conversation-tabs]) {
+  margin-block-start: 0;
+  align-items: center;
+  gap: 0 20px;
+  min-height: 37px;
+}
+[data-slot="conversation.session.header"] div:has(> [data-conversation-tabs])::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(-1 * var(--wb-session-header-end)) auto calc(-1 * var(--wb-session-header-start));
+  border-block-start: 1px solid var(--dsw-alias-border-l3);
+  pointer-events: none;
+}
+[data-conversation-tabs][role="tablist"] {
+  min-height: 37px;
+  gap: 0 20px;
+}
+[data-conversation-tabs] > [role="tab"] {
+  min-height: 37px;
+  margin-block-start: 0;
+  padding-block: 9px;
+}
+[data-slot="conversation.session.header"] div:has(> [data-conversation-tabs]) button[aria-haspopup="menu"] {
+  margin-block-start: 0;
 }
 /* The preset is a static titled label in this slot. Sibling action buttons retain their chrome. */
 [data-slot="conversation.session.header.actions"] > span[title]:has(> svg) {

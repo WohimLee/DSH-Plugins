@@ -207,6 +207,7 @@ globalThis.fetch = async (input, options = {}) => {
   const available = management.getByRole('region', { name: 'Available models' });
   const qoderConnection = management.getByRole('region', { name: 'Qoder', exact: true });
   const deepseekConnection = management.getByRole('region', { name: 'DeepSeek', exact: true });
+  const usage = management.getByRole('region', { name: 'Usage', exact: true });
   const nav = management.getByRole('navigation', { name: 'Model management' });
   const overview = nav.getByRole('button', { name: 'Overview', exact: true });
   const addProvider = nav.getByRole('button', { name: 'Add provider', exact: true });
@@ -230,9 +231,12 @@ globalThis.fetch = async (input, options = {}) => {
     return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-frame-top-clearance'));
   });
   assert.equal(clearance, 48);
+  const modelsTitle = nav.getByRole('heading', { name: 'Models', exact: true });
   const overviewTitle = management.getByRole('heading', { name: 'Model management', level: 1 });
-  assert.equal((await nav.boundingBox()).width, 164);
-  assert.equal((await overview.boundingBox()).y, clearance + 8, 'Overview clears the window controls');
+  const overviewTop = (await overview.boundingBox()).y;
+  assert.equal((await nav.boundingBox()).width, 283.5, 'the wide secondary navigation matches the Workbench default');
+  assert.equal((await modelsTitle.boundingBox()).y, clearance + 8, 'Models clears the window controls');
+  assert.ok(overviewTop >= clearance + 28, 'Overview follows the sidebar title');
   assert.deepEqual(await headingStyle(overviewTitle), ['20px', '28px', '500']);
   assert.equal((await overviewTitle.boundingBox()).y, clearance + 30);
 
@@ -241,8 +245,10 @@ globalThis.fetch = async (input, options = {}) => {
   assert.equal(await nav.getByRole('button', { name: /^(Codex|Qoder|Grok)$/ }).count(), 0);
   assert.equal(await codexConnection.count(), 0);
   assert.equal(await qoderConnection.count(), 0);
-  const layout = () => management.locator('.dsh-connection-card').evaluateAll(cards => cards.map(card => ({
-    ...card.getBoundingClientRect().toJSON(), provider: card.querySelector('.dsh-connection-icon')?.dataset.provider,
+  const layout = () => management.locator('.dsh-connection-row').evaluateAll(rows => rows.map(row => ({
+    ...row.getBoundingClientRect().toJSON(), provider: row.dataset.provider,
+    titleRight: row.querySelector('h3').getBoundingClientRect().right,
+    statusLeft: row.querySelector('[role="status"]').getBoundingClientRect().left,
   })));
 
   await addProvider.click();
@@ -267,13 +273,18 @@ globalThis.fetch = async (input, options = {}) => {
   assert.equal(await available.locator('summary').filter({ hasText: 'Codex' }).count(), 0);
   const auth = join(codexHome, 'auth.json');
   await writeFile(auth, JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
-  await codexConnection.getByRole('status').filter({ hasText: 'Local Codex sign-in detected' }).waitFor();
+  await codexConnection.getByRole('status').filter({ hasText: 'Connected' }).waitFor();
+  await codexConnection.getByText('Uses your local Codex sign-in.', { exact: true }).waitFor();
   const wide = await layout();
-  assert.deepEqual(wide.map(card => card.provider), ['codex', 'deepseek']);
-  assert.equal(wide[0].top, wide[1].top, 'desktop cards share a row');
+  assert.deepEqual(wide.map(row => row.provider), ['codex', 'deepseek']);
+  assert.equal(wide[0].left, wide[1].left, 'desktop provider rows share a column');
+  assert.equal(wide[0].width, wide[1].width, 'desktop provider rows share the list width');
+  assert.ok(wide[1].top >= wide[0].bottom, 'desktop provider rows stack vertically');
+  assert.ok(wide.every(row => row.statusLeft > row.titleRight), 'provider status follows the name');
+  assert.equal(await management.getByRole('button', { name: /usage$/i }).count(), 0, 'usage is available in details');
   await page.setViewportSize({ width: 560, height: 900 });
   const narrow = await layout();
-  assert.ok(narrow[1].top > narrow[0].top, 'narrow views stack cards');
+  assert.ok(narrow[1].top >= narrow[0].bottom, 'narrow views keep providers stacked');
   await page.setViewportSize({ width: 1280, height: 900 });
   await openCodex.focus();
   await page.keyboard.press('Enter');
@@ -281,8 +292,8 @@ globalThis.fetch = async (input, options = {}) => {
   assert.equal(await nav.getByRole('button', { name: 'Codex', exact: true }).getAttribute('aria-current'), 'page');
   await management.getByRole('region', { name: 'Desktop', exact: true }).getByText('Signed in', { exact: true }).waitFor();
   await overview.click();
-  const cardTitle = await codexConnection.getByRole('heading', { name: 'Codex', exact: true }).boundingBox();
-  await page.mouse.click(cardTitle.x + cardTitle.width / 2, cardTitle.y + cardTitle.height / 2);
+  const rowTitle = await codexConnection.getByRole('heading', { name: 'Codex', exact: true }).boundingBox();
+  await page.mouse.click(rowTitle.x + rowTitle.width / 2, rowTitle.y + rowTitle.height / 2);
   await management.getByRole('heading', { name: 'Codex', exact: true, level: 1 }).waitFor();
   await overview.click();
   const connectedCodex = available.locator('summary').filter({ hasText: 'Codex' });
@@ -304,18 +315,25 @@ globalThis.fetch = async (input, options = {}) => {
   await connectedCodex.waitFor({ state: 'detached' });
   await writeFile(auth, JSON.stringify({ tokens: { access_token: 'codex-fixture-token', account_id: 'codex-fixture-account' } }));
   await connectedCodex.waitFor();
-  const codexUsage = codexConnection.getByRole('button', { name: 'Codex usage' });
-  const codexTooltip = codexConnection.getByRole('tooltip');
+  await openCodex.click();
+  const codexUsage = usage.getByRole('button', { name: 'Codex usage' });
+  const codexTooltip = usage.getByRole('tooltip');
   assert.equal(await codexTooltip.isVisible(), false);
-  const beforeUsage = await layout();
+  const beforeUsage = await usage.boundingBox();
   await codexUsage.hover();
   await codexTooltip.getByText(/Weekly · 62% left.*Resets/).waitFor();
   await codexTooltip.getByText(/5 (?:hr|hours) · 82% left/).waitFor();
   assert.equal(await codexUsage.getAttribute('data-remaining'), '62');
-  assert.deepEqual(await layout(), beforeUsage, 'the usage tooltip does not move the cards');
-  await deepseekConnection.getByRole('button', { name: 'DeepSeek usage' }).hover();
-  await deepseekConnection.getByRole('tooltip').getByText(/Bonus balance.*7\.00/).waitFor();
-  await deepseekConnection.getByRole('tooltip').getByText(/Account balance.*23\.48/).waitFor();
+  assert.deepEqual(await usage.boundingBox(), beforeUsage, 'the usage tooltip does not move the summary');
+  await management.getByRole('button', { name: 'View available models', exact: true }).click();
+  await connectedCodex.waitFor();
+  assert.ok(await connectedCodex.evaluate(summary => summary.parentElement.open && document.activeElement === summary),
+    'the catalog shortcut opens and focuses the selected provider');
+  await nav.getByRole('button', { name: 'DeepSeek', exact: true }).click();
+  await usage.getByRole('button', { name: 'DeepSeek usage' }).hover();
+  await usage.getByRole('tooltip').getByText(/Bonus balance.*7\.00/).waitFor();
+  await usage.getByRole('tooltip').getByText(/Account balance.*23\.48/).waitFor();
+  await overview.click();
   await setupQoder();
   const addToken = qoderAddForm.getByLabel('Personal access token');
   const addRemark = qoderAddForm.getByLabel('Remark (optional)');
@@ -333,11 +351,12 @@ globalThis.fetch = async (input, options = {}) => {
   await management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 }).waitFor();
   const qoderTitle = management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 });
   assert.deepEqual(await headingStyle(qoderTitle), ['20px', '28px', '500']);
-  assert.equal((await overview.boundingBox()).y, clearance + 8, 'provider details keep navigation in place');
+  assert.equal((await overview.boundingBox()).y, overviewTop, 'provider details keep navigation in place');
   await page.setViewportSize({ width: 390, height: 815 });
   await page.locator('[data-sidebar-drawer]').waitFor();
   assert.equal((await nav.boundingBox()).width, 390);
-  assert.equal((await overview.boundingBox()).y, clearance + 8);
+  assert.equal((await modelsTitle.boundingBox()).y, clearance + 8);
+  assert.ok((await overview.boundingBox()).y > clearance + 28);
   const deepseekNav = nav.getByRole('button', { name: 'DeepSeek', exact: true });
   assert.ok((await deepseekNav.boundingBox()).y > (await overview.boundingBox()).y, 'narrow navigation wraps');
   const navBox = await nav.boundingBox();
@@ -364,8 +383,10 @@ globalThis.fetch = async (input, options = {}) => {
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management.png') });
+    await openCodex.click();
     await codexUsage.hover();
     await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management-usage.png') });
+    await overview.click();
   }
   await manageQoder.click();
   await managedQoder.getByRole('button', { name: 'Unbind' }).click();
@@ -400,7 +421,7 @@ globalThis.fetch = async (input, options = {}) => {
   await deepseekApi.getByRole('button', { name: 'Remove', exact: true }).click();
   await deepseekApi.getByText('DeepSeek API fixture', { exact: true }).waitFor({ state: 'detached' });
   await overview.click();
-  console.log('PASS Model management: Overview, connected-only sidebar and cards, keyboard and pointer navigation, Desktop detection, API configuration, and live catalog updates.');
+  console.log('PASS Model management: Overview, connected-only sidebar and rows, usage and catalog in provider navigation, Desktop detection, API configuration, and live catalog updates.');
   await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
 
   const openSettings = async () => {
@@ -470,9 +491,10 @@ globalThis.fetch = async (input, options = {}) => {
   await closeModels();
 
   await page.getByRole('button', { name: 'Model management', exact: true }).click();
-  const qoderAccount = qoderConnection.getByRole('combobox', { name: 'Qoder account' });
-  const qoderUsage = qoderConnection.getByRole('button', { name: 'Qoder usage' });
-  const qoderTooltip = qoderConnection.getByRole('tooltip');
+  await manageQoder.click();
+  const qoderAccount = usage.getByRole('combobox', { name: 'Qoder account' });
+  const qoderUsage = usage.getByRole('button', { name: 'Qoder usage' });
+  const qoderTooltip = usage.getByRole('tooltip');
   await qoderAccount.selectOption({ label: 'Personal' });
   await qoderUsage.focus();
   await qoderTooltip.getByText('Plan · 60 / 300 Credits left', { exact: true }).waitFor();

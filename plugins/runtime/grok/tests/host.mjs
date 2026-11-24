@@ -114,6 +114,7 @@ async function management(page) {
   await page.getByRole('button', { name: 'Model management', exact: true }).click();
   const panel = page.getByRole('main', { name: 'Model management' });
   return {
+    panel,
     connection: panel.getByRole('region', { name: 'Grok', exact: true }),
     groups: panel.getByRole('region', { name: 'Available models' }).locator('summary').filter({ hasText: 'Grok' }),
   };
@@ -197,12 +198,16 @@ globalThis.fetch = (input, options) => {
   browser = await chromium.launch(process.env.DSH_TEST_BROWSER_EXECUTABLE
     ? { executablePath: process.env.DSH_TEST_BROWSER_EXECUTABLE } : { channel: 'chrome' });
   const page = await openApp(url);
-  const { connection, groups } = await management(page);
+  const { panel, connection, groups } = await management(page);
   await connection.getByText('Connected with an xAI API Key').waitFor();
   await groups.first().waitFor();
   assert.equal(await connection.locator('img').evaluate(image => image.naturalWidth), 96);
-  await connection.getByRole('button', { name: 'Grok usage' }).hover();
-  await connection.getByRole('tooltip').getByText('View API usage in the xAI Console.').waitFor();
+  const legacyUsage = connection.getByRole('button', { name: 'Grok usage' });
+  const hasOverviewUsage = await legacyUsage.count() > 0;
+  if (!hasOverviewUsage) await connection.getByRole('button', { name: 'View connection' }).click();
+  const usage = hasOverviewUsage ? connection : panel.getByRole('region', { name: 'Usage', exact: true });
+  await usage.getByRole('button', { name: 'Grok usage' }).hover();
+  await usage.getByRole('tooltip').getByText('View API usage in the xAI Console.').waitFor();
 
   const api = await settings(page);
   await api.getByText('Default account', { exact: true }).waitFor();

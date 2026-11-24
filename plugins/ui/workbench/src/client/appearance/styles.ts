@@ -1,8 +1,11 @@
 /** Stable data-slot anchors are the host's documented dynamic-style seam. */
 import { workspaceStyles } from './workspace.js';
 import { controlStyles } from './controls.js';
+import { scheduledStyles } from './scheduled.js';
 
 const toolFrame = 'html[data-dsh-workbench] [data-slot="root"] > div:has(> div > [data-global-panel])';
+const pluginsFrame = `${toolFrame}:not([data-sidebar-drawer]):has([data-workbench-plugins-navigation]):has([data-plugin-panel])`;
+const pluginGroups = `${pluginsFrame} :is([data-plugin-group="basic"], [data-plugin-group="extensions"], [data-plugin-group="bundles"])`;
 
 const desktopFrame = 'html[data-dsh-workbench] [data-slot="root"] > div:not([data-sidebar-drawer])';
 const expandedHome = `${desktopFrame}:has(> [data-side="sidebar"]):not(:has(> div > [data-global-panel]))`;
@@ -21,6 +24,7 @@ ${toolFrame} [data-slot="sidebar"] :is([data-slot="sidebar.workspaces"], [data-s
 ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar.brand.name"]) {
   display: none !important;
 }
+.wb-plugins-navigation { display: none; }
 @media (min-width: 824px) {
   /* Keep the 335.5px total with a 52px rail and the host's 280px default
      track. Apply the remaining inset to the sidebar, main and handle alike. */
@@ -40,6 +44,35 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
   }
   ${toolFrame}:not([data-sidebar-drawer]) > div:has(> [data-global-panel]) {
     grid-column: 1 / 3;
+  }
+  ${pluginsFrame} { --wb-plugins-sidebar-width: 283.5px; }
+  ${pluginsFrame} > div:has(> [data-global-panel]) {
+    margin-inline-start: var(--wb-plugins-sidebar-width);
+  }
+  ${pluginGroups} { container: wb-plugins-overview / inline-size; }
+  @container wb-plugins-overview (min-width: 680px) {
+    ${pluginGroups} > ul {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+      column-gap: 24px;
+    }
+  }
+  ${pluginsFrame} .wb-plugins-navigation {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: absolute;
+    inset-block: var(--dsh-frame-top-clearance, 0px) 0;
+    inset-inline-start: 0;
+    inline-size: var(--wb-plugins-sidebar-width);
+    box-sizing: border-box;
+    overflow: auto;
+    pointer-events: auto;
+    padding: 8px 12px;
+    border-inline-end: 1px solid var(--dsw-alias-border-primary, #8882);
+    background: var(--dsw-specific-sidebar-fill);
+    color: var(--dsw-alias-label-primary);
   }
   ${toolFrame}:not([data-sidebar-drawer]) > div:has(> [data-slot="sidebar"]) {
     visibility: hidden; width: 0; height: 0;
@@ -82,6 +115,22 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
     border-end-start-radius: 12px;
   }
 }
+.wb-plugins-navigation-title { padding: 4px 8px 8px; font-size: 14px; font-weight: 600; }
+.wb-plugins-navigation button {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  min-block-size: 31px; padding: 4px 8px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--dsw-alias-label-secondary);
+  font: inherit; font-size: 13px; text-align: start; cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.wb-plugins-navigation button svg { flex: none; }
+.wb-plugins-navigation button:hover { background: var(--dsw-alias-background-hover, #8882); }
+.wb-plugins-navigation button[aria-current] {
+  background: var(--dsw-alias-background-active, #8883); color: var(--dsw-alias-label-primary);
+}
+.wb-plugins-navigation button:focus-visible {
+  outline: 2px solid var(--dsw-alias-accent-primary, #4c95f6); outline-offset: -2px;
+}
 html[data-dsh-workbench] .dsh-workbench-rail {
   position: fixed; inset: var(--dsh-frame-top-clearance, 0px) auto 0 0; width: var(--dsh-workbench-rail);
   box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
@@ -121,4 +170,4 @@ html[data-dsh-workbench] .wb-source-picker select {
   html[data-dsh-workbench] { --dsh-workbench-rail: 0px; }
   html[data-dsh-workbench] .dsh-workbench-rail { display: none; }
 }
-` + workspaceStyles + controlStyles;
+` + workspaceStyles + controlStyles + scheduledStyles;
