@@ -48,6 +48,12 @@ export const workspaceStyles = `
   text-align: start;
   padding: 3px 6px 3px calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px));
 }
+.wb-tree-row:is([data-wb-kind="session"], [data-external-session]) > .wb-tree-label,
+.wb-archived-title {
+  font-family: var(--dsh-font-family-text, -apple-system), BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13.6px;
+  font-weight: 430;
+}
 .wb-tree-row:is([data-wb-kind="session"], [data-external-session]) > .wb-tree-label {
   padding-inline-start: calc(6px + clamp(0px, var(--wb-depth, 0) * 15px, 75px) + 16px + 7px);
 }

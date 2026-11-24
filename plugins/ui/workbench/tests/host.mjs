@@ -197,8 +197,20 @@ try {
     assert.deepEqual(await row.locator('.wb-tree-label').evaluate(label => {
       const style = getComputedStyle(label);
       return [style.fontSize, style.lineHeight, label.getBoundingClientRect().height];
-    }), ['13.5px', '20px', 31]);
+    }), [row === project ? '13.5px' : '13.6px', '20px', 31]);
   }
+  const sessionTitle = alpha.locator('.wb-tree-label > span');
+  const readTitleFont = () => sessionTitle.evaluate(node => {
+    const { fontFamily, fontWeight } = getComputedStyle(node);
+    return { fontFamily, fontWeight };
+  });
+  const defaultFont = await readTitleFont();
+  assert.match(defaultFont.fontFamily, /^-apple-system, .+?, "Segoe UI", sans-serif$/);
+  assert.doesNotMatch(defaultFont.fontFamily, /PingFang/);
+  assert.equal(defaultFont.fontWeight, '430');
+  await page.evaluate(() => document.body.style.setProperty('--dsh-font-family-text', 'Georgia'));
+  assert.match((await readTitleFont()).fontFamily, /^Georgia,/);
+  await page.evaluate(() => document.body.style.removeProperty('--dsh-font-family-text'));
   const restWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
   await alpha.hover();
   const hoverWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
