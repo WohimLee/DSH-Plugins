@@ -220,6 +220,22 @@ globalThis.fetch = async (input, options = {}) => {
     await providerInput.selectOption('qoder');
   };
 
+  const headingStyle = heading => heading.evaluate(node => {
+    const { fontSize, lineHeight, fontWeight } = getComputedStyle(node);
+    return [fontSize, lineHeight, fontWeight];
+  });
+  const platformBeforeLayout = await page.locator('html').getAttribute('data-platform');
+  const clearance = await page.evaluate(() => {
+    document.documentElement.dataset.platform = 'darwin';
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dsh-frame-top-clearance'));
+  });
+  assert.equal(clearance, 48);
+  const overviewTitle = management.getByRole('heading', { name: 'Model management', level: 1 });
+  assert.equal((await nav.boundingBox()).width, 164);
+  assert.equal((await overview.boundingBox()).y, clearance + 8, 'Overview clears the window controls');
+  assert.deepEqual(await headingStyle(overviewTitle), ['20px', '28px', '500']);
+  assert.equal((await overviewTitle.boundingBox()).y, clearance + 30);
+
   await deepseekConnection.waitFor();
   assert.equal(await overview.getAttribute('aria-current'), 'page');
   assert.equal(await nav.getByRole('button', { name: /^(Codex|Qoder|Grok)$/ }).count(), 0);
@@ -315,6 +331,28 @@ globalThis.fetch = async (input, options = {}) => {
   assert.equal(await addRemark.inputValue(), 'Managed from sidebar');
   await qoderAddForm.getByRole('button', { name: 'Bind account' }).click();
   await management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 }).waitFor();
+  const qoderTitle = management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 });
+  assert.deepEqual(await headingStyle(qoderTitle), ['20px', '28px', '500']);
+  assert.equal((await overview.boundingBox()).y, clearance + 8, 'provider details keep navigation in place');
+  await page.setViewportSize({ width: 390, height: 815 });
+  await page.locator('[data-sidebar-drawer]').waitFor();
+  assert.equal((await nav.boundingBox()).width, 390);
+  assert.equal((await overview.boundingBox()).y, clearance + 8);
+  const deepseekNav = nav.getByRole('button', { name: 'DeepSeek', exact: true });
+  assert.ok((await deepseekNav.boundingBox()).y > (await overview.boundingBox()).y, 'narrow navigation wraps');
+  const navBox = await nav.boundingBox();
+  assert.ok((await qoderTitle.boundingBox()).y > navBox.y + navBox.height, 'detail follows narrow navigation');
+  const body = management.locator('.dsh-model-management-body');
+  assert.ok(await body.evaluate(node => node.scrollWidth <= node.clientWidth), 'detail has no horizontal overflow');
+  await overview.click();
+  assert.ok(await body.evaluate(node => node.scrollWidth <= node.clientWidth), 'Overview has no horizontal overflow');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.locator('[data-sidebar-drawer]').waitFor({ state: 'detached' });
+  await nav.getByRole('button', { name: 'Qoder', exact: true }).click();
+  await page.evaluate(previous => {
+    if (previous === null) document.documentElement.removeAttribute('data-platform');
+    else document.documentElement.setAttribute('data-platform', previous);
+  }, platformBeforeLayout);
   const managedQoder = management.getByRole('group', { name: 'Managed from sidebar' });
   await managedQoder.waitFor();
   await overview.click();

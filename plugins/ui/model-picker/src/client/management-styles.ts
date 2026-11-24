@@ -17,16 +17,20 @@ export const managementStyles = `
   background: var(--connection-canvas);
   color: var(--connection-text);
 }
+html[data-platform="darwin"] .dsh-model-management {
+  --model-page-clearance: var(--dsh-frame-top-clearance, 0px);
+}
 .dsh-model-management-body {
   min-width: 0; min-height: 0; overflow: auto;
-  padding: 25px clamp(15px, 3vw, 31px) 24px;
+  padding: calc(28px + var(--model-page-clearance, 0px)) clamp(24px, 4vw, 48px) 24px;
 }
 .dsh-model-management-nav {
-  box-sizing: border-box; min-width: 0; overflow: auto; padding: 19px 10px;
+  box-sizing: border-box; min-width: 0; overflow: auto;
+  padding: calc(8px + var(--model-page-clearance, 0px)) 10px 8px;
   border-inline-end: 1px solid var(--connection-border); background: var(--connection-nav);
 }
 .dsh-model-management .dsh-model-management-nav button {
-  width: 100%; justify-content: flex-start; min-height: 35px; gap: 9px;
+  width: 100%; justify-content: flex-start; min-height: 31px; gap: 9px;
   padding: 6px 9px; border-color: transparent; color: var(--connection-muted); font-size: 13px;
   text-align: start; overflow-wrap: anywhere;
 }
@@ -37,17 +41,17 @@ export const managementStyles = `
 .dsh-model-management-inner {
   display: grid;
   gap: 23px;
-  max-width: 850px;
+  max-width: 960px;
   margin-inline: auto;
   container-type: inline-size;
 }
 .dsh-model-management :is(h1, h2, h3, p) { margin: 0; }
-.dsh-model-management h1 { font-size: clamp(22px, 3.5cqi, 28px); font-weight: 670; line-height: 1.2; letter-spacing: -.035em; }
+.dsh-model-management h1 { font-size: 20px; font-weight: 500; line-height: 28px; letter-spacing: normal; }
 .dsh-model-management h2 { font-size: 15px; font-weight: 600; }
 .dsh-model-management h3 { font-size: 15px; font-weight: 640; }
 .dsh-model-management :is(p, summary, li) { font-size: 13px; }
 .dsh-model-management-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; flex-wrap: wrap;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
 }
 .dsh-model-management-section { display: grid; gap: 10px; }
 .dsh-connection-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
@@ -118,7 +122,7 @@ export const managementStyles = `
 .dsh-connection-accounts { list-style: none; padding: 0; border-top: 1px solid var(--connection-border); }
 .dsh-connection-accounts li { padding-block: 6px; overflow-wrap: anywhere; }
 .dsh-connection-accounts li p { color: var(--connection-muted); font-size: 12px; }
-.dsh-model-legacy-connections { max-width: 850px; margin: 12px auto 0; }
+.dsh-model-legacy-connections { max-width: 960px; margin: 12px auto 0; }
 .dsh-connection-usage { position: relative; }
 .dsh-connection-usage:is(:hover, :focus-within) { z-index: 2; }
 .dsh-model-management .dsh-connection-usage-button { border-color: transparent; padding: 3px; }
@@ -167,6 +171,9 @@ export const managementStyles = `
 @container (max-width: 510px) {
   .dsh-connection-grid { grid-template-columns: minmax(0, 1fr); }
 }
+@media (max-width: 767px) {
+  .dsh-model-management-body { padding-inline: 20px; }
+}
 @media (max-width: 720px) {
   .dsh-model-management { grid-template-columns: 131px minmax(0, 1fr); }
   .dsh-model-management-nav { padding-inline: 7px; }
@@ -174,7 +181,7 @@ export const managementStyles = `
 @media (max-width: 475px) {
   .dsh-model-management { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .dsh-model-management-nav {
-    display: flex; flex-wrap: wrap; gap: 3px; padding: 6px 9px;
+    display: flex; flex-wrap: wrap; gap: 3px; padding-inline: 9px; padding-block-end: 6px;
     border-inline-end: 0; border-block-end: 1px solid var(--connection-border);
   }
   .dsh-model-management .dsh-model-management-nav button { width: auto; gap: 5px; padding-inline: 7px; }
@@ -183,6 +190,7 @@ export const managementStyles = `
   .dsh-connection-setup-fields { grid-template-columns: minmax(0, 1fr); }
 }
 @media (pointer: coarse) {
-  .dsh-model-management :is(button, summary, select) { min-height: 44px; }
+  .dsh-model-management :is(button, summary, select),
+  .dsh-model-management .dsh-model-management-nav button { min-height: 44px; }
 }
 `;
