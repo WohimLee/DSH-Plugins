@@ -38,3 +38,10 @@ export function routeName(route: Route, t: PropsLocale<'modelPicker'>['t']): str
   if (route.id === 'codex' || route.id === 'grok') return t('defaultAccount');
   return route.name.replace(/^(?:Qoder|Codex|Grok|DeepSeek) · /, '');
 }
+
+export function routeSource(id: string): 'desktop' | 'api' | undefined {
+  if (id === 'deepseek-account' || id === 'codex' || id.startsWith('codex-account-')
+    || /^qoder-account-d-[0-9a-f]{24}$/.test(id)) return 'desktop';
+  if (id === 'deepseek-official' || id.startsWith('deepseek-api-account-') || id.startsWith('codex-api-account-')
+    || id === 'grok' || id.startsWith('grok-account-') || id.startsWith('qoder-account-')) return 'api';
+}

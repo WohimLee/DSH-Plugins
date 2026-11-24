@@ -216,8 +216,8 @@ globalThis.fetch = async (input, options = {}) => {
   const qoderAddForm = management.getByRole('form', { name: 'Add account' });
   const setupQoder = async (method = 'api') => {
     await addProvider.click();
-    await providerInput.selectOption('qoder');
     await methodInput.selectOption(method);
+    await providerInput.selectOption('qoder');
   };
 
   await deepseekConnection.waitFor();
@@ -301,8 +301,10 @@ globalThis.fetch = async (input, options = {}) => {
   await deepseekConnection.getByRole('tooltip').getByText(/Bonus balance.*7\.00/).waitFor();
   await deepseekConnection.getByRole('tooltip').getByText(/Account balance.*23\.48/).waitFor();
   await setupQoder();
-  await qoderAddForm.getByLabel('Personal access token').fill('fixture-personal');
+  const addToken = qoderAddForm.getByLabel('Personal access token');
   await qoderAddForm.getByLabel('Remark (optional)').fill('Managed from sidebar');
+  await addToken.fill('fixture-personal');
+  assert.equal(await addToken.inputValue(), 'fixture-personal');
   await qoderAddForm.getByRole('button', { name: 'Bind account' }).click();
   await management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 }).waitFor();
   const managedQoder = management.getByRole('group', { name: 'Managed from sidebar' });
@@ -382,7 +384,7 @@ globalThis.fetch = async (input, options = {}) => {
   await bind('Work', 'fixture-work');
 
   const options = page.locator('[data-dsh-model-picker]').getByLabel('Account', { exact: true }).locator('option');
-  const workOption = options.filter({ hasText: /^Work$/ });
+  const workOption = options.filter({ hasText: /^Work · API$/ });
   await settings.getByRole('button', { name: 'Close', exact: true }).click();
   await openModels();
   await visibleProviders.filter({ hasText: 'Qoder' }).hover();
@@ -399,7 +401,7 @@ globalThis.fetch = async (input, options = {}) => {
   await settings.getByRole('button', { name: 'Close', exact: true }).click();
   await openModels();
   await visibleProviders.filter({ hasText: 'Qoder' }).hover();
-  assert.equal(await options.filter({ hasText: /^Research$/ }).getAttribute('value'), originalWorkRoute);
+  assert.equal(await options.filter({ hasText: /^Research · API$/ }).getAttribute('value'), originalWorkRoute);
   await closeModels();
 
   await openSettings();
@@ -409,7 +411,7 @@ globalThis.fetch = async (input, options = {}) => {
   await openModels();
   await visibleProviders.filter({ hasText: 'Qoder' }).hover();
   await page.locator('[data-dsh-model-picker] [data-model-row]').getByText('Auto', { exact: true }).waitFor();
-  assert.equal(await options.filter({ hasText: /^Research$/ }).count(), 0);
+  assert.equal(await options.filter({ hasText: /^Research · API$/ }).count(), 0);
   await closeModels();
 
   await openSettings();
@@ -455,9 +457,15 @@ globalThis.fetch = async (input, options = {}) => {
   assert.ok(await browse.evaluate(node => node === document.activeElement));
   const collapsed = await browse.boundingBox();
   await browse.hover();
-  const picker = page.locator('[data-dsh-model-picker]');
+  const picker = page.locator('.dsh-model-picker-flyout[data-branch="models"] [data-dsh-model-picker]');
   await picker.waitFor();
   assert.deepEqual(await browse.boundingBox(), collapsed, 'hovering Models must not move the entry');
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
+    await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'models-first-hover.png') });
+  }
+  assert.equal(await picker.locator('[data-model-row]').count(), 0, 'hovering Models first opens only providers');
+
   const menu = page.getByRole('menu').filter({ has: picker });
   const panel = picker.locator('..');
   const assertDocked = async side => {
@@ -483,41 +491,64 @@ globalThis.fetch = async (input, options = {}) => {
   const threeProviders = await providers.boundingBox();
   assert.equal(await providers.locator('[data-provider-row]').count(), 3);
   assert.equal(threeProviders.height, originalRows.reduce((height, row) => height + row.height, 0));
-  assert.equal((await right.boundingBox()).height, threeProviders.height);
-  const columns = picker.locator('.picker-columns');
-  const frame = await columns.boundingBox();
   const menuFrame = await menu.boundingBox();
-  const shortPanel = await panel.boundingBox();
-  assert.ok(shortPanel.width <= 380, 'the panel should fit the two compact columns');
   const assertStableHover = async (index, expected) => {
-    const { x, y, width, height } = originalRows[index];
-    await page.mouse.move(x + width / 2, y + height / 2, { steps: 6 });
-    assert.equal(await provider(hoverTargets[index]).getAttribute('aria-current'), 'true');
+    await provider(hoverTargets[index]).hover();
+    assert.equal(await provider(hoverTargets[index]).getAttribute('aria-expanded'), 'true');
     await model(expected).waitFor();
-    assert.deepEqual(await columns.boundingBox(), frame, 'provider rows alone determine the columns’ height');
-    assert.deepEqual(await panel.boundingBox(), shortPanel, 'long model lists must not resize the panel');
     assert.deepEqual(await menu.boundingBox(), menuFrame, 'the anchored menu must retain its size and position');
     assert.deepEqual(await Promise.all(hoverTargets.map(name => provider(name).boundingBox())), originalRows);
+    const providerPanel = await picker.locator('.picker-primary').boundingBox();
+    const modelPanel = await right.boundingBox();
+    assert.ok(providerPanel.width <= 145 && modelPanel.width <= 207, 'both submenus use compact widths');
+    assert.ok(Math.abs(modelPanel.x + modelPanel.width - providerPanel.x) < 1, 'left-facing model and provider panes touch');
   };
   await assertStableHover(1, 'Codex Fixture');
+  const firstCodex = await model('Codex Fixture').boundingBox();
+  await page.mouse.move(firstCodex.x + firstCodex.width / 2, firstCodex.y + firstCodex.height / 2, { steps: 8 });
+  await model('Codex Fixture').waitFor();
+  assert.ok(await right.getByText('Desktop', { exact: true }).isVisible());
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'models-provider-menu.png') });
+  }
   await right.evaluate(el => { el.scrollTop = el.scrollHeight; });
   assert.ok(await right.evaluate(el => el.scrollTop > 0));
   await assertStableHover(2, 'Auto');
   await assertStableHover(0, 'DeepSeek-V4.1-Flash');
-  await assertStableHover(2, 'Auto');
-  // Each additional provider contributes one normal row.
-  await providers.evaluate(el => {
-    const row = el.querySelector('[data-provider-row]').cloneNode(true);
-    row.removeAttribute('aria-current');
-    row.querySelector('.picker-title').textContent = 'Fourth provider fixture';
-    el.append(row);
+
+  await effort.hover();
+  await picker.waitFor({ state: 'detached' });
+  const hoverEffort = page.locator('[data-branch="effort"]');
+  await hoverEffort.getByRole('menuitemradio').first().hover();
+  await hoverEffort.waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'effort-hover.png') });
+  }
+  await page.mouse.move(8, 8);
+  await hoverEffort.waitFor({ state: 'detached' });
+  await browse.hover();
+  await providers.waitFor();
+  assert.equal(await right.count(), 0, 're-entering Models starts at the provider level');
+  await provider('Qoder').hover();
+  await picker.getByRole('searchbox').hover();
+  await right.waitFor({ state: 'detached' });
+
+  await browse.focus();
+  await browse.press('ArrowRight');
+  const keyboardSearch = picker.getByRole('searchbox');
+  await keyboardSearch.press('ArrowDown');
+  const firstProvider = provider('DeepSeek');
+  assert.ok(await firstProvider.evaluate(node => node === document.activeElement));
+  assert.equal(await right.count(), 0, 'keyboard focus alone does not open a provider');
+  await firstProvider.press('ArrowRight');
+  await page.waitForFunction(() => document.activeElement?.hasAttribute('data-model-row'));
+  await page.keyboard.press('ArrowLeft');
+  await right.waitFor({ state: 'detached' });
+  await firstProvider.evaluate(async node => {
+    await new Promise(requestAnimationFrame);
+    if (node !== document.activeElement) throw new Error('Provider focus was not restored');
   });
-  const fourth = providers.getByRole('button', { name: 'Fourth provider fixture' });
-  const fourProviders = await providers.boundingBox();
-  assert.equal(fourProviders.height, threeProviders.height + originalRows[0].height);
-  assert.equal((await fourth.boundingBox()).height, originalRows[0].height);
-  assert.equal((await right.boundingBox()).height, fourProviders.height);
-  await fourth.evaluate(node => node.remove());
+  await provider('Qoder').hover();
   const account = picker.getByLabel('Account', { exact: true });
   await account.focus();
   await account.selectOption(workRoute);
@@ -536,6 +567,7 @@ globalThis.fetch = async (input, options = {}) => {
   }
   await model('Lite').waitFor();
   assert.equal(await model('Auto').count(), 0);
+  assert.ok(await account.locator('option').filter({ hasText: /^Work · API$/ }).count());
   const search = picker.getByRole('searchbox');
   await search.fill('codex fixture');
   await model('Codex Fixture').waitFor();
@@ -562,7 +594,8 @@ globalThis.fetch = async (input, options = {}) => {
   await rootZoom.evaluate(node => node.remove());
   await page.setViewportSize({ width: 480, height: 760 });
   await browse.hover();
-  await model('DeepSeek-V4.1-Flash').waitFor();
+  await providers.waitFor();
+  assert.equal(await right.count(), 0);
   const compactRail = await providers.boundingBox();
   await provider('Qoder').hover();
   await model('Auto').waitFor();
@@ -592,7 +625,8 @@ globalThis.fetch = async (input, options = {}) => {
   await model('Codex Fixture').click();
   assert.doesNotMatch(await selectedTrigger.innerText(), /Image input|Text input|可发图片|仅文本/);
   await selectedTrigger.filter({ hasText: 'Codex Fixture' }).click();
-  await effort.click();
+  await effort.focus();
+  await effort.press('ArrowRight');
   const levels = page.getByRole('menuitemradio');
   assert.deepEqual(await levels.allTextContents(), ['Default', 'high', 'low']);
   await levels.filter({ hasText: 'high' }).click();
