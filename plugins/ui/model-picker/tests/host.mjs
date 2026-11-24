@@ -302,9 +302,17 @@ globalThis.fetch = async (input, options = {}) => {
   await deepseekConnection.getByRole('tooltip').getByText(/Account balance.*23\.48/).waitFor();
   await setupQoder();
   const addToken = qoderAddForm.getByLabel('Personal access token');
-  await qoderAddForm.getByLabel('Remark (optional)').fill('Managed from sidebar');
-  await addToken.fill('fixture-personal');
+  const addRemark = qoderAddForm.getByLabel('Remark (optional)');
+  // The first Desktop check can replace the connection contribution while the
+  // test switches methods. Complete both fields on the settled API form before
+  // attempting the one write.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await addRemark.fill('Managed from sidebar');
+    await addToken.fill('fixture-personal');
+    if (await addToken.inputValue() === 'fixture-personal' && await addRemark.inputValue() === 'Managed from sidebar') break;
+  }
   assert.equal(await addToken.inputValue(), 'fixture-personal');
+  assert.equal(await addRemark.inputValue(), 'Managed from sidebar');
   await qoderAddForm.getByRole('button', { name: 'Bind account' }).click();
   await management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 }).waitFor();
   const managedQoder = management.getByRole('group', { name: 'Managed from sidebar' });
