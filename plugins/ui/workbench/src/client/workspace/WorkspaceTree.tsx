@@ -384,11 +384,11 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   };
   const removeUngrouped = () => setRemoval({ id: ungrouped, title: t('ungrouped') });
   const showUngroupedMenu = (event: MouseEvent) => openMenu(event, t('ungroupedMenu'), [
-    { label: t('newSession'), icon: 'folderAdd', run: canStartUngrouped ? startUngrouped : undefined },
+    { label: t('newSession'), icon: 'new', run: canStartUngrouped ? startUngrouped : undefined },
     { label: t('removeUngrouped'), icon: 'close', danger: true, run: removeUngrouped },
   ]);
   const showRecentsMenu = tree.ungroupedInRecents ? (event: MouseEvent) => openMenu(event, t('sectionMenu'), [
-    { label: t('newUngrouped'), icon: 'folderAdd', run: canStartUngrouped ? startUngrouped : undefined },
+    { label: t('newUngrouped'), icon: 'new', run: canStartUngrouped ? startUngrouped : undefined },
     { label: t('restoreUngrouped'), icon: 'list', run: () => {
       if (save(state => ({ ...state, ungroupedInRecents: false }))) {
         show(defaultSection);
@@ -414,7 +414,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         <div className="wb-tree-actions">
           <Action label={t(project ? 'projectMenu' : 'ungroupedMenu')} icon="more" run={showProjectMenu} />
           {project && canAdd && <Action label={t('addSubproject')} icon="folderAdd" run={event => { event.currentTarget.focus(); setCreateParent(id); }} />}
-          {(project ? canCreateSession : canStartUngrouped) && <Action label={t('newSession')} icon="folderAdd" run={project ? () => {
+          {(project ? canCreateSession : canStartUngrouped) && <Action label={t('newSession')} icon="new" run={project ? () => {
             show(id);
             commands.startSession(project.workspaceId);
           } : startUngrouped} />}
@@ -468,7 +468,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
             {showSectionMenu && <Action label={t('sectionMenu')} icon="more" run={showSectionMenu} />}
             {canAdd && <Action label={t('addProject')} icon="folderAdd"
                run={event => { event.currentTarget.focus(); setCreateParent(section.id); }} />}
-            {isDefault && canCreateSession && <Action label={t('newSession')} icon="folderAdd"
+            {isDefault && canCreateSession && <Action label={t('newSession')} icon="new"
               run={() => commands.startSession()} />}
           </div>
         </div>}

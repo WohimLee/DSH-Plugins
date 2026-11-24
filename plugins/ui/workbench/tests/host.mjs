@@ -564,7 +564,10 @@ try {
   assert.deepEqual(await folderOutline(createProject.getByRole('button', { name: 'Add', exact: true })), addSourceOutline);
   assert.deepEqual(addSubprojectOutline, addProjectOutline);
   assert.deepEqual(addProjectOutline, addSourceOutline);
-  assert.deepEqual(await folderOutline(project.getByRole('button', { name: 'New session', exact: true })), addSourceOutline);
+  const newSessionOutline = await folderOutline(project.getByRole('button', { name: 'New session', exact: true }));
+  assert.match(newSessionOutline.path, /M12 5H6\.5.*M10 14\.5/);
+  assert.deepEqual([newSessionOutline.width, newSessionOutline.stroke, newSessionOutline.decorative], [16, '1.75px', 'true']);
+  assert.deepEqual(await folderOutline(recents.getByRole('button', { name: 'New session', exact: true })), newSessionOutline);
   for (const outline of [openOutline, closedOutline, addSourceOutline, addProjectOutline]) {
     assert.deepEqual([outline.width, outline.stroke, outline.decorative], [16, '1.65px', 'true']);
   }
