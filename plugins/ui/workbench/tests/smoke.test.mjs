@@ -39,6 +39,11 @@ test('Client factory adds navigation without replacing native slot owners; dispo
     'sidebar.session.action': { kind: 'hoc', scope: 'root' },
     'sidebar.footer.action': { kind: 'list', scope: 'root' },
   } }, NativeSidebar);
+  const NativeUserImages = () => null;
+  core.registerFactory({ name: 'conversation.chat.user.content', scope: 'session', locale: 'chat', children: {
+    'conversation.chat.user.images': { kind: 'single', scope: 'session' },
+  } }, NativeFrame);
+  core.register({ name: 'conversation.chat.user.images', priority: 100 }, NativeUserImages);
   core.register({ name: 'sidebar.brand.name' }, NativeBrand);
   core.register({ name: 'sidebar.settings' }, NativeSettings);
   core.register({ name: 'sidebar.workspaces' }, NativeWorkspace);
@@ -74,6 +79,7 @@ test('Client factory adds navigation without replacing native slot owners; dispo
     assert.notEqual(core.entriesOfSlot('sidebar.workspaces')[0].component, NativeWorkspace);
     assert.notEqual(core.entriesOfSlot('sidebar.brand.name')[0].component, NativeBrand);
     assert.equal(core.entriesOfSlot('shell.overlay').length, 1);
+    assert.notEqual(core.entriesOfSlot('conversation.chat.user.images')[0].component, NativeUserImages);
   } finally { for (const off of cleanups.reverse()) await off(); }
   for (const slot of ['shell.overlay', 'sidebar.session.action', 'conversation.session.header.utilities', 'conversation.hero.frame', 'sidebar.right.tab.guide', 'sidebar.right.pane.tab.title']) {
     assert.equal(core.entriesOfSlot(slot).length, 0);
@@ -81,4 +87,5 @@ test('Client factory adds navigation without replacing native slot owners; dispo
   assert.equal(core.entriesOfSlot('sidebar.brand.name')[0].component, NativeBrand);
   assert.equal(core.entriesOfSlot('sidebar.workspaces')[0].component, NativeWorkspace);
   assert.equal(core.entriesOfSlot('sidebar.settings')[0].component, NativeSettings);
+  assert.equal(core.entriesOfSlot('conversation.chat.user.images')[0].component, NativeUserImages);
 });

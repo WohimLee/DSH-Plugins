@@ -32,9 +32,14 @@ export async function createProbe(temp, runtimeVersion) {
 import { readFileSync, unwatchFile, watchFile } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions', 'sessionPersistence'];
+export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions', 'sessionPersistence', 'attachments'];
 export async function apply(ctx, config) {
   const { workspace } = await ctx.workspaceController.create({ path: config.path });
+  const image = await ctx.attachments.saveImage({
+    data: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAUAAAADICAAAAAC8b2d3AAABmklEQVR4nO3QIQEAIBAAMTIRm5REQEzw4hZh6wy3h1u/g15+B70UiApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQFQgKhAViApEBaICUYGoQHQBKT9yRhuTXu0AAAAASUVORK5CYII=', 'base64'),
+    mediaType: 'image/png', name: 'workbench-image.png',
+  });
+  const imageContent = { type: 'image', attachment: image };
   const activityCalls = ['read', 'fixture_lookup', 'bash', 'edit'].map(name => ({
     type: 'tool-call', id: randomUUID(), name, arguments: '{}',
   }));
@@ -45,7 +50,7 @@ export async function apply(ctx, config) {
     if (session && !session.ownEvents().some(event => event.type === 'turn/start')) session.append([
       ['turn/start', { turn: 1 }],
       ...(suffix === 'alpha' ? [
-        ['user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: 'Review the edited files' }], source: { kind: 'user' } }, { surfaceOp: 'append' }],
+        ['user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: 'Review the edited files' }, imageContent], source: { kind: 'user' } }, { surfaceOp: 'append' }],
         ['step/start', { turn: 1, step: 1 }],
         ['assistant/message', { turn: 1, step: 1, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
           content: activityCalls, source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
@@ -57,7 +62,7 @@ export async function apply(ctx, config) {
         ['step/end', { turn: 1, step: 1 }],
         ['step/start', { turn: 1, step: 2 }],
         ['assistant/message', { turn: 1, step: 2, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
-          content: [{ type: 'text', text: 'Activity preview fixture' }], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
+          content: [{ type: 'text', text: 'Activity preview fixture' }, imageContent], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
         ['step/end', { turn: 1, step: 2 }],
         ['workspace/changes', { turn: 1 }],
       ] : []),
