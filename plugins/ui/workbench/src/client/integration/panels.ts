@@ -6,6 +6,8 @@ import type {} from '@deepseek-ai/dsh-client-locale/client';
 
 export interface PanelEntry { readonly id: MainPanelId; readonly label: string; readonly order: number }
 
+const primaryPanels = new Map<string, number>([['plugins', 0], ['schedules', 1], ['dsh-model-picker', 2]]);
+
 /** Follow public navigation registrations, including locale and plugin changes. */
 export function panelSource(ctx: Context): HostObservable<readonly PanelEntry[]> {
   let snapshot: readonly PanelEntry[] = [];
@@ -16,7 +18,8 @@ export function panelSource(ctx: Context): HostObservable<readonly PanelEntry[]>
       label: options.id === 'schedules' ? ctx.locale.bind('workbench')('scheduled')
         : typeof options.label === 'function' ? options.label() : options.label ?? options.id!,
       order: options.order ?? 0,
-    })).sort((a, b) => a.order - b.order);
+    })).sort((a, b) => (primaryPanels.get(a.id) ?? primaryPanels.size) - (primaryPanels.get(b.id) ?? primaryPanels.size)
+      || a.order - b.order);
     if (snapshot.length === next.length && snapshot.every((entry, index) =>
       entry.id === next[index].id && entry.label === next[index].label && entry.order === next[index].order)) return;
     snapshot = next;

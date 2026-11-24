@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { PanelMenu } from './PanelMenu.js';
 import { PluginsNavigation } from './PluginsNavigation.js';
+import { ScheduledNavigation } from './ScheduledNavigation.js';
+import type { NativeScheduleText } from './scheduled-native.js';
+import type { ScheduledTasks } from './scheduled-source.js';
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
@@ -11,7 +14,8 @@ import type {} from '../messages.js';
 interface ActivityInjected {
   selectPanel: (id: MainPanelId | null) => void;
   openPluginsList: () => boolean;
-  hooks: { panels: HostObservable<readonly PanelEntry[]> };
+  nativeScheduleText: NativeScheduleText;
+  hooks: { panels: HostObservable<readonly PanelEntry[]>; scheduledTasks: HostObservable<ScheduledTasks> };
 }
 export type ActivityBarProps = PropsRuntime<'shell.overlay'> & PropsRenderFactories & PropsLocale<'workbench'> & InjectFace<ActivityInjected>;
 
@@ -22,20 +26,26 @@ function HomeIcon() {
   </svg>;
 }
 
-export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsList, renderFactorySlot, t }: ActivityBarProps) {
+export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsList, renderFactorySlot, t,
+  useScheduledTasks, nativeScheduleText }: ActivityBarProps) {
   const [unpinned, setUnpinned] = useState<readonly string[]>([]);
   const panels = usePanels(snapshot => snapshot);
   const hasMore = panels.some(panel => panel.id !== 'plugins');
   const selected = usePanelInfo(info => info.activePanelId);
   const plugins = selected === 'plugins' && panels.find(panel => panel.id === 'plugins');
+  const scheduled = selected === 'schedules';
   return <>
+    {(plugins || scheduled || selected === 'dsh-model-picker') && <div className="wb-window-caption">DSH Desktop</div>}
     <nav className="dsh-workbench-rail" aria-label={t('navigation')} data-workbench-rail>
       <button type="button" className="dsh-workbench-button" aria-label={t('conversation')} title={t('conversation')}
         aria-current={selected === null ? 'page' : undefined} onClick={() => selectPanel(null)}><HomeIcon /></button>
       <div className="dsh-workbench-panel-buttons">
         {panels.filter(panel => !hasMore || !unpinned.includes(panel.id)).map(({ id, label }) => <button key={id} type="button" className="dsh-workbench-button"
           data-workbench-panel={id} aria-label={label} title={label} aria-current={selected === id ? 'page' : undefined}
-          onClick={() => selectPanel(id)}>{renderFactorySlot('sidebar.panel.icon', { id, size: 19, active: selected === id }, {
+          onClick={() => selectPanel(id)}>{id === 'plugins' ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" aria-hidden="true">
+            <rect x="3" y="8" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="16" width="7" height="6" rx="1" /><rect x="11" y="13" width="7" height="7" rx="1" />
+          </svg> : renderFactorySlot('sidebar.panel.icon', { id, size: 19, active: selected === id }, {
             fallback: <span aria-hidden="true">◇</span>,
           })}</button>)}
         {hasMore && <PanelMenu panels={panels} selected={selected} unpinned={unpinned} selectPanel={selectPanel}
@@ -44,5 +54,6 @@ export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsL
       </div>
     </nav>
     {plugins && <PluginsNavigation label={plugins.label} openList={openPluginsList} t={t} />}
+    {scheduled && <ScheduledNavigation {...{ t, useScheduledTasks }} nativeText={nativeScheduleText} />}
   </>;
 }

@@ -157,12 +157,12 @@ try {
   const header = page.locator('[data-window-drag]').filter({ has: page.locator('[data-workbench-brand]') });
   const sidebarAction = page.locator('.wb-section-session');
   const newSection = sidebarAction.getByRole('button', { name: 'New Section', exact: true });
-  const searchSessions = header.getByRole('button', { name: 'Search sessions', exact: true });
+  const searchSessions = sidebarAction.getByRole('button', { name: 'Search chats', exact: true });
   await header.getByRole('button', { name: 'View activity' }).waitFor();
   await searchSessions.waitFor();
   await newSection.waitFor();
   assert.equal(await header.getByRole('button', { name: 'New Section', exact: true }).count(), 0);
-  assert.equal(await sidebarAction.getByRole('button', { name: 'New session', exact: true }).count(), 0);
+  await sidebarAction.getByRole('button', { name: 'New chat', exact: true }).waitFor();
   await page.mouse.move(1200, 400);
   const newSectionOutline = await folderOutline(newSection);
   const addProjectOutline = await folderOutline(recents.getByRole('button', { name: 'Add project', exact: true }));
@@ -181,16 +181,21 @@ try {
     const handle = column.parentElement.querySelector('[data-side="sidebar"]').getBoundingClientRect();
     return [rail.width, sidebar.width, main.x, handle.x];
   });
-  assert.deepEqual(await sidebarGeometry(), [52, 283.5, 335.5, 335.5], 'default expanded sidebar and drag handle at 100%');
-  await page.mouse.move(339.5, 200);
+  assert.deepEqual(await sidebarGeometry(), [42, 202, 244, 244], 'default expanded sidebar and drag handle at 100%');
+  assert.deepEqual(await tree.evaluate(element => {
+    const sidebar = element.closest('[data-slot="sidebar"]').parentElement;
+    const rail = document.querySelector('[data-workbench-rail]');
+    return [getComputedStyle(rail).backgroundColor, getComputedStyle(sidebar).backgroundColor];
+  }), ['rgb(40, 41, 44)', 'rgb(34, 35, 37)']);
+  await page.mouse.move(248, 200);
   await page.mouse.down();
-  await page.mouse.move(359.5, 200, { steps: 5 });
+  await page.mouse.move(268, 200, { steps: 5 });
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '300px');
-  assert.deepEqual(await sidebarGeometry(), [52, 303.5, 355.5, 355.5], 'drag moves the sidebar and separator by the same amount');
-  await page.mouse.move(359.5, 200);
+  assert.deepEqual(await sidebarGeometry(), [42, 222, 264, 264], 'drag moves the sidebar and separator by the same amount');
+  await page.mouse.move(268, 200);
   await page.mouse.down();
-  await page.mouse.move(339.5, 200, { steps: 5 });
+  await page.mouse.move(248, 200, { steps: 5 });
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '280px');
   for (const row of [project, alpha]) {
@@ -1112,7 +1117,7 @@ try {
   await recentsLabel.click();
   assert.equal(await recentsLabel.getAttribute('aria-expanded'), 'false');
   await recents.hover();
-  assert.equal(await openDraft(recents.getByRole('button', { name: 'New session', exact: true }), childDraft), topDraft);
+  assert.equal(await openDraft(sidebarAction.getByRole('button', { name: 'New chat', exact: true }), childDraft), topDraft);
   await recentsLabel.click();
   assert.equal(await rowMenu.count(), 0);
   await host.stop();
@@ -1167,28 +1172,56 @@ try {
   await rail.getByRole('button', { name: 'Plugins', exact: true }).click();
   const pluginsNavigation = page.locator('[data-workbench-plugins-navigation]');
   await pluginsNavigation.waitFor();
-  await checkToolPage(283.5);
+  await checkToolPage(202);
+  const readManagementChrome = (navigation, body, heading) => navigation.evaluate((element, selectors) => {
+    const main = document.querySelector(selectors.body);
+    const title = main.querySelector(selectors.heading);
+    const headingStyle = getComputedStyle(title);
+    return [getComputedStyle(element).backgroundColor, getComputedStyle(main).backgroundColor,
+      headingStyle.fontSize, headingStyle.lineHeight, headingStyle.fontWeight];
+  }, { body, heading });
+  const expectedManagementChrome = ['rgb(34, 35, 37)', 'rgb(25, 26, 28)', '21px', '27.3px', '550'];
   const basicList = page.locator('[data-plugin-group="basic"] > ul');
   await basicList.waitFor();
+  assert.deepEqual(await readManagementChrome(pluginsNavigation, '[data-plugin-panel]', '[data-plugin-header-part="title"]'), expectedManagementChrome);
   assert.equal(await basicList.evaluate(list => getComputedStyle(list).gridTemplateColumns.split(' ').length), 2);
   const basicPlugins = pluginsNavigation.locator('[data-workbench-plugin-group="basic"]');
   await basicPlugins.click();
   await pluginsNavigation.locator('[data-workbench-plugin-group="basic"][aria-current="true"]').waitFor();
-  await page.locator('[data-plugin-group="basic"]').waitFor();
+  const visiblePluginGroups = page.locator('[data-plugin-group]:visible');
+  assert.deepEqual(await visiblePluginGroups.evaluateAll(groups => groups.map(group => group.getAttribute('data-plugin-group'))), ['basic']);
+  for (const group of ['extensions', 'bundles']) {
+    await pluginsNavigation.locator(`[data-workbench-plugin-group="${group}"]`).click();
+    await page.locator(`[data-plugin-group="${group}"]:visible`).waitFor();
+    assert.deepEqual(await visiblePluginGroups.evaluateAll(groups => groups.map(item => item.getAttribute('data-plugin-group'))), [group]);
+  }
   await pluginsNavigation.locator('[data-workbench-plugin-group="overview"]').click();
+  const pluginSearch = page.locator('[data-workbench-plugin-search] input');
+  await pluginSearch.waitFor();
+  await pluginSearch.fill('shell');
+  await page.getByRole('button', { name: 'View Shell', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'View Subagent', exact: true }).count(), 0);
+  await pluginSearch.clear();
   await page.locator('[data-plugin-header-part="title"]').waitFor();
   if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'plugins-page.png') });
   await homeButton.click();
   await tree.waitFor({ state: 'visible' });
 
   await rail.getByRole('button', { name: 'Scheduled', exact: true }).click();
-  await checkToolPage();
+  await checkToolPage(202);
   const schedule = page.getByTestId('task-manager-page');
+  const scheduledNavigation = page.locator('[data-workbench-scheduled-navigation]');
+  await scheduledNavigation.waitFor();
+  await schedule.getByRole('heading', { name: 'Scheduled', exact: true }).waitFor();
+  await schedule.getByRole('button', { name: 'Active', exact: true }).waitFor();
+  await schedule.getByRole('searchbox', { name: 'Search scheduled tasks' }).waitFor();
+  assert.deepEqual(await readManagementChrome(scheduledNavigation, '[data-testid="task-manager-page"]', 'h1'), expectedManagementChrome);
+  const pausedTasks = scheduledNavigation.locator('[data-workbench-scheduled-paused]');
+  assert.equal(await pausedTasks.evaluate(element => element.open), false);
   const catalog = schedule.getByRole('list', { name: 'Task catalog' });
   const fixtureNames = ['Workbench layout fixture one', 'Workbench layout fixture two'];
   for (const name of fixtureNames) {
-    await schedule.getByRole('button', { name: 'Choose a creation method' }).click();
-    await page.getByRole('menuitem', { name: 'Create manually' }).click();
+    await scheduledNavigation.locator('[data-workbench-scheduled-new]').click();
     const form = schedule.getByRole('complementary', { name: 'Create manually' });
     await form.getByLabel('Automation task name').fill(name);
     await form.getByLabel('Automation task instruction').fill('Isolated layout fixture. No run is requested.');
@@ -1201,10 +1234,16 @@ try {
   assert.equal((await firstTask.boundingBox()).height, 49);
   assert.equal(Math.abs((await subsequentTask.boundingBox()).y - (await firstTask.boundingBox()).y), 49);
   if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'scheduled-page.png') });
-  await firstTask.press('Enter');
+  const activeTask = scheduledNavigation.locator('[data-workbench-scheduled-group="active"] [data-workbench-scheduled-task]').filter({ hasText: fixtureNames[0] });
+  await activeTask.click();
   await schedule.getByRole('complementary', { name: 'Task details' }).waitFor();
   await schedule.getByRole('button', { name: 'Pause', exact: true }).click();
   await schedule.getByRole('button', { name: 'Resume', exact: true }).waitFor();
+  await pausedTasks.locator('summary').click();
+  const pausedTask = pausedTasks.locator('[data-workbench-scheduled-task]').filter({ hasText: fixtureNames[0] });
+  await pausedTask.click();
+  await schedule.getByRole('button', { name: 'Resume', exact: true }).waitFor();
+  assert.equal(await pausedTask.getAttribute('aria-current'), 'true');
   await homeButton.click();
   await tree.waitFor({ state: 'visible' });
   await children(child).locator('[data-row-key="session:workbench-test-beta"]').waitFor();

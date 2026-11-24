@@ -10,16 +10,18 @@ ${conversationStyles}
 .wb-control:hover, .wb-control[aria-pressed="true"] { background: var(--dsw-alias-background-active, #8883); }
 .wb-control:disabled { opacity: .45; cursor: default; }
 .wb-control:focus-visible { outline: 2px solid var(--dsw-alias-accent-primary, #4c95f6); }
-.wb-section-session { display: flex; inline-size: 100%; min-inline-size: 0; }
-.wb-section-session .wb-new-section {
+.wb-section-session { display: grid; gap: 2px; inline-size: 100%; min-inline-size: 0; }
+.wb-home-shortcut-row { display: flex; align-items: center; gap: 2px; }
+.wb-section-session .wb-home-shortcut {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 6px;
   text-align: start; border: 0; background: transparent;
 }
-.wb-section-session .wb-new-section:hover { background: var(--dsw-alias-background-hover, #8882); }
+.wb-section-session .wb-home-shortcut:hover { background: var(--dsw-alias-background-hover, #8882); }
+.wb-section-session .wb-home-shortcut { font-family: var(--wb-nav-font); font-size: 13px; line-height: 19px; }
 .wb-section-action { display: flex; align-items: center; gap: 2px; flex: none; }
 .wb-section-trigger { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; background: transparent; color: var(--dsw-alias-label-secondary, #999); }
 html[data-dsh-workbench] [data-window-drag]:has([data-workbench-brand]) { height: 48px; gap: 4px; }
-html[data-dsh-workbench] [data-slot="sidebar.brand.name"] [data-workbench-brand] { font-size: 18px; }
+html[data-dsh-workbench] [data-slot="sidebar.brand.name"] [data-workbench-brand] { font-size: 14px; }
 .wb-inline-name input, .wb-directory input, .wb-rename-session input, .wb-guide input {
   border: 1px solid var(--dsw-alias-border-primary, #8884); border-radius: 7px; color: inherit;
   background: var(--dsw-alias-background-hover, #8882); padding: 7px 9px; font: inherit; min-inline-size: 0;

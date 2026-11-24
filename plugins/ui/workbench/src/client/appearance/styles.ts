@@ -1,10 +1,13 @@
 /** Stable data-slot anchors are the host's documented dynamic-style seam. */
 import { workspaceStyles } from './workspace.js';
 import { controlStyles } from './controls.js';
+import { chromeStyles } from './chrome.js';
+import { pluginSearchStyles } from './plugins.js';
 import { scheduledStyles } from './scheduled.js';
 
 const toolFrame = 'html[data-dsh-workbench] [data-slot="root"] > div:has(> div > [data-global-panel])';
 const pluginsFrame = `${toolFrame}:not([data-sidebar-drawer]):has([data-workbench-plugins-navigation]):has([data-plugin-panel])`;
+const scheduledFrame = `${toolFrame}:not([data-sidebar-drawer]):has([data-workbench-scheduled-navigation]):has([data-testid="task-manager-page"])`;
 const pluginGroups = `${pluginsFrame} :is([data-plugin-group="basic"], [data-plugin-group="extensions"], [data-plugin-group="bundles"])`;
 
 const desktopFrame = 'html[data-dsh-workbench] [data-slot="root"] > div:not([data-sidebar-drawer])';
@@ -14,7 +17,7 @@ const settingsSeat = '[data-slot="sidebar.settings"]';
 const launcher = '[data-slot="settings.launcher"]';
 
 export const stylesheet = `
-html[data-dsh-workbench] { --dsh-workbench-rail: 52px; }
+html[data-dsh-workbench] { --dsh-workbench-rail: 42px; }
 html[data-dsh-workbench] [data-slot="root"] > div {
   margin-inline-start: var(--dsh-workbench-rail);
   width: calc(100% - var(--dsh-workbench-rail));
@@ -26,9 +29,8 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
 }
 .wb-plugins-navigation { display: none; }
 @media (min-width: 824px) {
-  /* Keep the 335.5px total with a 52px rail and the host's 280px default
-     track. Apply the remaining inset to the sidebar, main and handle alike. */
-  ${expandedHome} { --wb-sidebar-inset: 3.5px; }
+  /* Offset the host's 280px default track while keeping its native resize behavior. */
+  ${expandedHome} { --wb-sidebar-inset: calc(var(--wb-secondary-width) - 280px); }
   ${expandedHome} > ${sidebarColumn} {
     box-sizing: border-box; inline-size: calc(100% + var(--wb-sidebar-inset));
   }
@@ -45,9 +47,9 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
   ${toolFrame}:not([data-sidebar-drawer]) > div:has(> [data-global-panel]) {
     grid-column: 1 / 3;
   }
-  ${pluginsFrame} { --wb-plugins-sidebar-width: 283.5px; }
-  ${pluginsFrame} > div:has(> [data-global-panel]) {
-    margin-inline-start: var(--wb-plugins-sidebar-width);
+  ${pluginsFrame} > div:has(> [data-global-panel]),
+  ${scheduledFrame} > div:has(> [data-global-panel]) {
+    margin-inline-start: var(--wb-secondary-width);
   }
   ${pluginGroups} { container: wb-plugins-overview / inline-size; }
   @container wb-plugins-overview (min-width: 680px) {
@@ -65,7 +67,7 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
     position: absolute;
     inset-block: var(--dsh-frame-top-clearance, 0px) 0;
     inset-inline-start: 0;
-    inline-size: var(--wb-plugins-sidebar-width);
+    inline-size: var(--wb-secondary-width);
     box-sizing: border-box;
     overflow: auto;
     pointer-events: auto;
@@ -134,14 +136,14 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
 html[data-dsh-workbench] .dsh-workbench-rail {
   position: fixed; inset: var(--dsh-frame-top-clearance, 0px) auto 0 0; width: var(--dsh-workbench-rail);
   box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
-  gap: 8px; padding: 8px 6px 95px;
+  gap: 5px; padding: 12px 6px 95px;
   background: var(--dsw-specific-sidebar-fill, #252525); color: var(--dsw-alias-label-secondary, #999);
   border-inline-end: 1px solid var(--dsw-alias-border-primary, #ffffff12);
   pointer-events: auto; overflow-y: auto; overscroll-behavior: contain;
 }
 html[data-dsh-workbench] .dsh-workbench-button {
-  width: 36px; min-height: 36px; flex-shrink: 0; padding: 0; display: flex;
-  align-items: center; justify-content: center; border: 0; border-radius: 11px;
+  width: 30px; min-height: 30px; flex-shrink: 0; padding: 0; display: flex;
+  align-items: center; justify-content: center; border: 0; border-radius: 7px;
   background: transparent; color: inherit; cursor: pointer; -webkit-app-region: no-drag;
 }
 html[data-dsh-workbench] .dsh-workbench-button:hover {
@@ -152,7 +154,7 @@ html[data-dsh-workbench] .dsh-workbench-button[aria-current="page"] {
 }
 html[data-dsh-workbench] .dsh-workbench-button:focus-visible { outline: 2px solid var(--dsw-alias-accent-primary, #4c95f6); outline-offset: 2px; }
 html[data-dsh-workbench] .dsh-workbench-panel-buttons {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
   min-block-size: 0; inline-size: 100%; overflow-y: auto; scrollbar-width: none;
 }
 html[data-dsh-workbench] [data-workbench-brand] { font: 600 20px/1.4 system-ui, sans-serif; letter-spacing: .01em; }
@@ -170,4 +172,4 @@ html[data-dsh-workbench] .wb-source-picker select {
   html[data-dsh-workbench] { --dsh-workbench-rail: 0px; }
   html[data-dsh-workbench] .dsh-workbench-rail { display: none; }
 }
-` + workspaceStyles + controlStyles + scheduledStyles;
+` + workspaceStyles + controlStyles + scheduledStyles + chromeStyles + pluginSearchStyles;

@@ -7,6 +7,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
 import { ActivityBar } from './navigation/ActivityBar.js';
+import { scheduledSource } from './navigation/scheduled-source.js';
 import { SourcePicker } from './integration/SourcePicker.js';
 import { sessionSources } from './integration/sessionSources.js';
 import { ExternalTree } from './workspace/ExternalTree.js';
@@ -52,6 +53,7 @@ function assemble(ctx: Context): void {
   }, ({ images, loadImage, align, renderFactorySlot }: MessageImagesProps) =>
     renderFactorySlot('conversation.images.content', { images, loadImage, align, compact: true })));
   const panels = panelSource(ctx);
+  const scheduledTasks = scheduledSource(ctx);
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'dsh-workbench:activity', order: -100, locale: 'workbench',
     inject: () => ({
@@ -62,7 +64,8 @@ function assemble(ctx: Context): void {
         navigation.openList();
         return true;
       },
-      hooks: { panels },
+      nativeScheduleText: ctx.locale.bind('schedule.manager'),
+      hooks: { panels, scheduledTasks },
     }),
   }, ActivityBar));
   const view = registerWorkspaceView(ctx, () => ctx.slots.register({
@@ -87,6 +90,7 @@ function assemble(ctx: Context): void {
     name: 'sidebar.session.action', id: 'dsh-workbench:new-section', locale: 'workbench',
     inject: () => ({
       newSection: () => { activity.set(false); drafts.begin({ kind: 'section' }); },
+      startSession: () => ctx.uiWorkspace.startSession(),
       search: (...args: Parameters<typeof ctx.sessions.search>) => ctx.sessions.search(...args),
       openSession: ctx.uiWorkspace.openSession.bind(ctx.uiWorkspace),
       toggleActivity: () => activity.set(!activity.getSnapshot()),
