@@ -137,7 +137,13 @@ async function send(page, target) {
   const named = providers.filter({ hasText: 'Grok · Work' });
   if (target === workModel) {
     if (await named.count()) await named.hover();
-    else await page.locator('[data-dsh-model-picker]').getByLabel('Account', { exact: true }).selectOption({ label: 'Work' });
+    else {
+      const accounts = page.locator('[data-dsh-model-picker]').getByLabel('Account', { exact: true });
+      const workAccount = accounts.getByRole('option', { name: /^Work(?: · API)?$/ });
+      const value = await workAccount.getAttribute('value');
+      assert.ok(value, 'named Grok account exposes a route value');
+      await accounts.selectOption(value);
+    }
   }
   await page.getByText(target.id, { exact: true }).click();
   await composer.locator('[contenteditable=true]').fill(fixturePrompt);
