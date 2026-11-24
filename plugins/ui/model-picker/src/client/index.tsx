@@ -226,7 +226,8 @@ function ModelsOption({ directory, ctx, t, ...props }: OptionsProps) {
           }}>
           {choices.map(choice => <button key={choice.id ?? ''} type="button" role="menuitemradio"
             aria-checked={choice.id === effective} disabled={props.locked} onClick={() => chooseEffort(choice.id)}>
-            {choice.name}{choice.id === effective && <span aria-hidden="true">✓</span>}
+            <span className="picker-title" title={choice.name}>{choice.name}</span>
+            <span className="picker-effort-mark" aria-hidden="true">{choice.id === effective ? '✓' : ''}</span>
           </button>)}
         </div>}
     </div>}
@@ -243,11 +244,16 @@ function placeModelsPanel(panel: HTMLElement, menu: DOMRect, preferredWidth: num
   const leftRoom = (menu.left - inset) / zoom;
   const side = rightRoom >= preferredWidth ? 'right' : leftRoom >= preferredWidth ? 'left' : undefined;
   panel.dataset.side = side ?? 'stack';
+  const width = side ? Math.min(preferredWidth, side === 'right' ? rightRoom : leftRoom)
+    : Math.min(preferredWidth, (innerWidth - 2 * inset) / zoom);
+  panel.style.maxWidth = `${width}px`;
   if (side) {
-    panel.style.width = `${Math.min(preferredWidth, side === 'right' ? rightRoom : leftRoom)}px`;
     panel.style.setProperty('--picker-panel-height', `${(innerHeight - 2 * inset) / zoom}px`);
-    const height = panel.getBoundingClientRect().height;
+    // Keep the provider rows in place as the model submenu changes size.
+    const anchor = panel.querySelector('.picker-primary') ?? panel;
+    const height = anchor.getBoundingClientRect().height;
     const top = Math.max(inset, Math.min(menu.top, innerHeight - inset - height));
+    panel.style.setProperty('--picker-panel-height', `${(innerHeight - inset - top) / zoom}px`);
     Object.assign(panel.style, {
       left: side === 'right' ? '100%' : 'auto',
       right: side === 'left' ? '100%' : 'auto',
@@ -257,16 +263,15 @@ function placeModelsPanel(panel: HTMLElement, menu: DOMRect, preferredWidth: num
     return;
   }
 
-  const width = Math.min(preferredWidth, (innerWidth - 2 * inset) / zoom);
-  const left = Math.max(inset, Math.min(menu.right, innerWidth - inset) - width * zoom);
+  const edge = Math.max(inset + width * zoom, Math.min(menu.right, innerWidth - inset));
   const above = menu.top - inset;
   const below = innerHeight - menu.bottom - inset;
   const useAbove = above >= below;
+  panel.toggleAttribute('data-above', useAbove);
   panel.style.setProperty('--picker-panel-height', `${Math.max(0, above, below) / zoom}px`);
   Object.assign(panel.style, {
-    width: `${width}px`,
-    left: `${(left - menu.left) / zoom}px`,
-    right: 'auto',
+    left: 'auto',
+    right: `${(menu.right - edge) / zoom}px`,
     top: useAbove ? 'auto' : '100%',
     bottom: useAbove ? '100%' : 'auto',
   });
@@ -278,17 +283,24 @@ const pickerStyles = `
   [role="menu"]:has(.dsh-model-picker-flyout) { overflow: visible; }
   .dsh-model-picker-flyout {
     position: absolute; z-index: 1; box-sizing: border-box; pointer-events: none;
-    max-block-size: var(--picker-panel-height, calc(100dvh - 24px));
+    width: max-content; max-block-size: var(--picker-panel-height, calc(100dvh - 24px));
   }
   .dsh-model-picker-flyout[data-branch="models"] > [data-dsh-model-picker] {
-    display: grid; grid-template-columns: 144px minmax(0, 1fr); align-items: stretch;
+    display: flex; align-items: flex-start;
   }
-  .dsh-model-picker-flyout[data-side="left"] > [data-dsh-model-picker] {
-    grid-template-columns: minmax(0, 1fr) 144px;
+  .dsh-model-picker-flyout:is([data-side="left"], [data-side="stack"]) > [data-dsh-model-picker] {
+    flex-direction: row-reverse;
   }
-  .dsh-model-picker-flyout[data-side="left"] .picker-primary { grid-column: 2; grid-row: 1; }
-  .dsh-model-picker-flyout[data-side="left"] .picker-models { grid-column: 1; grid-row: 1; }
-  [data-dsh-model-picker] .picker-models { contain: size; }
+  .dsh-model-picker-flyout[data-side="stack"][data-above] > [data-dsh-model-picker] {
+    align-items: flex-end;
+  }
+  [data-dsh-model-picker] .picker-primary.picker-surface {
+    flex: none; width: max-content; min-width: 106px; max-width: min(180px, 100%);
+  }
+  [data-dsh-model-picker] .picker-primary:has(.picker-search-results) { max-width: 100%; }
+  [data-dsh-model-picker] .picker-primary input { width: 0; min-width: 100%; }
+  [data-dsh-model-picker] .picker-models { width: max-content; }
+  [data-dsh-model-picker] .picker-providers [data-provider-row] { gap: 9px; }
 }
 .dsh-model-picker-entry, [data-dsh-model-picker] button {
   width: 100%; border: 0; border-radius: var(--dsw-radius-md, 6px);
@@ -307,11 +319,11 @@ const pickerStyles = `
   background: var(--dsw-alias-interactive-bg-hover, rgb(127 127 127 / .18));
 }
 [data-dsh-model-picker] {
-  --picker-list-height: max(64px, calc(var(--picker-panel-height, 100dvh - 184px) - 34px));
+  --picker-list-height: max(0px, calc(var(--picker-panel-height, 100dvh - 184px) - 38px));
   font-size: 13px;
 }
 [data-dsh-model-picker] .picker-surface, [data-dsh-model-picker].picker-surface {
-  min-width: 0; box-sizing: border-box; pointer-events: auto; padding: 3px;
+  min-width: 0; box-sizing: border-box; pointer-events: auto; padding: 4px;
   border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-lg, 8px);
   box-shadow: var(--dsw-elevation-prominent);
   background: var(--dsw-alias-bg-module-platform, Canvas); color: var(--dsw-alias-label-primary, CanvasText);
@@ -328,7 +340,12 @@ const pickerStyles = `
 [data-dsh-model-picker].picker-effort {
   min-width: 0; overflow-y: auto; scrollbar-width: thin; max-block-size: var(--picker-list-height);
 }
-[data-dsh-model-picker] button { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 3px 6px; min-height: 25px; }
+@media (min-width: 390px) and (pointer: fine) {
+  [data-dsh-model-picker] .picker-models, [data-dsh-model-picker].picker-effort {
+    max-block-size: var(--picker-panel-height, calc(100dvh - 24px));
+  }
+}
+[data-dsh-model-picker] button { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 3px 8px; min-height: 25px; }
 [data-dsh-model-picker] [data-provider-row] { min-height: 28px; }
 [data-dsh-model-picker] [data-provider-row][aria-expanded="true"] {
   background: var(--dsw-alias-interactive-bg-hover, rgb(127 127 127 / .18));
@@ -341,11 +358,19 @@ const pickerStyles = `
 [data-dsh-model-picker] .picker-back { display: none; }
 [data-dsh-model-picker] .picker-account { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 3px 7px; }
 [data-dsh-model-picker] .picker-account select { max-width: 100%; min-width: 0; padding: 3px 6px; }
-[data-dsh-model-picker] .picker-section { margin: 4px 7px 1px; }
+[data-dsh-model-picker] .picker-section { margin: 4px 8px 1px; }
+[data-dsh-model-picker] .picker-name-tooltip {
+  position: fixed; inset: auto; margin: 0; width: max-content; max-inline-size: min(320px, calc(100vw - 24px));
+  overflow-wrap: anywhere; pointer-events: none;
+  font: inherit; padding: 5px 8px;
+}
+[data-dsh-model-picker] .picker-model-mark { flex: none; }
+[data-dsh-model-picker].picker-effort .picker-effort-mark { flex: 0 0 10px; }
 @media (max-width: 389px), (pointer: coarse) {
   [role="menu"]:has(.dsh-model-picker-flyout) {
     width: min(380px, calc(100vw - 24px)); max-width: calc(100vw - 24px); overflow-y: auto;
   }
+  [data-dsh-model-picker] { --picker-list-height: max(64px, calc(100dvh - 222px)); }
   [data-dsh-model-picker] .picker-models { border: 0; padding: 0; }
   [data-dsh-model-picker] .picker-providers { padding: 0; max-block-size: min(168px, var(--picker-list-height)); }
   [data-dsh-model-picker][data-entered="true"] .picker-primary { display: none; }

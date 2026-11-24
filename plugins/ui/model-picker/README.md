@@ -4,7 +4,7 @@
 
 在 Add provider 选择厂商和连接方式。Desktop 显示安装及登录检测，API 显示对应凭据配置。详情的 Desktop 与 API 分区分别显示账号与适用的添加入口。Codex 0.1.10 与 Qoder 0.1.10 可通过独立、已登录的配置目录关联桌面账号。Codex 的 API 分区使用 OpenAI API Key，Qoder 使用 PAT，Grok 0.1.4 使用 xAI API Key。DeepSeek 原生登录由 DSH 账号菜单管理，命名 API 账号可从管理页添加。Grok 通过 API 接入。
 
-在 DSH 输入框的模型菜单中，悬停「Effort」打开推理档位，悬停「Models」先打开厂商列表。把指针移到厂商上，再展开该厂商的模型选择。相邻项和子菜单之间可以移动指针，移出分支后逐级收起。窄窗优先使用上下停靠，触屏可逐级点按。键盘可用方向键进入或返回，搜索覆盖所有已加载的厂商和账号。模型列表和搜索结果标注已知的 Desktop 或 API 来源。选中模型才改变当前会话的选择，结果与 `/model` 共用同一份状态。推理强度菜单读取当前账号与模型声明的档位。切换模型时保留仍受支持的显式档位，否则采用目标模型的默认值。没有声明档位时，输入框隐藏该菜单并省略选择参数。团队设置和其他菜单扩展由原生菜单管理。
+在 DSH 输入框的模型菜单中，悬停「Effort」打开推理档位，悬停「Models」先打开厂商列表。把指针移到厂商上，再展开该厂商的模型选择。厂商、模型和 Effort 面板按各自内容定宽定高。单个显著超长模型名显示省略号，悬停、键盘聚焦或触屏首次点按可查看全名。相邻项和子菜单之间可以移动指针，移出分支后逐级收起。窄窗优先使用上下停靠，触屏可逐级点按。键盘可用方向键进入或返回，搜索覆盖所有已加载的厂商和账号。模型列表和搜索结果标注已知的 Desktop 或 API 来源。选中模型才改变当前会话的选择，结果与 `/model` 共用同一份状态。推理强度菜单读取当前账号与模型声明的档位。切换模型时保留仍受支持的显式档位，否则采用目标模型的默认值。没有声明档位时，输入框隐藏该菜单并省略选择参数。团队设置和其他菜单扩展由原生菜单管理。
 
 在厂商详情的用量区选择账号。鼠标悬停或键盘聚焦圆环可查看明细。
 
@@ -30,7 +30,7 @@
 ```sh
 pnpm --filter dsh-model-picker check
 pnpm --filter dsh-model-picker pack --pack-destination /tmp
-dsh plugin --profile web add /tmp/dsh-model-picker-0.2.0.tgz
+dsh plugin --profile web add /tmp/dsh-model-picker-0.2.4.tgz
 ```
 
 Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filter dsh-model-picker test:host`，需要本机 Chrome 或 `DSH_TEST_BROWSER_EXECUTABLE`。测试使用合成输入和临时 profile。

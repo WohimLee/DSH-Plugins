@@ -27,6 +27,8 @@ export function Picker({ directory, ctx, locked, dismiss, reportFailure, back, t
   const search = useRef<HTMLInputElement>(null);
   const results = useRef<HTMLDivElement>(null);
   const providers = useRef<HTMLDivElement>(null);
+  const nameTooltip = useRef<HTMLDivElement>(null);
+  const nameAnchor = useRef<HTMLButtonElement>();
   const closeTimer = useRef<ReturnType<typeof setTimeout>>();
   const id = useId();
   const group = groups.find(item => item.id === provider);
@@ -60,6 +62,15 @@ export function Picker({ directory, ctx, locked, dismiss, reportFailure, back, t
   }, [ctx, groups]);
 
   useEffect(() => () => clearTimeout(closeTimer.current), []);
+
+  useLayoutEffect(() => {
+    nameTooltip.current?.setAttribute('popover', 'manual');
+  }, []);
+
+  useLayoutEffect(() => {
+    closeName();
+    if (root.current) fitModelNames(root.current);
+  }, [groups, route, term]);
 
   function sourceLabel(route: Route): string | undefined {
     const source = qoderSources.get(route.id) ?? routeSource(route.id);
@@ -102,6 +113,29 @@ export function Picker({ directory, ctx, locked, dismiss, reportFailure, back, t
       || [model.name, model.id, item.provider, item.route.name].some(name => name.toLocaleLowerCase().includes(term))) }))
     .filter(item => item.models.length > 0);
 
+  function closeName(): void {
+    const tooltip = nameTooltip.current;
+    if (tooltip?.matches(':popover-open')) tooltip.hidePopover();
+    nameAnchor.current = undefined;
+  }
+
+  function showName(button: HTMLButtonElement): boolean {
+    const label = button.querySelector<HTMLElement>('.picker-title');
+    const tooltip = nameTooltip.current;
+    if (!label || !tooltip || label.scrollWidth <= label.clientWidth) return false;
+    nameAnchor.current = button;
+    tooltip.textContent = label.textContent;
+    if (!tooltip.matches(':popover-open')) tooltip.showPopover();
+    const anchor = button.getBoundingClientRect();
+    const { width, height } = tooltip.getBoundingClientRect();
+    const left = Math.max(12, Math.min(anchor.left, window.innerWidth - width - 12));
+    const below = anchor.bottom + 4;
+    const top = below + height <= window.innerHeight - 12 ? below : Math.max(12, anchor.top - height - 4);
+    tooltip.style.left = `${left / tooltip.currentCSSZoom}px`;
+    tooltip.style.top = `${top / tooltip.currentCSSZoom}px`;
+    return true;
+  }
+
   function choose(route: Route, model: Model): void {
     if (busy) return;
     const same = state.current?.provider === route.id && state.current.model === model.id;
@@ -134,6 +168,7 @@ export function Picker({ directory, ctx, locked, dismiss, reportFailure, back, t
       if (controls[index + (event.shiftKey ? -1 : 1)]) event.stopPropagation();
       return;
     }
+    if (event.key === 'Escape') closeName();
     const target = event.target;
     const providerId = target instanceof HTMLElement ? target.dataset.providerRow : undefined;
     const atModels = target instanceof Node && results.current?.contains(target);
@@ -158,9 +193,12 @@ export function Picker({ directory, ctx, locked, dismiss, reportFailure, back, t
     }
   }
 
-  return <div data-dsh-model-picker="" data-entered={String(!!group && !searching)} ref={root} onKeyDown={keys}>
+  return <div data-dsh-model-picker="" data-entered={String(!!group && !searching)} ref={root} onKeyDown={keys}
+    onScrollCapture={closeName} onPointerDownCapture={event => {
+      if (nameAnchor.current && event.target instanceof Node && !nameAnchor.current.contains(event.target)) closeName();
+    }}>
     <div className="picker-primary picker-surface">
-      <input ref={search} type="search" aria-label={t('search')} placeholder={t('search')}
+      <input ref={search} type="search" aria-label={t('search')} placeholder={t('searchPlaceholder')}
         value={query} onChange={event => { setProvider(''); setQuery(event.target.value); }} />
       {failed && <div className="picker-detail" role="status">{t('catalogFailed')}</div>}
       {state.failures.map(failure => <div key={failure.id} className="picker-detail" role="status">
@@ -196,11 +234,12 @@ export function Picker({ directory, ctx, locked, dismiss, reportFailure, back, t
         : sourceLabel(route) && <p className="picker-detail picker-section">{sourceLabel(route)}</p>}
       {renderModels()}
     </div>}
+    <div ref={nameTooltip} className="picker-name-tooltip picker-surface" role="tooltip" />
   </div>;
 
   function renderModels() {
     if (models.length === 0) return <div className="picker-detail" role="status">{t(searching ? 'noMatches' : 'empty')}</div>;
-    return models.map(item => <div key={item.route.id}>
+    return models.map(item => <div key={item.route.id} className="picker-model-group">
       {searching && <div className="picker-detail picker-section">
         {item.provider === item.route.name
           ? [item.provider, sourceLabel(item.route)].filter(Boolean).join(' · ')
@@ -209,10 +248,47 @@ export function Picker({ directory, ctx, locked, dismiss, reportFailure, back, t
       {item.models.map(model => {
         const selected = state.current?.provider === item.route.id && state.current.model === model.id;
         return <button key={model.id} type="button" data-model-row="" aria-current={selected} disabled={busy}
-          onClick={() => choose(item.route, model)}>
-          <span className="picker-title" title={model.name}>{model.name}</span>{selected && <span aria-hidden="true">✓</span>}
+          onPointerEnter={event => { if (event.pointerType === 'mouse') showName(event.currentTarget); }}
+          onPointerLeave={event => {
+            if (event.pointerType === 'mouse' && !event.currentTarget.matches(':focus-visible')) closeName();
+          }}
+          onFocus={event => {
+            const button = event.currentTarget;
+            if (!button.matches(':focus-visible')) return;
+            requestAnimationFrame(() => { if (document.activeElement === button) showName(button); });
+          }}
+          onBlur={closeName}
+          onClick={event => {
+            if (event.nativeEvent instanceof PointerEvent && event.nativeEvent.pointerType === 'touch'
+              && nameAnchor.current !== event.currentTarget && showName(event.currentTarget)) return;
+            closeName();
+            choose(item.route, model);
+          }}>
+          <span className="picker-title">{model.name}</span>{selected && <span className="picker-model-mark" aria-hidden="true">✓</span>}
         </button>;
       })}
     </div>);
+  }
+}
+
+function fitModelNames(root: HTMLElement): void {
+  const context = document.createElement('canvas').getContext('2d');
+  if (!context) return;
+  for (const group of root.querySelectorAll('.picker-model-group')) {
+    const labels = Array.from(group.querySelectorAll<HTMLElement>('.picker-title'));
+    for (const label of labels) {
+      label.style.removeProperty('max-inline-size');
+      delete label.dataset.modelOutlier;
+    }
+    if (labels.length < 3) continue;
+    const font = getComputedStyle(labels[0]);
+    context.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+    const widths = labels.map(label => ({ label, width: context.measureText(label.textContent ?? '').width }))
+      .sort((a, b) => b.width - a.width);
+    const [longest, second] = widths;
+    if (longest.width > second.width * 1.45 && longest.width - second.width > 48) {
+      longest.label.style.maxInlineSize = `${Math.ceil(second.width + 28)}px`;
+      longest.label.dataset.modelOutlier = '';
+    }
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-picker",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "为 DSH 提供厂商模型选择、连接管理与账号用量。",
   "type": "module",

@@ -28,6 +28,8 @@ const binary = join(temp, 'codex-fixture');
 const qoder = join(temp, 'qoder-fixture');
 const fixtureFetch = join(temp, 'provider-api-fixtures.mjs');
 const patch = join(temp, 'model-picker.yml');
+const longModel = 'Codex Ultra Long Context Preview Model For Regression';
+const codexEfforts = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 let host, closed, browser, page, log = '';
 const platform = createServer((request, response) => {
   if (request.headers['x-dsh-auth-token'] !== 'synthetic-dsh-grant') return response.writeHead(401).end();
@@ -66,10 +68,11 @@ records:
 `, { mode: 0o600 });
   await writeFile(join(codexHome, 'models_cache.json'), JSON.stringify({ models: [
     { slug: 'codex-fixture', display_name: 'Codex Fixture', input_modalities: ['text', 'image'], visibility: 'list', supported_in_api: true,
-      supported_reasoning_levels: [{ effort: 'high' }, { effort: 'low' }] },
-    ...Array.from({ length: 9 }, (_, i) => ({
+      supported_reasoning_levels: codexEfforts.map(effort => ({ effort })), default_reasoning_level: 'high' },
+    ...Array.from({ length: 24 }, (_, i) => ({
       slug: `codex-long-${i}`, display_name: `Codex model ${i + 2}`, visibility: 'list', supported_in_api: true,
     })),
+    { slug: 'codex-name-outlier', display_name: longModel, visibility: 'list', supported_in_api: true },
   ] }));
   await writeFile(binary, `#!/usr/bin/env node
 const readline = require('node:readline');
@@ -536,6 +539,16 @@ globalThis.fetch = async (input, options = {}) => {
 
   const menu = page.getByRole('menu').filter({ has: picker });
   const panel = picker.locator('..');
+  const primary = picker.locator('.picker-primary');
+  const geometry = await page.evaluate(() => ({
+    viewport: [innerWidth, innerHeight], dpr: devicePixelRatio, zoom: document.documentElement.currentCSSZoom,
+    dark: matchMedia('(prefers-color-scheme: dark)').matches,
+  }));
+  const sizing = panel => panel.evaluate(node => {
+    const { width, height } = node.getBoundingClientRect();
+    const { fontFamily, fontSize, lineHeight } = getComputedStyle(node);
+    return { width, height, fontFamily, fontSize, lineHeight, rows: node.querySelectorAll('button').length };
+  });
   const assertDocked = async side => {
     const parent = await menu.boundingBox();
     const child = await panel.boundingBox();
@@ -566,10 +579,10 @@ globalThis.fetch = async (input, options = {}) => {
     await model(expected).waitFor();
     assert.deepEqual(await menu.boundingBox(), menuFrame, 'the anchored menu must retain its size and position');
     assert.deepEqual(await Promise.all(hoverTargets.map(name => provider(name).boundingBox())), originalRows);
-    const providerPanel = await picker.locator('.picker-primary').boundingBox();
+    const providerPanel = await primary.boundingBox();
     const modelPanel = await right.boundingBox();
-    assert.ok(providerPanel.width <= 145 && modelPanel.width <= 207, 'both submenus use compact widths');
     assert.ok(Math.abs(modelPanel.x + modelPanel.width - providerPanel.x) < 1, 'left-facing model and provider panes touch');
+    geometry[hoverTargets[index]] = await sizing(right);
   };
   await assertStableHover(1, 'Codex Fixture');
   const firstCodex = await model('Codex Fixture').boundingBox();
@@ -583,15 +596,31 @@ globalThis.fetch = async (input, options = {}) => {
   assert.ok(await right.evaluate(el => el.scrollTop > 0));
   await assertStableHover(2, 'Auto');
   await assertStableHover(0, 'DeepSeek-V4.1-Flash');
+  geometry.providers = await sizing(primary);
+  const deepSeekTitleFits = await model('DeepSeek-V4.1-Flash').evaluate(label => label.scrollWidth === label.clientWidth);
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'models-deepseek.png') });
+  }
 
   await effort.hover();
   await picker.waitFor({ state: 'detached' });
   const hoverEffort = page.locator('[data-branch="effort"]');
   await hoverEffort.getByRole('menuitemradio').first().hover();
   await hoverEffort.waitFor();
+  geometry.effort = await sizing(hoverEffort);
   if (process.env.DSH_TEST_ARTIFACTS) {
     await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'effort-hover.png') });
+    await writeFile(join(process.env.DSH_TEST_ARTIFACTS, 'model-menu-geometry.json'), JSON.stringify(geometry, null, 2));
   }
+  assert.ok(geometry.providers.width >= 102 && geometry.providers.width <= 118,
+    `the provider surface should be about 106px wide; received ${geometry.providers.width}px`);
+  assert.ok(geometry.DeepSeek.width <= 180 && deepSeekTitleFits, 'the DeepSeek pane fits the complete longest model name');
+  assert.ok(geometry.DeepSeek.height < geometry.providers.height - 15, 'the short DeepSeek menu ends after its model rows');
+  assert.ok(geometry.Codex.height > geometry.DeepSeek.height, 'more model rows make the model pane taller');
+  assert.ok(geometry.Qoder.width < 206 && geometry.Qoder.height < geometry.providers.height,
+    'the Qoder pane fits its short rows and the account selector');
+  assert.ok(geometry.effort.width <= 112, 'the Effort pane fits its labels and selection mark');
+  const providerSearch = picker.getByRole('searchbox', { name: 'Search all models…', exact: true });
   await page.mouse.move(8, 8);
   await hoverEffort.waitFor({ state: 'detached' });
   await browse.hover();
@@ -603,8 +632,9 @@ globalThis.fetch = async (input, options = {}) => {
 
   await browse.focus();
   await browse.press('ArrowRight');
-  const keyboardSearch = picker.getByRole('searchbox');
-  await keyboardSearch.press('ArrowDown');
+  await providerSearch.waitFor();
+  assert.equal(await providerSearch.getAttribute('placeholder'), 'Search…');
+  await providerSearch.press('ArrowDown');
   const firstProvider = provider('DeepSeek');
   assert.ok(await firstProvider.evaluate(node => node === document.activeElement));
   assert.equal(await right.count(), 0, 'keyboard focus alone does not open a provider');
@@ -636,7 +666,25 @@ globalThis.fetch = async (input, options = {}) => {
   await model('Lite').waitFor();
   assert.equal(await model('Auto').count(), 0);
   assert.ok(await account.locator('option').filter({ hasText: /^Work · API$/ }).count());
+  await provider('Codex').click();
+  const longRow = picker.getByRole('button', { name: longModel, exact: true });
+  const longLabel = longRow.locator('[data-model-outlier]');
+  assert.ok(await longLabel.evaluate(label => label.scrollWidth > label.clientWidth));
+  assert.ok(await model('Codex Fixture').evaluate(label => label.scrollWidth === label.clientWidth));
+  await longRow.scrollIntoViewIfNeeded();
+  await longRow.hover();
+  const nameTooltip = picker.getByRole('tooltip');
+  await nameTooltip.getByText(longModel, { exact: true }).waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-name-outlier.png') });
+  }
+  await picker.getByRole('button', { name: 'Codex model 25', exact: true }).press('ArrowDown');
+  assert.ok(await longRow.evaluate(row => row === document.activeElement));
+  await nameTooltip.getByText(longModel, { exact: true }).waitFor();
   const search = picker.getByRole('searchbox');
+  await search.fill('preview model for regression');
+  await model(longModel).waitFor();
+  assert.equal(await picker.locator('[data-model-outlier]').count(), 0, 'only one search result remains so it can use the full available width');
   await search.fill('codex fixture');
   await model('Codex Fixture').waitFor();
   assert.equal(await model('Lite').count(), 0);
@@ -693,12 +741,21 @@ globalThis.fetch = async (input, options = {}) => {
   await model('Codex Fixture').click();
   assert.doesNotMatch(await selectedTrigger.innerText(), /Image input|Text input|可发图片|仅文本/);
   await selectedTrigger.filter({ hasText: 'Codex Fixture' }).click();
+  await effort.hover();
+  const codexHover = hoverEffort.getByRole('menuitemradio');
+  assert.deepEqual(await codexHover.allTextContents().then(rows => rows.map(text => text.replace('✓', '').trim())), codexEfforts);
+  geometry.codexEffort = await sizing(hoverEffort);
+  assert.ok(geometry.codexEffort.width <= 100, 'six Codex effort levels fit within the compact submenu');
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'effort-codex.png') });
+    await writeFile(join(process.env.DSH_TEST_ARTIFACTS, 'model-menu-geometry.json'), JSON.stringify(geometry, null, 2));
+  }
   await effort.focus();
   await effort.press('ArrowRight');
   const levels = page.getByRole('menuitemradio');
-  assert.deepEqual(await levels.allTextContents(), ['Default', 'high', 'low']);
-  await levels.filter({ hasText: 'high' }).click();
-  await selectedTrigger.filter({ hasText: 'high' }).click();
+  assert.deepEqual(await levels.allTextContents().then(rows => rows.map(text => text.replace('✓', '').trim())), codexEfforts);
+  await page.getByRole('menuitemradio', { name: 'xhigh', exact: true }).click();
+  await selectedTrigger.filter({ hasText: 'xhigh' }).click();
   await browse.hover();
   await provider('Codex').hover();
   await model('Codex model 2').click();
@@ -707,6 +764,35 @@ globalThis.fetch = async (input, options = {}) => {
   assert.doesNotMatch(await selectedTrigger.getAttribute('aria-label'), /reasoning effort/);
   await page.keyboard.press('Escape');
   console.log('PASS native effort menu follows the selected provider and model, including no-effort models.');
+
+  await page.setViewportSize({ width: 380, height: 760 });
+  const touchSession = await page.context().newCDPSession(page);
+  await touchSession.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+  const tap = async target => {
+    await target.scrollIntoViewIfNeeded();
+    const box = await target.boundingBox();
+    assert.ok(box, 'touch target must be visible');
+    const touchPoints = [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }];
+    await touchSession.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints });
+    await touchSession.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  try {
+    assert.ok(await page.evaluate(() => matchMedia('(pointer: coarse)').matches));
+    await tap(selectedTrigger);
+    await tap(browse);
+    await tap(provider('Codex'));
+    await tap(longRow);
+    await nameTooltip.getByText(longModel, { exact: true }).waitFor();
+    assert.ok(await selectedTrigger.getByText('Codex model 2', { exact: true }).isVisible(), 'first tap only previews the full name');
+    await tap(longRow);
+    await picker.waitFor({ state: 'detached' });
+    await selectedTrigger.locator('[data-model-id="codex-name-outlier"]').waitFor({ state: 'attached' });
+    assert.ok((await selectedTrigger.getAttribute('aria-label')).includes(longModel));
+  } finally {
+    await touchSession.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    await touchSession.detach();
+    await page.setViewportSize({ width: 1280, height: 900 });
+  }
   await page.getByRole('button', { name: 'Plugins', exact: true }).click();
   const toggle = page.getByRole('switch', { name: /^Enable (?:Model picker|dsh-model-picker)$/i });
   await toggle.click();
@@ -720,7 +806,7 @@ globalThis.fetch = async (input, options = {}) => {
   await toggle.and(page.locator('[aria-checked="false"]')).click();
   await stylesheet.waitFor({ state: 'attached' });
   assert.deepEqual(errors, []);
-  console.log('PASS isolated Web model picker: stable row sizing and independent scrolling, docking, narrow desktop, selection without usage, search and hot reload.');
+  console.log('PASS isolated Web model picker: content-sized menus, stable docking, narrow desktop, full-name preview on pointer, keyboard and touch, search, selection and hot reload.');
 } catch (error) {
   if (page) console.error(await page.locator('body').innerText().then(text => text.slice(-3200)).catch(() => ''));
   console.error(log.replace(/([?&]token=)[^&\s]+/g, '$1[redacted]'));
