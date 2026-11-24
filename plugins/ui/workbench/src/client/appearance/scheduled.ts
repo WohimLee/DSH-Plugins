@@ -27,18 +27,16 @@ ${darwinHeading} { padding-block-start: calc(25px + var(--dsh-frame-top-clearanc
     position: absolute;
     inset-block: var(--dsh-frame-top-clearance, 0px) 0;
     inset-inline-start: 0;
-    inline-size: var(--wb-secondary-width, 202px);
+    inline-size: var(--wb-secondary-width);
     box-sizing: border-box;
     overflow: auto;
     overscroll-behavior: contain;
     pointer-events: auto;
-    padding: 8px 12px;
     border-inline-end: 1px solid var(--wb-sidebar-border, var(--dsw-alias-border-primary, #8882));
     background: var(--wb-sidebar-fill, var(--dsw-specific-sidebar-fill));
     color: var(--dsw-alias-label-primary);
   }
 }
-.wb-scheduled-title { padding: 4px 8px 8px; font-size: 14px; font-weight: 600; }
 .wb-scheduled-navigation :is(button, summary) {
   appearance: none;
   display: flex;
@@ -74,13 +72,13 @@ ${darwinHeading} { padding-block-start: calc(25px + var(--dsh-frame-top-clearanc
 .wb-scheduled-paused p { font-size: 12px; padding-inline: 8px; color: var(--dsw-alias-label-secondary); }
 .wb-scheduled-navigation .wb-scheduled-row {
   display: grid;
-  grid-template-rows: 19px 16px;
+  grid-template-rows: 20px 16px;
   gap: 2px;
   inline-size: 100%;
   min-inline-size: 0;
   min-block-size: 49px;
   box-sizing: border-box;
-  padding-block: 6px;
+  padding-block: 5px 6px;
 }
 .wb-scheduled-row > :is(span, small) {
   min-inline-size: 0;
@@ -88,7 +86,6 @@ ${darwinHeading} { padding-block-start: calc(25px + var(--dsh-frame-top-clearanc
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.wb-scheduled-row span { font-size: 14px; line-height: 19px; }
 .wb-scheduled-row small { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 16px; }
 .wb-scheduled-navigation .wb-scheduled-row[aria-current] { background: var(--dsw-alias-background-active, #8883); }
 `;

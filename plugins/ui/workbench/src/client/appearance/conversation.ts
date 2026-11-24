@@ -2,8 +2,9 @@ export const conversationStyles = `
 /* Workbench zoom scales this baseline independently of the host's text size. */
 html[data-dsh-workbench] [data-conversation-content] {
   --wb-conversation-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --wb-message-size: 13px;
-  --wb-message-leading: 24px;
+  --wb-conversation-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --wb-message-size: 14px;
+  --wb-message-leading: 22.75px;
 }
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] {
   --dsw-font-markdown-base: var(--wb-message-size) / var(--wb-message-leading) var(--wb-conversation-font);
@@ -18,13 +19,20 @@ html[data-dsh-workbench] [data-conversation-content] {
   --dsw-font-markdown-table-head: 600 var(--wb-table-size) / var(--wb-table-leading) var(--wb-conversation-font);
 }
 [data-conversation-content] [data-message-bubble] {
+  font-family: var(--wb-conversation-font);
   font-size: var(--wb-message-size);
   line-height: var(--wb-message-leading);
 }
+[data-conversation-content] [data-chat-flow-kind="assistant-step"] :not(pre) > code {
+  font-family: var(--wb-conversation-mono);
+  font-size: 12.25px;
+}
 /* On rc.5 only completed timing labels have nested duration spans. */
 html[data-dsh-workbench] [data-conversation-content] [data-turn-process]:is([data-has-duration], :has(> span > span)) {
+  font-family: var(--wb-conversation-font);
   font-size: 14px;
 }
+html[data-dsh-workbench] [data-conversation-content] [data-turn-process] > span > span { font-family: inherit; }
 html[data-dsh-workbench] [data-conversation-content] [data-step-process] button[data-process-activity] {
   font-family: var(--wb-conversation-font);
   font-size: 14px;

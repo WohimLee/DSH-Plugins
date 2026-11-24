@@ -157,12 +157,13 @@ try {
   const header = page.locator('[data-window-drag]').filter({ has: page.locator('[data-workbench-brand]') });
   const sidebarAction = page.locator('.wb-section-session');
   const newSection = sidebarAction.getByRole('button', { name: 'New Section', exact: true });
-  const searchSessions = sidebarAction.getByRole('button', { name: 'Search chats', exact: true });
+  const searchSessions = header.getByRole('button', { name: 'Search sessions', exact: true });
   await header.getByRole('button', { name: 'View activity' }).waitFor();
   await searchSessions.waitFor();
   await newSection.waitFor();
   assert.equal(await header.getByRole('button', { name: 'New Section', exact: true }).count(), 0);
-  await sidebarAction.getByRole('button', { name: 'New chat', exact: true }).waitFor();
+  assert.deepEqual(await sidebarAction.getByRole('button').allTextContents(), ['New Section']);
+  assert.equal(await searchSessions.textContent(), '');
   await page.mouse.move(1200, 400);
   const newSectionOutline = await folderOutline(newSection);
   const addProjectOutline = await folderOutline(recents.getByRole('button', { name: 'Add project', exact: true }));
@@ -181,28 +182,51 @@ try {
     const handle = column.parentElement.querySelector('[data-side="sidebar"]').getBoundingClientRect();
     return [rail.width, sidebar.width, main.x, handle.x];
   });
-  assert.deepEqual(await sidebarGeometry(), [42, 202, 244, 244], 'default expanded sidebar and drag handle at 100%');
+  assert.deepEqual(await sidebarGeometry(), [52, 296, 348, 348], 'default expanded sidebar and drag handle at 100%');
   assert.deepEqual(await tree.evaluate(element => {
     const sidebar = element.closest('[data-slot="sidebar"]').parentElement;
     const rail = document.querySelector('[data-workbench-rail]');
     return [getComputedStyle(rail).backgroundColor, getComputedStyle(sidebar).backgroundColor];
   }), ['rgb(40, 41, 44)', 'rgb(34, 35, 37)']);
-  await page.mouse.move(248, 200);
+  await page.mouse.move(352, 200);
   await page.mouse.down();
-  await page.mouse.move(268, 200, { steps: 5 });
+  await page.mouse.move(372, 200, { steps: 5 });
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '300px');
-  assert.deepEqual(await sidebarGeometry(), [42, 222, 264, 264], 'drag moves the sidebar and separator by the same amount');
-  await page.mouse.move(268, 200);
+  assert.deepEqual(await sidebarGeometry(), [52, 316, 368, 368], 'drag moves the sidebar and separator by the same amount');
+  const firstSidebarRow = async locator => {
+    const bounds = await locator.boundingBox();
+    return locator.evaluate((button, box) => {
+      const icon = button.querySelector('svg').getBoundingClientRect();
+      const { fontFamily, fontSize, lineHeight } = getComputedStyle(button);
+      return [box.x, box.y, box.height, icon.x, icon.y, fontFamily, fontSize, lineHeight];
+    }, bounds);
+  };
+  const homeSidebarRow = await firstSidebarRow(newSection);
+  const homeRail = page.locator('[data-workbench-rail]');
+  for (const [label, selector] of [
+    ['Plugins', '[data-workbench-plugins-navigation] > button'],
+    ['Scheduled', '[data-workbench-scheduled-new]'],
+  ]) {
+    await homeRail.getByRole('button', { name: label, exact: true }).click();
+    const first = page.locator(selector).first();
+    await first.waitFor();
+    assert.equal(await first.evaluate(button => button.closest('nav').getBoundingClientRect().width), 316, label);
+    assert.deepEqual(await firstSidebarRow(first), homeSidebarRow, label);
+  }
+  await homeRail.getByRole('button', { name: 'Conversation', exact: true }).click();
+  await newSection.waitFor();
+  assert.deepEqual(await sidebarGeometry(), [52, 316, 368, 368], 'switching preserves the user-resized track');
+  await page.mouse.move(372, 200);
   await page.mouse.down();
-  await page.mouse.move(248, 200, { steps: 5 });
+  await page.mouse.move(352, 200, { steps: 5 });
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector('[data-side="sidebar"]').style.left === '280px');
   for (const row of [project, alpha]) {
     assert.deepEqual(await row.locator('.wb-tree-label').evaluate(label => {
       const style = getComputedStyle(label);
       return [style.fontSize, style.lineHeight, label.getBoundingClientRect().height];
-    }), [row === project ? '13.5px' : '13.6px', '20px', 31]);
+    }), [row === project ? '14px' : '13.6px', '20px', 31]);
   }
   const sessionTitle = alpha.locator('.wb-tree-label > span');
   const readTitleFont = () => sessionTitle.evaluate(node => {
@@ -310,7 +334,7 @@ try {
   await bell.click();
   const activity = page.locator('[data-workbench-activity-list]');
   const priority = activity.locator('section').filter({ has: page.getByRole('heading', { name: 'Priority' }) });
-  await priority.getByText('Activity preview fixture', { exact: true }).waitFor();
+  await priority.getByText(/^Activity preview fixture/).waitFor();
   await priority.getByRole('button', { name: /Workbench alpha/i }).click();
   await bell.locator('.wb-status-unread').waitFor({ state: 'detached' });
   await bell.click();
@@ -608,8 +632,12 @@ try {
       if (previous) bodyStyle.setProperty(themeSize, previous);
       else bodyStyle.removeProperty(themeSize);
     }
-  }), [['13px', '24px'], ['13px', '24px']], '100% uses the same message size with the Desktop text preference');
+  }), [['14px', '22.75px'], ['14px', '22.75px']], '100% uses the Codex desktop body size with the host text preference');
   const bubble = page.locator('[data-message-bubble]').filter({ hasText: 'Review the edited files' });
+  assert.deepEqual(await bubble.evaluate(node => {
+    const { fontFamily, fontSize, lineHeight } = getComputedStyle(node);
+    return [fontFamily, fontSize, lineHeight];
+  }), [await paragraph.evaluate(node => getComputedStyle(node).fontFamily), '14px', '22.75px']);
   const darkTheme = page.locator('body[data-ds-dark-theme]');
   const bubbleFill = () => bubble.evaluate(node => getComputedStyle(node).backgroundColor);
   await darkTheme.waitFor({ state: 'attached' });
@@ -620,6 +648,11 @@ try {
   await page.emulateMedia({ colorScheme: 'dark' });
   await darkTheme.waitFor({ state: 'attached' });
   const theme = await page.addStyleTag({ content: 'body { --dsh-content-font-size: 15px !important; --dsh-code-font-size: 15px !important; }' });
+  const inlineCode = page.locator('[data-conversation-content] code').filter({ hasText: /^main$/ });
+  assert.deepEqual(await inlineCode.evaluate(node => {
+    const { fontFamily, fontSize } = getComputedStyle(node);
+    return [fontFamily, fontSize];
+  }), ['ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace', '12.25px']);
   const duration = page.getByRole('button', { name: /^Completed in / });
   await duration.waitFor();
   if (process.env.DSH_TEST_ARTIFACTS) {
@@ -1117,7 +1150,7 @@ try {
   await recentsLabel.click();
   assert.equal(await recentsLabel.getAttribute('aria-expanded'), 'false');
   await recents.hover();
-  assert.equal(await openDraft(sidebarAction.getByRole('button', { name: 'New chat', exact: true }), childDraft), topDraft);
+  assert.equal(await openDraft(recents.getByRole('button', { name: 'New session', exact: true }), childDraft), topDraft);
   await recentsLabel.click();
   assert.equal(await rowMenu.count(), 0);
   await host.stop();
@@ -1172,7 +1205,7 @@ try {
   await rail.getByRole('button', { name: 'Plugins', exact: true }).click();
   const pluginsNavigation = page.locator('[data-workbench-plugins-navigation]');
   await pluginsNavigation.waitFor();
-  await checkToolPage(202);
+  await checkToolPage(296);
   const readManagementChrome = (navigation, body, heading) => navigation.evaluate((element, selectors) => {
     const main = document.querySelector(selectors.body);
     const title = main.querySelector(selectors.heading);
@@ -1208,7 +1241,7 @@ try {
   await tree.waitFor({ state: 'visible' });
 
   await rail.getByRole('button', { name: 'Scheduled', exact: true }).click();
-  await checkToolPage(202);
+  await checkToolPage(296);
   const schedule = page.getByTestId('task-manager-page');
   const scheduledNavigation = page.locator('[data-workbench-scheduled-navigation]');
   await scheduledNavigation.waitFor();

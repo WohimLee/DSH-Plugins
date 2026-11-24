@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { PanelMenu } from './PanelMenu.js';
 import { PluginsNavigation } from './PluginsNavigation.js';
 import { ScheduledNavigation } from './ScheduledNavigation.js';
@@ -28,6 +28,28 @@ function HomeIcon() {
 
 export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsList, renderFactorySlot, t,
   useScheduledTasks, nativeScheduleText }: ActivityBarProps) {
+  const rail = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const frame = rail.current?.closest<HTMLElement>('[data-slot="root"] > div');
+    if (!frame) return;
+    const property = '--wb-host-sidebar-track';
+    const syncWidth = () => {
+      // AppFrame writes the live track before painting, including during a drag.
+      const track = frame.style.gridTemplateColumns.match(/^\d+(?:\.\d+)?px(?= )/)?.[0];
+      const expanded = !frame.hasAttribute('data-sidebar-collapsed') && !frame.hasAttribute('data-sidebar-drawer');
+      const width = expanded ? track : undefined;
+      if (frame.style.getPropertyValue(property) === (width ?? '')) return;
+      if (width) frame.style.setProperty(property, width);
+      else frame.style.removeProperty(property);
+    };
+    syncWidth();
+    const observer = new MutationObserver(syncWidth);
+    observer.observe(frame, { attributes: true, attributeFilter: ['style', 'data-sidebar-collapsed', 'data-sidebar-drawer'] });
+    return () => {
+      observer.disconnect();
+      frame.style.removeProperty(property);
+    };
+  }, []);
   const [unpinned, setUnpinned] = useState<readonly string[]>([]);
   const panels = usePanels(snapshot => snapshot);
   const hasMore = panels.some(panel => panel.id !== 'plugins');
@@ -36,7 +58,7 @@ export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsL
   const scheduled = selected === 'schedules';
   return <>
     {(plugins || scheduled || selected === 'dsh-model-picker') && <div className="wb-window-caption">DSH Desktop</div>}
-    <nav className="dsh-workbench-rail" aria-label={t('navigation')} data-workbench-rail>
+    <nav ref={rail} className="dsh-workbench-rail" aria-label={t('navigation')} data-workbench-rail>
       <button type="button" className="dsh-workbench-button" aria-label={t('conversation')} title={t('conversation')}
         aria-current={selected === null ? 'page' : undefined} onClick={() => selectPanel(null)}><HomeIcon /></button>
       <div className="dsh-workbench-panel-buttons">

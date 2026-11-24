@@ -7,10 +7,16 @@ const sidebar = 'div:has(> [data-slot="sidebar"])';
 const management = ':is([data-plugin-panel], [data-testid="task-manager-page"], .dsh-model-management)';
 const title = ':is([data-plugin-header-part="title"], [data-testid="task-manager-page"] h1, .dsh-model-management h1)';
 const nav = ':is(.wb-plugins-navigation, [data-workbench-scheduled-navigation], .dsh-model-management-nav)';
+const sidebarTitle = ':is(.wb-plugins-navigation-title, .dsh-model-management-nav > h2, .wb-scheduled-title)';
+const homeTitle = ':is([data-slot="sidebar.brand.name"] [data-workbench-brand], .wb-source-picker select)';
+const sidebarAction = ':is(.wb-new-section, .wb-plugins-navigation > button, .dsh-model-management-nav > button, .wb-scheduled-new)';
+const sidebarGroup = ':is(.wb-tree-row[data-wb-kind="section"] .wb-tree-label, .dsh-model-management-nav > p, .wb-scheduled-group-title, .wb-scheduled-paused summary)';
 
 export const chromeStyles = `
 html[data-dsh-workbench] {
-  --wb-secondary-width: 202px;
+  --wb-sidebar-inset: 16px;
+  --wb-sidebar-header-height: 44px;
+  --wb-sidebar-top: 6px;
   --wb-frame-fill: light-dark(#f0f1f3, #28292c);
   --wb-sidebar-fill: light-dark(#f6f6f7, #222325);
   --wb-canvas: light-dark(#ffffff, #191a1c);
@@ -21,7 +27,9 @@ html[data-dsh-workbench] {
   --wb-nav-font: var(--dsh-font-family-text, -apple-system), BlinkMacSystemFont, "Segoe UI", sans-serif;
   --wb-page-inset: clamp(18px, 4.2vw, 45px);
 }
+html[data-dsh-workbench][data-platform="darwin"] { --wb-sidebar-top: 0px; }
 ${managed} {
+  --wb-secondary-width: calc(var(--wb-host-sidebar-track, 280px) + var(--wb-sidebar-inset));
   --dsw-alias-bg-base: var(--wb-canvas);
   --dsw-alias-border-l3: var(--wb-seam);
   --dsw-specific-sidebar-fill: var(--wb-sidebar-fill);
@@ -57,31 +65,16 @@ ${managed} ${title} {
   line-height: 1.3;
   font-weight: 550;
 }
-${managed} :is(.wb-plugins-navigation-title, .dsh-model-management-nav > h2, .wb-scheduled-title) {
-  font-family: var(--wb-nav-font);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
-}
-${managed} :is(.wb-plugins-navigation > button, .dsh-model-management-nav > button) {
-  font-family: var(--wb-nav-font);
-  font-size: 13px;
-  line-height: 19px;
-}
+${managed} :is(${homeTitle}, ${sidebarTitle}) { font: 600 18px/24px var(--wb-nav-font); letter-spacing: normal; }
+${managed} ${sidebarAction},
+${managed} .wb-tree-row[data-wb-kind="project"] .wb-tree-label,
+${managed} .wb-scheduled-row > span { font: 400 14px/20px var(--wb-nav-font); }
+${managed} ${sidebarGroup} { font: 500 14px/20px var(--wb-nav-font); color: var(--dsw-alias-label-secondary); }
 ${managed} :is([data-plugin-group] h3, .dsh-model-management-section h2) {
   font-family: var(--wb-nav-font);
   font-size: 14px;
   line-height: 20px;
   font-weight: 600;
-}
-${managed} :is([data-slot="sidebar.brand.name"] [data-workbench-brand], .wb-source-picker select) {
-  font: 600 14px/20px var(--wb-nav-font);
-  letter-spacing: normal;
-}
-${managed} .dsh-model-management-nav > p {
-  font-size: 12px;
-  line-height: 17px;
-  font-weight: 400;
 }
 ${managed} ${management} { background-color: var(--wb-canvas); }
 ${managed} :is([data-plugin-header-part="title"], [data-plugin-header-part="intro"]):where(h1, div) { margin: 0; }
@@ -89,7 +82,6 @@ ${managed} div:has(> [data-plugin-header-part="title"]) {
   display: flex; align-items: center; gap: 8px;
 }
 ${managed} [data-plugin-header-part="intro"] > span:first-child { display: none; }
-${managed} [data-window-drag]:has([data-workbench-brand]) { height: 40px; }
 ${managed} [data-window-drag]:has([data-workbench-brand]) span:has(> [data-slot="sidebar.brand.mark"]) { display: none; }
 ${managed} [data-slot="conversation.session.header"] nav::before {
   content: '';
@@ -101,6 +93,23 @@ ${managed} [data-slot="conversation.session.header"] nav::before {
 }
 .wb-window-caption { display: none; }
 @media (min-width: 824px) {
+  ${managed} [data-window-drag]:has([data-workbench-brand]) { height: var(--wb-sidebar-header-height); }
+  ${darwin}:not([data-sidebar-collapsed]) [data-window-drag] + [data-window-drag]:has([data-workbench-brand]) { margin-block-start: -4px; }
+  ${managed} .wb-section-session { padding-block-start: 3px; }
+  ${managed} ${nav} { padding: var(--wb-sidebar-top) 12px 8px; }
+  ${managed} ${sidebarTitle} {
+    display: flex; align-items: center; flex: none;
+    block-size: var(--wb-sidebar-header-height); box-sizing: border-box;
+    margin: 0 0 3px; padding-inline: 4px;
+  }
+  ${managed} :is(.wb-plugins-navigation, .dsh-model-management-nav) > :is(.wb-plugins-navigation-title, h2) { margin-block-end: 1px; }
+  ${managed} :is(.wb-plugins-navigation > button, .dsh-model-management-nav > button, .wb-scheduled-new) {
+    flex: none; box-sizing: border-box; min-block-size: 32px;
+    border: 0; border-radius: 7px; padding: 4px 6px; gap: 8px;
+  }
+  ${managed} .dsh-model-management-nav { display: flex; flex-direction: column; gap: 2px; }
+  ${managed} .dsh-model-management-nav > p { margin-inline: 4px; }
+  ${managed} :is(.wb-scheduled-group-title, .wb-scheduled-paused summary, .wb-scheduled-row) { padding-inline: 4px; }
   ${managed} [data-plugin-panel] { --plugin-page-top-inset: 25px; --plugin-page-inset: var(--wb-page-inset); }
   ${managed} [data-plugin-bar] > header { align-items: center; }
   ${managed} [data-testid="task-manager-page"] > div:first-child > div { scrollbar-gutter: auto; }
@@ -108,8 +117,7 @@ ${managed} [data-slot="conversation.session.header"] nav::before {
   ${managed} .dsh-model-management-body {
     padding: calc(25px + var(--dsh-frame-top-clearance, 0px)) var(--wb-page-inset) 24px;
   }
-  ${managed} .dsh-model-management-nav { padding-inline: 8px; }
-  ${managed} .dsh-model-management-nav > h2 { margin-inline: 8px; }
+  ${darwin} .dsh-model-management-nav { padding-block-start: var(--dsh-frame-top-clearance, 48px); }
   ${darwin}:has(.dsh-model-management) > div:has(> [data-global-panel]) { border-inline-start: 0; }
   ${darwin} .dsh-model-management-nav { border-inline-end: 0; }
   ${darwin} .dsh-model-management-body { border-inline-start: 1px solid var(--wb-seam); }

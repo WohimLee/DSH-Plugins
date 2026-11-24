@@ -17,7 +17,7 @@ const settingsSeat = '[data-slot="sidebar.settings"]';
 const launcher = '[data-slot="settings.launcher"]';
 
 export const stylesheet = `
-html[data-dsh-workbench] { --dsh-workbench-rail: 42px; }
+html[data-dsh-workbench] { --dsh-workbench-rail: 52px; }
 html[data-dsh-workbench] [data-slot="root"] > div {
   margin-inline-start: var(--dsh-workbench-rail);
   width: calc(100% - var(--dsh-workbench-rail));
@@ -29,8 +29,7 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
 }
 .wb-plugins-navigation { display: none; }
 @media (min-width: 824px) {
-  /* Offset the host's 280px default track while keeping its native resize behavior. */
-  ${expandedHome} { --wb-sidebar-inset: calc(var(--wb-secondary-width) - 280px); }
+  /* Home and management pages use the same native track and extra inset. */
   ${expandedHome} > ${sidebarColumn} {
     box-sizing: border-box; inline-size: calc(100% + var(--wb-sidebar-inset));
   }
@@ -71,7 +70,6 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
     box-sizing: border-box;
     overflow: auto;
     pointer-events: auto;
-    padding: 8px 12px;
     border-inline-end: 1px solid var(--dsw-alias-border-primary, #8882);
     background: var(--dsw-specific-sidebar-fill);
     color: var(--dsw-alias-label-primary);
@@ -117,7 +115,6 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
     border-end-start-radius: 12px;
   }
 }
-.wb-plugins-navigation-title { padding: 4px 8px 8px; font-size: 14px; font-weight: 600; }
 .wb-plugins-navigation button {
   display: flex; align-items: center; gap: 8px; flex: none;
   min-block-size: 31px; padding: 4px 8px; border: 0; border-radius: 7px;
@@ -136,14 +133,14 @@ ${toolFrame} [data-slot="sidebar"] [data-window-drag] > :has([data-slot="sidebar
 html[data-dsh-workbench] .dsh-workbench-rail {
   position: fixed; inset: var(--dsh-frame-top-clearance, 0px) auto 0 0; width: var(--dsh-workbench-rail);
   box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
-  gap: 5px; padding: 12px 6px 95px;
+  gap: 8px; padding: 8px 6px 95px;
   background: var(--dsw-specific-sidebar-fill, #252525); color: var(--dsw-alias-label-secondary, #999);
   border-inline-end: 1px solid var(--dsw-alias-border-primary, #ffffff12);
   pointer-events: auto; overflow-y: auto; overscroll-behavior: contain;
 }
 html[data-dsh-workbench] .dsh-workbench-button {
-  width: 30px; min-height: 30px; flex-shrink: 0; padding: 0; display: flex;
-  align-items: center; justify-content: center; border: 0; border-radius: 7px;
+  width: 36px; min-height: 36px; flex-shrink: 0; padding: 0; display: flex;
+  align-items: center; justify-content: center; border: 0; border-radius: 11px;
   background: transparent; color: inherit; cursor: pointer; -webkit-app-region: no-drag;
 }
 html[data-dsh-workbench] .dsh-workbench-button:hover {
@@ -154,7 +151,7 @@ html[data-dsh-workbench] .dsh-workbench-button[aria-current="page"] {
 }
 html[data-dsh-workbench] .dsh-workbench-button:focus-visible { outline: 2px solid var(--dsw-alias-accent-primary, #4c95f6); outline-offset: 2px; }
 html[data-dsh-workbench] .dsh-workbench-panel-buttons {
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
   min-block-size: 0; inline-size: 100%; overflow-y: auto; scrollbar-width: none;
 }
 html[data-dsh-workbench] [data-workbench-brand] { font: 600 20px/1.4 system-ui, sans-serif; letter-spacing: .01em; }

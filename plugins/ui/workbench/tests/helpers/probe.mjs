@@ -62,7 +62,7 @@ export async function apply(ctx, config) {
         ['step/end', { turn: 1, step: 1 }],
         ['step/start', { turn: 1, step: 2 }],
         ['assistant/message', { turn: 1, step: 2, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
-          content: [{ type: 'text', text: 'Activity preview fixture' }, imageContent], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
+          content: [{ type: 'text', text: 'Activity preview fixture\\n\\n校准示例：\`main\` 里的项目与会话。' }, imageContent], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
         ['step/end', { turn: 1, step: 2 }],
         ['workspace/changes', { turn: 1 }],
       ] : []),
