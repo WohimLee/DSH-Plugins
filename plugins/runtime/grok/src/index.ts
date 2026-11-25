@@ -9,6 +9,7 @@ import type { ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type {} from '@deepseek-ai/dsh-typert-registry';
 import { defaultProviderAuthContext, InMemoryCredentialStore } from '@earendil-works/pi-ai';
+import { detectGrokDesktop } from './desktop.js';
 import type { GrokModel } from './catalog.js';
 import { grokProvider, readCatalog, RejectedKey, route } from './catalog.js';
 import { change, contribution, defaultAccountId, service } from './remote.js';
@@ -119,6 +120,12 @@ class ConnectionRemote extends TypertRemoteService {
   async read(refresh: boolean) {
     if (this.ctx.invocation?.peer.principal.kind !== 'owner') return null;
     return this.status(refresh);
+  }
+
+  @Remote
+  async desktopInstalled(signal: AbortSignal) {
+    if (this.ctx.invocation?.peer.principal.kind !== 'owner') return null;
+    return detectGrokDesktop(signal);
   }
 
   @Remote

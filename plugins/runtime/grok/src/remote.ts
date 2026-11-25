@@ -32,6 +32,7 @@ export type ConnectionView = z.infer<typeof view>;
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespaceMap {
     dshGrokConnection: {
+      desktopInstalled(signal?: AbortSignal): Promise<RemoteResult<boolean | null>>;
       read(refresh: boolean): Promise<RemoteResult<ConnectionView | null>>;
       update(input: Change): Promise<RemoteResult<ConnectionView | null>>;
     };
@@ -47,6 +48,11 @@ export const contribution: TypertRemoteContribution = {
     parameters: [{ name: 'refresh', wire: 'refresh', source: 'json',
       codec: { mode: 'strict', typeSymbol: 'boolean', create: () => z.boolean() } }],
     result,
+  }, {
+    id: 'dsh-grok#dshGrokConnection/desktopInstalled', service, namespace: service, method: 'desktopInstalled',
+    invocation: { kind: 'direct' }, parameters: [],
+    result: { mode: 'strict', typeSymbol: 'GrokDesktopInstalled', create: () => z.boolean().nullable() },
+    cancellation: { parameter: 'signal' },
   }, {
     id: 'dsh-grok#dshGrokConnection/update', service, namespace: service, method: 'update',
     invocation: { kind: 'direct' },

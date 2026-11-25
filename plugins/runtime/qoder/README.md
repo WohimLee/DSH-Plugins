@@ -25,7 +25,7 @@ pnpm --filter dsh-qoder pack --pack-destination /tmp
 Web 使用对应版本的 DSH CLI 安装。安装参数 `--ignore-scripts` 跳过 SDK 自带的运行时下载脚本，插件使用已安装的 Qoder CLI。
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-qoder-0.1.11.tgz --ignore-scripts
+dsh plugin --profile web add /tmp/dsh-qoder-0.1.12.tgz --ignore-scripts
 ```
 
 Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile desktop`。若从 Desktop 插件页安装，在该 profile 的 `pnpm-workspace.yaml` 现有 `allowBuilds` 下添加 `'@qoder-ai/qoder-agent-sdk': false`，即可跳过该 SDK 的下载脚本。重启宿主后，打开 **设置 → Qoder** 查看账号状态。

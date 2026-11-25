@@ -94,9 +94,9 @@ class Usage extends TypertRemoteService {
     const source = provider === 'codex' || provider.startsWith('codex-account-') ? this.ctx.get('dshCodexAccountUsage')
       : provider === 'qoder' || provider.startsWith('qoder-account-') ? this.ctx.get('dshQoderAccountUsage')
       : undefined;
-    if (!source) return null;
     try {
-      const value = await source.read(provider, signal);
+      const value = provider.startsWith('deepseek-api-account-') ? await this.deepSeek?.readUsage(provider, signal)
+        : await source?.read(provider, signal);
       signal.throwIfAborted();
       const projected = usage.nullable().safeParse(value);
       return projected.success ? projected.data : null;

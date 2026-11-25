@@ -6,8 +6,8 @@ import type {} from '@deepseek-ai/dsh-deepseek-account/types';
 import type { ProviderUsage } from '../remote.js';
 
 type T = PropsLocale<'modelPicker'>['t'];
-type Wallet = { currency: string; balance: string };
-export type Usage = ProviderUsage | { wallets: readonly Wallet[]; bonus: readonly Wallet[] };
+type Wallet = NonNullable<ProviderUsage['wallets']>[number];
+export type Usage = ProviderUsage;
 export type ReadUsage = (provider: string, signal: AbortSignal) => Promise<Usage | null>;
 
 const weeklyMinutes = 7 * 24 * 60;
@@ -26,14 +26,15 @@ export function createReadUsage(ctx: Context): ReadUsage {
       return { wallets: result.value.value, bonus: result.value.bonusWallets };
     }
     if (provider !== 'codex' && provider !== 'qoder'
-      && !provider.startsWith('codex-account-') && !provider.startsWith('qoder-account-')) return null;
+      && !provider.startsWith('codex-account-') && !provider.startsWith('qoder-account-')
+      && !provider.startsWith('deepseek-api-account-')) return null;
     const result = await ctx.remote.dshModelPickerUsage.read(provider, signal);
     return result.ok ? result.value : null;
   };
 }
 
 export function usagePercent(data: Usage): number | undefined {
-  if ('wallets' in data) return undefined;
+  if (data.wallets) return undefined;
   const windows = data.windows ?? [];
   const window = windows.find(window => window.minutes === weeklyMinutes) ?? windows[0];
   if (window) return window.remainingPercent;
@@ -45,15 +46,17 @@ export function usagePercent(data: Usage): number | undefined {
   return undefined;
 }
 
-export function usageDetails(data: Usage, t: T, language: string): string[] {
-  if ('wallets' in data) {
+export function usageDetails(data: Usage, t: T, language: string, includeReset = true): string[] {
+  if (data.wallets) {
     return [...data.wallets.map(wallet => `${t('balance')} ${walletText(wallet, language)}`),
-      ...data.bonus.map(wallet => `${t('bonus')} ${walletText(wallet, language)}`)];
+      ...(data.bonus ?? []).map(wallet => `${t('bonus')} ${walletText(wallet, language)}`)];
   }
   const format = new Intl.NumberFormat(language);
+  const windows = data.windows ?? [];
+  const primary = windows.find(window => window.minutes === weeklyMinutes) ?? windows[0];
   return [
-    ...(data.windows ?? []).map(window => {
-      const date = window.resetsAt === undefined ? undefined : new Date(window.resetsAt * 1000);
+    ...(includeReset ? windows : primary ? [primary] : []).map(window => {
+      const date = !includeReset || window.resetsAt === undefined ? undefined : new Date(window.resetsAt * 1000);
       const reset = date && Number.isFinite(date.valueOf())
         ? ` · ${t('resets')} ${new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(date)}` : '';
       return `${windowText(window.minutes, t, language)} · ${t('left', { value: `${window.remainingPercent}%` })}${reset}`;

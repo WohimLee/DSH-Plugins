@@ -247,6 +247,24 @@ export function createDeepSeekApi(ctx: Context) {
   }
 
   return {
+    async readUsage(provider: string, signal: AbortSignal) {
+      if (!accountRoute.test(provider) || !accounts.get(provider)?.catalog) return null;
+      const active = AbortSignal.any([signal, lifetime.signal, AbortSignal.timeout(10_000)]);
+      const record = readRecord(await ctx.credentials.readRecord(credentialKey(scope, provider)));
+      if (!record) return null;
+      const response = await fetch(new URL('/user/balance', PUBLIC_BASE_URL), {
+        headers: { Authorization: `Bearer ${record.key}` }, signal: active, redirect: 'error',
+      });
+      if (!response.ok) return null;
+      const parsed = z.object({ balance_infos: z.array(z.object({
+        currency: z.string(), total_balance: z.string(), granted_balance: z.string(),
+      })) }).safeParse(await response.json());
+      if (!parsed.success) return null;
+      return {
+        wallets: parsed.data.balance_infos.map(info => ({ currency: info.currency, balance: info.total_balance })),
+        bonus: parsed.data.balance_infos.map(info => ({ currency: info.currency, balance: info.granted_balance })),
+      };
+    },
     async apiAccounts() {
       await pending;
       return {

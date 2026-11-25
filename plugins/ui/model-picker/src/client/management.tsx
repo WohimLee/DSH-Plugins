@@ -4,10 +4,10 @@ import type { ModelPickerConnectionCard, PropsLocale, PropsRenderSlots } from '@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CodexApi, CodexApiChange, CodexDesktop } from '../remote.js';
 import { groupProviders } from './model.js';
-import { ConnectionRow, ProviderIcon } from './connection-card.js';
+import { ConnectionRow, ProviderIcon, RemoveProviderDialog } from './connection-card.js';
 import { ApiAccounts, CodexDesktopAccounts, DesktopDetection } from './connection-setup.js';
 import { CardUsage } from './card-usage.js';
-import { ManagementIcon, ProviderGlyph } from './icons.js';
+import { ManagementIcon } from './icons.js';
 import { createReadUsage } from './usage.js';
 
 type Props = PropsLocale<'modelPicker'> & PropsRenderSlots<'modelPicker.connections'> & { ctx: Context; language: string };
@@ -66,6 +66,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
   const [page, setPage] = useState<Page>(defaultPage);
   const [setup, setSetup] = useState<Setup>();
   const [changing, setChanging] = useState(false);
+  const [removing, setRemoving] = useState<string>();
   const [contributions, setContributions] = useState<ReadonlyMap<string, ModelPickerConnectionCard>>(new Map());
   const heading = useRef<HTMLHeadingElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -156,11 +157,28 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
     return result.ok ? result.value : 'unavailable';
   }
 
+  const managedCodexDesktop = snapshot.codexDesktop?.accounts.filter(account => account.removable) ?? [];
+  const managedCodexApi = snapshot.codexApi?.canManage ? snapshot.codexApi.accounts : [];
+  const managedDeepSeekApi = snapshot.deepseekApi?.canManage ? snapshot.deepseekApi.accounts : [];
+
   cards.set('codex', {
     id: 'codex', name: 'Codex', action: t('viewConnection'),
     status: t(codexConnected ? 'connected' : 'codexDisconnected'),
     tone: codexConnected ? 'ready' : 'warning',
     description: signedInCodex ? t('codexLocal') : undefined,
+    hasExternalConnection: snapshot.codexDesktop
+      ? snapshot.codexDesktop.accounts.some(account => !account.removable && account.signedIn)
+      : snapshot.codex === true,
+    removeConnection: managedCodexDesktop.length + managedCodexApi.length > 0 ? async () => {
+      const results = await Promise.allSettled([
+        ...managedCodexDesktop.map(account => ctx.remote.dshModelPickerUsage.changeCodexDesktop(
+          { kind: 'remove', provider: account.provider })),
+        ...managedCodexApi.map(account => ctx.remote.dshModelPickerUsage.changeCodexApi(
+          { kind: 'remove', provider: account.provider })),
+      ]);
+      return results.every(result => result.status === 'fulfilled' && result.value.ok
+        && (result.value.value === 'ok' || result.value.value === 'notFound'));
+    } : undefined,
     footer: codexModels ? modelLabel(t, countModels(codexModels)) : undefined,
     details: null,
     connection: {
@@ -181,6 +199,13 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
   cards.set('deepseek', {
     id: 'deepseek', name: 'DeepSeek', action: t('viewConnection'), status: t('providerAvailable'), tone: 'ready',
     footer: deepseekModels ? modelLabel(t, countModels(deepseekModels)) : undefined,
+    hasExternalConnection: deepseekDesktop || deepseekDefault,
+    removeConnection: managedDeepSeekApi.length > 0 ? async () => {
+      const results = await Promise.allSettled(managedDeepSeekApi.map(account => ctx.remote.dshModelPickerUsage.changeDeepSeekApi(
+        { kind: 'remove', provider: account.provider })));
+      return results.every(result => result.status === 'fulfilled' && result.value.ok
+        && (result.value.value === 'ok' || result.value.value === 'notFound'));
+    } : undefined,
     details: null,
     connection: {
       connected: deepseekDesktop || deepseekDefault || boundDeepSeekApi > 0,
@@ -221,6 +246,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
   const currentConnected = page.kind !== 'provider' || connected.includes(page.id);
   const visibleCard = page.kind === 'provider' ? cards.get(page.id) : undefined;
   const visibleGroup = visibleCard && snapshot.groups.find(group => group.id === visibleCard.id);
+  const removingCard = removing ? cards.get(removing) : undefined;
   const adding = setup ? cards.get(setup.id) : undefined;
   const setupBusy = !!setup && (changing || adding?.connection?.busy === true);
   const addedCount = adding?.connection?.accountCount ?? (adding?.tone === 'ready' ? 1 : undefined);
@@ -243,7 +269,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
   }
 
   useEffect(() => {
-    if (setupId && setupMethod === 'desktop') refreshConnections();
+    if (setupId && setupId !== 'grok' && setupMethod === 'desktop') refreshConnections();
   }, [setupId, setupMethod, refreshConnections]);
 
   useEffect(() => {
@@ -279,6 +305,12 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
     heading.current?.focus();
   }, [key]);
 
+  function providerUsage(id: string, name: string) {
+    return <CardUsage group={snapshot.groups.find(group => group.id === id)} {...{ name, readUsage, refresh, t, language }}
+      includeDeepSeekAccount={id === 'deepseek' && snapshot.deepseekSignedIn}
+      unavailable={t(id === 'grok' ? 'usageInXaiConsole' : 'unavailable')} />;
+  }
+
   function methodContent(card: ModelPickerConnectionCard | undefined, method: Method, configuring = false): ReactNode {
     if (!card) return <p>{t('connectionPluginRequired')}</p>;
     return (configuring ? card.connection?.setup?.[method] : undefined) ?? card.connection?.[method]
@@ -300,7 +332,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
       {connected.length > 0 && <p>{t('providers')}</p>}
       {connected.map(id => <button type="button" key={id} disabled={setupBusy} aria-current={key === id ? 'page' : undefined}
         onClick={() => navigate({ kind: 'provider', id })}>
-        <ProviderGlyph id={id} />{providers.get(id)}
+        <ProviderIcon id={id} />{providers.get(id)}
       </button>)}
     </nav>
     <div className="dsh-model-management-body" ref={body}>
@@ -309,19 +341,19 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
           <header className="dsh-model-management-header"><h1 ref={heading} tabIndex={-1}>{t('addProvider')}</h1></header>
           <section className="dsh-connection-setup">
             <div className="dsh-connection-setup-fields">
-              <label>{t('provider')}<select disabled={setupBusy} aria-label={t('provider')} value={setup.id} onChange={event => {
+              <label>{t('provider')}<span className="dsh-setup-select"><select disabled={setupBusy} aria-label={t('provider')} value={setup.id} onChange={event => {
                 const id = event.currentTarget.value;
                 const card = cards.get(id);
                 setupStarted.current = false;
                 setSetup({ ...setup, id, initialCount: card?.connection?.accountCount ?? (connected.includes(id) ? 1 : 0) });
               }}>
                 {[...providers].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-              </select></label>
-              <label>{t('connectionMethod')}<select disabled={setupBusy} aria-label={t('connectionMethod')} value={setup.method} onChange={event => {
+              </select><ManagementIcon name="chevron" /></span></label>
+              <label>{t('connectionMethod')}<span className="dsh-setup-select"><select disabled={setupBusy} aria-label={t('connectionMethod')} value={setup.method} onChange={event => {
                 const method = event.currentTarget.value === 'api' ? 'api' : 'desktop';
                 setupStarted.current = false;
                 setSetup({ ...setup, method });
-              }}>{methods.map(method => <option key={method} value={method}>{t(method)}</option>)}</select></label>
+              }}>{methods.map(method => <option key={method} value={method}>{t(method)}</option>)}</select><ManagementIcon name="chevron" /></span></label>
             </div>
             <div className="dsh-connection-setup-method" key={setup.id + ':' + setup.method}
               onSubmitCapture={() => { setupStarted.current = true; }}
@@ -349,9 +381,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
           <div className="dsh-connection-method-stack" key={visibleCard.id}>
             <section className="dsh-connection-usage-summary" aria-label={t('usage')}>
               <h2>{t('usage')}</h2>
-              <CardUsage group={visibleGroup} name={visibleCard.name} {...{ readUsage, refresh, t, language }}
-                includeDeepSeekAccount={visibleCard.id === 'deepseek' && snapshot.deepseekSignedIn}
-                unavailable={visibleCard.id === 'grok' ? t('usageInXaiConsole') : t('unavailable')} />
+              {providerUsage(visibleCard.id, visibleCard.name)}
             </section>
             {visibleGroup && <button type="button" className="dsh-model-catalog-jump" onClick={() => {
               pendingCatalog.current = visibleGroup.id;
@@ -378,7 +408,14 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
             <h2>{t('desktopConnections')}</h2>
             {connected.length === 0 && <p role="status">{t(checking ? 'checkingConnection' : 'noConnections')}</p>}
             {connected.length > 0 && <div className="dsh-connection-list">
-              {connected.map(id => <ConnectionRow key={id} {...cards.get(id)!} open={() => navigate({ kind: 'provider', id })} />)}
+              {connected.map(id => {
+                const card = cards.get(id)!;
+                return <ConnectionRow key={id} {...card} usage={providerUsage(id, card.name)}
+                  open={() => navigate({ kind: 'provider', id })}
+                  removeLabel={t('remove')} removeName={t('removeProvider', { name: card.name })}
+                  removeUnavailable={t('removeUnavailable')}
+                  remove={card.removeConnection && !card.connection?.busy ? () => setRemoving(id) : undefined} />;
+              })}
             </div>}
           </section>
           <section className="dsh-model-management-section" aria-label={t('availableCatalog')}>
@@ -404,6 +441,10 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
           </section>
         </>}
       </div>
+      {removingCard && <RemoveProviderDialog card={removingCard} t={t} close={removed => {
+        setRemoving(undefined);
+        if (removed) heading.current?.focus();
+      }} refresh={refreshConnections} />}
       <div className="dsh-model-legacy-connections" hidden={!setup || !!adding}>{slot}</div>
     </div>
   </main>;

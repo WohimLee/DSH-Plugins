@@ -9,7 +9,10 @@ const quota = z.object({
   total: number.optional(),
 });
 
+const wallet = z.object({ currency: z.string(), balance: z.string() });
 export const usage = z.object({
+  wallets: z.array(wallet).optional(),
+  bonus: z.array(wallet).optional(),
   windows: z.array(z.object({
     remainingPercent: percent,
     minutes: number,

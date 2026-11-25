@@ -127,6 +127,11 @@ globalThis.fetch = async (input, options = {}) => {
       ? Response.json({ data: [{ id: 'gpt-5.3-codex' }, { id: 'gpt-unrelated' }] })
       : new Response(null, { status: 401 });
   }
+  if (url.href === 'https://api.deepseek.com/user/balance') {
+    return headers.get('authorization') === 'Bearer fixture-deepseek-api'
+      ? Response.json({ balance_infos: [{ currency: 'USD', total_balance: '9.75', granted_balance: '1.25' }] })
+      : new Response(null, { status: 401 });
+  }
   if (url.href === 'https://api.deepseek.com/models') {
     return headers.get('x-api-key') === 'fixture-deepseek-api'
       ? Response.json({ data: [{ id: 'deepseek-flash', input_modalities: ['text'], api_capabilities: { anthropic_messages: {} } }] })
@@ -216,6 +221,22 @@ globalThis.fetch = async (input, options = {}) => {
   const addProvider = nav.getByRole('button', { name: 'Add provider', exact: true });
   const providerInput = management.getByRole('combobox', { name: 'Provider', exact: true });
   const methodInput = management.getByRole('combobox', { name: 'Connection method', exact: true });
+  const removeDialog = management.getByRole('dialog', { name: /^Remove / });
+  const removeProvider = name => management.getByRole('button', { name: `Remove ${name}`, exact: true });
+  const assertSetupArrows = async () => {
+    for (const input of [providerInput, methodInput]) {
+      const arrow = await input.evaluate(select => {
+        const icon = select.nextElementSibling;
+        if (!icon) return null;
+        return {
+          appearance: getComputedStyle(select).appearance,
+          inset: select.getBoundingClientRect().right - icon.getBoundingClientRect().right,
+          pointerEvents: getComputedStyle(icon).pointerEvents,
+        };
+      });
+      assert.deepEqual(arrow, { appearance: 'none', inset: 10, pointerEvents: 'none' });
+    }
+  };
   const openCodex = codexConnection.getByRole('button', { name: 'View connection' });
   const qoderAddForm = management.getByRole('form', { name: 'Add account' });
   const setupQoder = async (method = 'api') => {
@@ -257,6 +278,13 @@ globalThis.fetch = async (input, options = {}) => {
   await addProvider.click();
   await providerInput.selectOption('codex');
   await methodInput.selectOption('desktop');
+  await assertSetupArrows();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
+    await management.locator('.dsh-connection-setup').screenshot({
+      path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management-setup.png'),
+    });
+  }
   await management.getByText('codex login', { exact: true }).waitFor();
   await management.getByText('Installed', { exact: true }).waitFor();
   await management.getByText('Signed out', { exact: true }).waitFor();
@@ -284,7 +312,18 @@ globalThis.fetch = async (input, options = {}) => {
   assert.equal(wide[0].width, wide[1].width, 'desktop provider rows share the list width');
   assert.ok(wide[1].top >= wide[0].bottom, 'desktop provider rows stack vertically');
   assert.ok(wide.every(row => row.statusLeft > row.titleRight), 'provider status follows the name');
-  assert.equal(await management.getByRole('button', { name: /usage$/i }).count(), 0, 'usage is available in details');
+  await codexConnection.getByRole('button', { name: 'Codex usage' }).getByText('Weekly · 62% left', { exact: true }).waitFor();
+  await deepseekConnection.getByRole('button', { name: 'DeepSeek usage' }).waitFor();
+  const codexLogo = codexConnection.locator('img');
+  const logoSize = icon => icon.evaluate(image => [image.getBoundingClientRect().width, image.getBoundingClientRect().height]);
+  const logoSrc = await codexLogo.getAttribute('src');
+  assert.equal(await codexLogo.evaluate(image => image.naturalWidth), 96);
+  assert.deepEqual(await logoSize(codexLogo), [24, 24]);
+  const codexNavLogo = nav.getByRole('button', { name: 'Codex', exact: true }).locator('img');
+  assert.equal(await codexNavLogo.getAttribute('src'), logoSrc);
+  assert.deepEqual(await logoSize(codexNavLogo), [24, 24]);
+  assert.ok(await deepseekConnection.locator('img').evaluate(image => image.naturalWidth > 0));
+  assert.equal(await removeProvider('Codex').getAttribute('aria-disabled'), 'true');
   await page.setViewportSize({ width: 560, height: 900 });
   const narrow = await layout();
   assert.ok(narrow[1].top >= narrow[0].bottom, 'narrow views keep providers stacked');
@@ -292,6 +331,9 @@ globalThis.fetch = async (input, options = {}) => {
   await openCodex.focus();
   await page.keyboard.press('Enter');
   await management.getByRole('heading', { name: 'Codex', exact: true, level: 1 }).waitFor();
+  const detailLogo = management.locator('.dsh-provider-header img');
+  assert.equal(await detailLogo.getAttribute('src'), logoSrc);
+  assert.deepEqual(await logoSize(detailLogo), [24, 24]);
   assert.equal(await nav.getByRole('button', { name: 'Codex', exact: true }).getAttribute('aria-current'), 'page');
   await management.getByRole('region', { name: 'Desktop', exact: true }).getByText('Signed in', { exact: true }).waitFor();
   await overview.click();
@@ -368,6 +410,10 @@ globalThis.fetch = async (input, options = {}) => {
   assert.ok(await body.evaluate(node => node.scrollWidth <= node.clientWidth), 'detail has no horizontal overflow');
   await overview.click();
   assert.ok(await body.evaluate(node => node.scrollWidth <= node.clientWidth), 'Overview has no horizontal overflow');
+  await addProvider.click();
+  await assertSetupArrows();
+  assert.ok(await body.evaluate(node => node.scrollWidth <= node.clientWidth), 'Add provider has no horizontal overflow');
+  await management.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.locator('[data-sidebar-drawer]').waitFor({ state: 'detached' });
   await nav.getByRole('button', { name: 'Qoder', exact: true }).click();
@@ -383,6 +429,9 @@ globalThis.fetch = async (input, options = {}) => {
   const manageQoder = qoderConnection.getByRole('button', { name: 'Manage accounts' });
   await qoderConnection.getByText('Connected', { exact: true }).waitFor();
   assert.equal(await managedQoder.isVisible(), false);
+  assert.equal(await qoderConnection.locator('img').evaluate(image => image.naturalWidth), 96);
+  await qoderConnection.getByRole('button', { name: 'Qoder usage' })
+    .getByText('Plan · 60 / 300 Credits left', { exact: true }).waitFor();
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management.png') });
@@ -392,7 +441,17 @@ globalThis.fetch = async (input, options = {}) => {
     await overview.click();
   }
   await manageQoder.click();
-  await managedQoder.getByRole('button', { name: 'Unbind' }).click();
+  await managedQoder.waitFor();
+  await overview.click();
+  await removeProvider('Qoder').click();
+  await removeDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await removeDialog.waitFor({ state: 'detached' });
+  await qoderConnection.waitFor();
+  await removeProvider('Qoder').click();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await removeDialog.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management-remove.png') });
+  }
+  await removeDialog.getByRole('button', { name: 'Remove', exact: true }).click();
   await management.getByRole('heading', { name: 'Model management', exact: true, level: 1 }).waitFor();
   await qoderConnection.waitFor({ state: 'detached' });
   await nav.getByRole('button', { name: 'Qoder', exact: true }).waitFor({ state: 'detached' });
@@ -409,7 +468,12 @@ globalThis.fetch = async (input, options = {}) => {
   await management.getByRole('heading', { name: 'Codex', exact: true, level: 1 }).waitFor();
   const codexApi = management.getByRole('region', { name: 'API', exact: true });
   await codexApi.getByText('Codex API fixture', { exact: true }).waitFor();
-  await codexApi.getByRole('button', { name: 'Remove', exact: true }).click();
+  await overview.click();
+  await removeProvider('Codex').click();
+  await removeDialog.getByText(/Connections managed elsewhere/).waitFor();
+  await removeDialog.getByRole('button', { name: 'Remove', exact: true }).click();
+  await removeDialog.waitFor({ state: 'detached' });
+  await openCodex.click();
   await codexApi.getByText('Codex API fixture', { exact: true }).waitFor({ state: 'detached' });
 
   await addProvider.click();
@@ -421,7 +485,17 @@ globalThis.fetch = async (input, options = {}) => {
   await management.getByRole('heading', { name: 'DeepSeek', exact: true, level: 1 }).waitFor();
   const deepseekApi = management.getByRole('region', { name: 'API', exact: true });
   await deepseekApi.getByText('DeepSeek API fixture', { exact: true }).waitFor();
-  await deepseekApi.getByRole('button', { name: 'Remove', exact: true }).click();
+  await overview.click();
+  await deepseekConnection.getByRole('combobox', { name: 'DeepSeek account' }).selectOption({ label: 'DeepSeek API fixture' });
+  const directDeepSeekUsage = deepseekConnection.getByRole('button', { name: 'DeepSeek usage' });
+  const visibleBalance = directDeepSeekUsage.getByText(/Account balance.*9\.75/);
+  await visibleBalance.waitFor();
+  await directDeepSeekUsage.focus();
+  await deepseekConnection.getByRole('tooltip').getByText(/Bonus balance.*1\.25/).waitFor();
+  await removeProvider('DeepSeek').click();
+  await removeDialog.getByRole('button', { name: 'Remove', exact: true }).click();
+  await removeDialog.waitFor({ state: 'detached' });
+  await deepseekConnection.getByRole('button', { name: 'View connection' }).click();
   await deepseekApi.getByText('DeepSeek API fixture', { exact: true }).waitFor({ state: 'detached' });
   await overview.click();
   console.log('PASS Model management: Overview, connected-only sidebar and rows, usage and catalog in provider navigation, Desktop detection, API configuration, and live catalog updates.');
@@ -494,15 +568,16 @@ globalThis.fetch = async (input, options = {}) => {
   await closeModels();
 
   await page.getByRole('button', { name: 'Model management', exact: true }).click();
-  await manageQoder.click();
-  const qoderAccount = usage.getByRole('combobox', { name: 'Qoder account' });
-  const qoderUsage = usage.getByRole('button', { name: 'Qoder usage' });
-  const qoderTooltip = usage.getByRole('tooltip');
+  const qoderAccount = qoderConnection.getByRole('combobox', { name: 'Qoder account' });
+  const qoderUsage = qoderConnection.getByRole('button', { name: 'Qoder usage' });
+  const qoderTooltip = qoderConnection.getByRole('tooltip');
   await qoderAccount.selectOption({ label: 'Personal' });
+  await qoderUsage.getByText('Plan · 60 / 300 Credits left', { exact: true }).waitFor();
   await qoderUsage.focus();
   await qoderTooltip.getByText('Plan · 60 / 300 Credits left', { exact: true }).waitFor();
   assert.equal(await qoderUsage.getAttribute('data-remaining'), '20');
   await qoderAccount.selectOption(workRoute);
+  await qoderUsage.getByText('Plan · 240 / 300 Credits left', { exact: true }).waitFor();
   await qoderUsage.hover();
   await qoderTooltip.getByText('Plan · 240 / 300 Credits left', { exact: true }).waitFor();
   await qoderTooltip.getByText('Add-on · 20 / 100 Credits left', { exact: true }).waitFor();

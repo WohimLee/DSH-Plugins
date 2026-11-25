@@ -16,7 +16,7 @@
 
 模型发现与聊天共用同一网络路径。macOS 若未配置宿主代理环境变量，两者均使用系统手动 HTTPS 代理并遵循主机例外名单。
 
-各账号的密钥分别保存在 DSH 宿主凭据存储，模型目录和推理使用同一账号。推理经 xAI Responses API，复用 DSH 的流式响应、函数调用和附件处理。余额和总用量可在 xAI Console 查看。Grok 当前接入方式为 API。有关 API Key 和账单的说明见 [xAI API 参考](https://docs.x.ai/developers/rest-api-reference/inference) 和 [API Billing FAQ](https://docs.x.ai/developers/faq/billing)。
+各账号的密钥分别保存在 DSH 宿主凭据存储，模型目录和推理使用同一账号。推理经 xAI Responses API，复用 DSH 的流式响应、函数调用和附件处理。余额和总用量可在 xAI Console 查看。在 macOS 的 Desktop 选项可以检测是否安装 Grok Bot。DSH 通过 API Key 接入 Grok。有关 API Key 和账单的说明见 [xAI API 参考](https://docs.x.ai/developers/rest-api-reference/inference) 和 [API Billing FAQ](https://docs.x.ai/developers/faq/billing)。
 
 可选推理档位和默认值来自当前密钥的语言模型目录；缺少能力声明时，聊天使用 xAI 的默认行为。[模型目录接口](https://docs.x.ai/developers/rest-api-reference/inference/models)
 

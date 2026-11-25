@@ -18,6 +18,9 @@ const messages = {
     unavailable: 'Could not load the Grok model catalog. Try again.',
     empty: 'This API Key has no available Grok chat models.',
     storage: 'Could not save the Grok connection. Check the DSH credential store.',
+    desktopApp: 'Grok Bot desktop app', desktopChecking: 'Checking…', installed: 'Installed',
+    notDetected: 'Not detected', desktopUnknown: 'Check unavailable',
+    desktopApi: 'DSH cannot use the Grok Bot sign-in yet. Use an xAI API key to connect Grok.',
     key: 'xAI API Key', connect: 'Connect', replace: 'Replace key', disconnect: 'Disconnect', refresh: 'Refresh models',
     accountName: 'Account name', defaultAccount: 'Default account', apiAccounts: 'Grok API accounts',
     noAccounts: 'No API accounts connected.',
@@ -35,6 +38,9 @@ const messages = {
     unavailable: '暂时无法读取 Grok 模型目录，请重试。',
     empty: '此 API Key 暂无可用的 Grok 对话模型。',
     storage: '未能保存 Grok 连接，请检查 DSH 凭据存储。',
+    desktopApp: 'Grok Bot 桌面应用', desktopChecking: '正在检测…', installed: '已安装',
+    notDetected: '未检测到', desktopUnknown: '暂时无法检测',
+    desktopApi: 'DSH 暂时无法复用 Grok Bot 登录。请使用 xAI API 密钥连接 Grok。',
     key: 'xAI API Key', connect: '连接', replace: '更换密钥', disconnect: '断开连接', refresh: '刷新模型',
     accountName: '账号名称', defaultAccount: '默认账号', apiAccounts: 'Grok API 账号',
     noAccounts: '尚未连接 API 账号。',
@@ -56,6 +62,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     footer?: string;
     action: string;
     details: ReactNode;
+    removeConnection?: () => Promise<boolean>;
+    hasExternalConnection?: boolean;
   }
   interface ModelPickerConnectionsOwner {
     renderCard?: (card: ModelPickerConnectionCard) => ReactNode;
@@ -128,6 +136,29 @@ function AccountForm({ t, busy, replacement, cancel, perform }: PropsLocale<'gro
       </button>
     </div>
   </form>;
+}
+
+function GrokDesktop({ ctx, t, refresh }: PropsLocale<'grokConnection'> & { ctx: Context; refresh: number }) {
+  const [installed, setInstalled] = useState<boolean | null>();
+  useEffect(() => {
+    const controller = new AbortController();
+    setInstalled(undefined);
+    void ctx.remote.dshGrokConnection.desktopInstalled(controller.signal).then(result => {
+      if (!controller.signal.aborted) setInstalled(result.ok ? result.value : null);
+    }).catch(() => {
+      if (!controller.signal.aborted) setInstalled(null);
+    });
+    return () => controller.abort();
+  }, [ctx, refresh]);
+
+  return <div className="dsh-connection-method-content">
+    <dl className="dsh-desktop-detection"><div>
+      <dt>{t('desktopApp')}</dt>
+      <dd role="status">{t(installed === undefined ? 'desktopChecking' : installed === null ? 'desktopUnknown'
+        : installed ? 'installed' : 'notDetected')}</dd>
+    </div></dl>
+    <p>{t('desktopApi')}</p>
+  </div>;
 }
 
 function GrokConnection({ ctx, t, renderCard, refresh = 0 }:
@@ -243,11 +274,17 @@ function GrokConnection({ ctx, t, renderCard, refresh = 0 }:
   </section>;
   if (!renderCard) return details;
   const card: ModelPickerConnectionCard & {
-    connection: { connected: boolean; accountCount: number; busy: boolean; api: ReactNode; setup: { api: ReactNode } };
+    connection: { connected: boolean; accountCount: number; busy: boolean; desktop: ReactNode; api: ReactNode; setup: { api: ReactNode } };
   } = {
     id: 'grok', name: 'Grok', status: statusLabel, tone: busy ? 'neutral' : connected ? 'ready' : 'warning',
     description: modelCount, footer: t('key'), action: t(connected ? 'manage' : 'setup'), details,
-    connection: { connected, accountCount, busy: mutating, api: api(false), setup: { api: <section aria-label={t('apiAccounts')}>
+    removeConnection: view?.accounts.length && !mutating ? async () => {
+      for (const account of view.accounts) {
+        if (!await perform({ kind: 'disconnect', id: account.id })) return false;
+      }
+      return true;
+    } : undefined,
+    connection: { connected, accountCount, busy: mutating, desktop: <GrokDesktop {...{ ctx, t, refresh }} />, api: api(false), setup: { api: <section aria-label={t('apiAccounts')}>
       {feedback}
       {view && <AccountForm {...{ t, busy, perform }} />}
     </section> } },

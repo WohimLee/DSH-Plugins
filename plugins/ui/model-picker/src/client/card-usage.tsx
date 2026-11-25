@@ -43,6 +43,8 @@ function UsageRing({ provider, name, readUsage, refresh, t, language, unavailabl
   const details = usage ? usageDetails(usage, t, language) : [];
   const lines = details.length ? details : [provider && usage === undefined ? t('loading') : unavailable];
 
+  const summary = usage ? usageDetails(usage, t, language, false)[0] ?? unavailable : lines[0];
+
   return <div className="dsh-connection-usage">
     <button type="button" className="dsh-connection-usage-button" aria-label={t('usageFor', { name })}
       aria-describedby={id} data-remaining={percent}>
@@ -51,6 +53,7 @@ function UsageRing({ provider, name, readUsage, refresh, t, language, unavailabl
         {percent !== undefined && percent > 0 && <circle className="dsh-connection-usage-arc"
           cx="10" cy="10" r="8" pathLength="100" strokeDasharray={`${percent} 100`} />}
       </svg>
+      <span>{summary}</span>
     </button>
     <div id={id} className="dsh-connection-usage-tooltip" role="tooltip">
       {lines.map((line, index) => <span key={index}>{line}</span>)}

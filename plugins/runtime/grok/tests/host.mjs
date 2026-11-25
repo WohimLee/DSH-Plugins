@@ -225,7 +225,13 @@ globalThis.fetch = (input, options) => {
     await page.keyboard.press('Escape');
     await addProvider.click();
     await page.getByLabel('Provider', { exact: true }).selectOption('grok');
-    await page.getByLabel('Connection method', { exact: true }).selectOption('api');
+    const method = page.getByLabel('Connection method', { exact: true });
+    await method.selectOption('desktop');
+    const detection = page.locator('.dsh-desktop-detection').filter({ hasText: 'Grok Bot desktop app' });
+    await detection.getByRole('status').filter({ hasText: /^(Installed|Not detected|Check unavailable)$/ }).waitFor();
+    await page.getByText(/DSH cannot use the Grok Bot sign-in yet/).waitFor();
+    assert.equal(await page.getByLabel('xAI API Key', { exact: true }).count(), 0);
+    await method.selectOption('api');
     setup = page.getByRole('region', { name: 'Grok API accounts' });
   }
   await setup.getByLabel('Account name', { exact: true }).fill('Work');
@@ -271,9 +277,11 @@ globalThis.fetch = (input, options) => {
   const afterWork = await readFile(credentialsFixture, 'utf8');
   assert.ok(!afterWork.includes(namedRecord));
   assert.ok(afterWork.includes('dsh-grok/api-key'));
-  await savedApi.getByRole('button', { name: 'Disconnect Default account', exact: true }).click();
-  await savedApi.getByText('Default account', { exact: true }).waitFor({ state: 'hidden' });
   await restarted.keyboard.press('Escape');
+  await saved.connection.getByRole('button', { name: 'Remove Grok', exact: true }).click();
+  const remove = saved.panel.getByRole('dialog', { name: 'Remove Grok', exact: true });
+  await remove.getByRole('button', { name: 'Remove', exact: true }).click();
+  await remove.waitFor({ state: 'detached' });
   await saved.groups.first().waitFor({ state: 'hidden' });
   if (hasProviderSetup) await saved.connection.waitFor({ state: 'hidden' });
   const removed = await readFile(credentialsFixture, 'utf8');

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+
+- 支持通过 Model Picker 概览的确认操作断开 Grok API 账号，并检测 macOS 宿主上的 Grok Bot 安装。
+
 ## 0.1.4
 
 - 支持添加多个命名 API 账号，分别加载模型、替换密钥和断开，保留原连接及 `grok` 会话路由。

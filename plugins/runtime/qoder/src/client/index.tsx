@@ -65,6 +65,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     footer?: string;
     action: string;
     details: ReactNode;
+    removeConnection?: () => Promise<boolean>;
+    hasExternalConnection?: boolean;
   }
   interface ModelPickerConnectionsOwner {
     renderCard?: (card: ModelPickerConnectionCard) => ReactNode;
@@ -181,6 +183,7 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
   const local = defaultAccount?.browserLogin ? defaultAccount : undefined;
   const desktopAccounts = accounts.filter(account => account.browserLogin && account.provider !== 'qoder');
   const apiAccounts = accounts.filter(account => !account.browserLogin);
+  const removable = accounts.filter(account => account.provider !== 'qoder' && account.state !== 'unbound');
   const localAvailable = !!defaultAccount && defaultAccount.state !== 'cliMissing';
   const desktop = (configure = false) => <div className="dsh-connection-method-content">
     <dl className="dsh-desktop-detection">
@@ -209,6 +212,18 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
     description, footer: connected && !error
       ? t(connectedCount === 1 ? 'connectedAccountsOne' : 'connectedAccounts', { count: connectedCount }) : undefined,
     action: connected ? t('manage') : t('setup'), details,
+    hasExternalConnection: local?.state === 'connected',
+    removeConnection: !saving && removable.length > 0 ? async () => {
+      setSaving(true);
+      try {
+        const remote = ctx.remote.dshQoderAccounts;
+        const results = await Promise.allSettled(removable.map(account => remote.change({ kind: 'unbind', provider: account.provider })));
+        await reload(false);
+        return results.every(result => result.status === 'fulfilled' && result.value.ok && result.value.value);
+      } finally {
+        setSaving(false);
+      }
+    } : undefined,
     connection: { connected, busy: saving, accountCount: connectedCount, desktop: desktop(), api: api(),
       setup: { desktop: !error && localAvailable ? desktop(true) : undefined, api: !error ? api(true) : undefined } },
   } as const;

@@ -54,10 +54,10 @@ html[data-platform="darwin"] .dsh-model-management {
   display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
 }
 .dsh-model-management-section { display: grid; gap: 10px; }
-.dsh-connection-list { border-block-start: 1px solid var(--connection-border); }
+.dsh-connection-list { container-type: inline-size; border-block-start: 1px solid var(--connection-border); }
 .dsh-connection-row {
   position: relative; display: grid; align-items: center;
-  grid-template-columns: minmax(0, 1fr) fit-content(42%) auto; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) fit-content(48%) fit-content(28%) auto; gap: 10px;
   min-height: 60px; box-sizing: border-box; padding: 8px 6px;
   border-block-end: 1px solid var(--connection-border);
 }
@@ -77,23 +77,32 @@ html[data-platform="darwin"] .dsh-model-management {
 .dsh-connection-open:focus-visible::after {
   outline: 2px solid var(--dsw-alias-accent-primary, var(--connection-accent)); outline-offset: -2px;
 }
+.dsh-connection-row-actions { display: flex; align-items: center; gap: 4px; }
+.dsh-model-management .dsh-connection-remove { color: light-dark(#a3222b, #ffabb0); }
+.dsh-connection-row .dsh-connection-remove { position: relative; z-index: 1; }
+.dsh-model-management .dsh-connection-remove[aria-disabled="true"] {
+  color: var(--connection-muted); opacity: .75; background: transparent; cursor: default;
+}
+.dsh-provider-remove-dialog {
+  width: min(400px, calc(100% - 36px)); box-sizing: border-box; padding: 18px; border-radius: 10px;
+  border: 1px solid var(--connection-border); background: var(--connection-card); color: var(--connection-text);
+}
+.dsh-provider-remove-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.dsh-provider-remove-dialog p { margin-block-start: 10px; }
+.dsh-provider-remove-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-block-start: 16px; }
 .dsh-connection-method, .dsh-connection-setup {
   min-width: 0;
   border: 1px solid var(--connection-border);
   border-radius: 10px;
   background: var(--connection-card);
 }
-.dsh-connection-icon { display: block; object-fit: contain; flex: none; }
+.dsh-connection-icon { display: block; object-fit: contain; flex: none; width: 24px; height: 24px; }
 .dsh-connection-fallback, .dsh-method-icon {
   display: grid; place-items: center; flex: none; width: 33px; height: 33px;
   border-radius: 9px; background: light-dark(#eee6fc, #362d4a); color: var(--connection-accent);
 }
-.dsh-connection-fallback[data-provider="codex"] { background: light-dark(#e9e8ff, #33325e); }
-.dsh-connection-fallback[data-provider="qoder"] { background: #e6e9ef; color: #272a36; }
-.dsh-connection-row .dsh-connection-icon {
-  width: 31px; height: 31px; box-sizing: border-box;
-}
-.dsh-connection-row .dsh-connection-fallback {
+.dsh-connection-fallback {
+  width: 24px; height: 24px; box-sizing: border-box;
   background: var(--connection-card); color: var(--connection-muted); border: 1px solid var(--connection-border);
 }
 .dsh-connection-status[data-tone="neutral"] { color: var(--connection-muted); }
@@ -110,8 +119,6 @@ html[data-platform="darwin"] .dsh-model-management {
   border-radius: 7px; min-height: 32px; padding-inline: 6px; font: inherit; font-size: 12px; max-width: min(100%, 148px);
 }
 .dsh-provider-header > div, .dsh-method-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.dsh-provider-header .dsh-connection-icon { width: 43px; height: 43px; }
-.dsh-provider-header .dsh-connection-icon svg { width: 21px; height: 21px; }
 .dsh-provider-header p, .dsh-method-heading p { margin-top: 3px; color: var(--connection-muted); }
 .dsh-method-heading p { font-size: 12px; }
 .dsh-connection-method-stack { display: grid; gap: 13px; }
@@ -128,6 +135,12 @@ html[data-platform="darwin"] .dsh-model-management {
   box-sizing: border-box; width: 100%; min-height: 34px; color: inherit; font: inherit;
   background: var(--connection-canvas); border: 1px solid var(--connection-border); border-radius: 6px; padding: 5px 8px;
 }
+.dsh-setup-select { position: relative; display: block; min-width: 0; }
+.dsh-setup-select select { appearance: none; padding-inline: 12px 34px; }
+.dsh-setup-select svg {
+  position: absolute; inset-inline-end: 10px; inset-block-start: 50%;
+  transform: translateY(-50%); pointer-events: none;
+}
 .dsh-connection-form > div { display: flex; gap: 8px; flex-wrap: wrap; }
 .dsh-desktop-detection, .dsh-connection-accounts { box-sizing: border-box; width: 100%; margin: 0; }
 .dsh-desktop-detection { padding: 2px 10px; border: 1px solid var(--connection-border); border-radius: 7px; background: var(--connection-nav); }
@@ -141,7 +154,10 @@ html[data-platform="darwin"] .dsh-model-management {
 .dsh-connection-accounts li { padding-block: 6px; overflow-wrap: anywhere; }
 .dsh-connection-accounts li p { color: var(--connection-muted); font-size: 12px; }
 .dsh-model-legacy-connections { max-width: 960px; margin: 12px auto 0; }
-.dsh-connection-usage { position: relative; }
+.dsh-connection-usage { position: relative; min-width: 0; }
+.dsh-connection-row .dsh-connection-usage-controls { position: relative; z-index: 1; }
+.dsh-connection-usage-button { max-width: 100%; text-align: start; overflow-wrap: anywhere; }
+.dsh-connection-usage-button svg { flex: none; }
 .dsh-connection-usage:is(:hover, :focus-within) { z-index: 2; }
 .dsh-model-management .dsh-connection-usage-button { border-color: transparent; padding: 3px; }
 .dsh-connection-usage-button svg { width: 20px; height: 20px; display: block; transform: rotate(-90deg); }
@@ -192,6 +208,13 @@ html[data-platform="darwin"] .dsh-model-management {
 }
 @media (max-width: 767px) {
   .dsh-model-management-body { padding-inline: 20px; }
+}
+@container (max-width: 515px) {
+  .dsh-connection-row { grid-template-columns: minmax(0, 1fr) fit-content(38%) auto; }
+  .dsh-connection-row .dsh-connection-usage-controls {
+    grid-row: 2; grid-column: 1 / -1; margin-inline-start: 30px;
+  }
+  .dsh-connection-row .dsh-connection-usage-tooltip { inset-inline: 0 auto; }
 }
 @media (max-width: 720px) {
   .dsh-model-management { grid-template-columns: 131px minmax(0, 1fr); }

@@ -26,6 +26,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     footer?: string;
     action: string;
     details: ReactNode;
+    removeConnection?: () => Promise<boolean>;
+    hasExternalConnection?: boolean;
     connection?: {
       connected: boolean;
       accountCount?: number;
