@@ -19,6 +19,8 @@ const messages = {
     title: 'Qoder accounts', intro: 'Use your Qoder CLI sign-in, or bind an account with a personal access token (PAT).',
     setup: 'Set up Qoder', manage: 'Manage accounts', setupRequired: 'Setup required', cliMissingShort: 'Qoder CLI is missing.',
     connectedAccountsOne: '{count} connected account', connectedAccounts: '{count} connected accounts',
+    identityUnavailable: 'Qoder could not identify this account. Use a remark to recognize this connection.',
+    accountAdded: 'Account added: {account}',
     create: 'Open Qoder Account Integrations', refresh: 'Refresh accounts', loading: 'Checking Qoder accounts…',
     noModels: 'Qoder returned no selectable models.', unavailable: 'Could not load the model catalog. Check the connection and try again.',
     unbound: 'Account not bound', cliMissing: 'Qoder CLI is missing. Install it or set cliPath in the plugin configuration.',
@@ -40,6 +42,8 @@ const messages = {
     title: 'Qoder 账号', intro: '使用本机 Qoder CLI 登录，或使用个人访问令牌（PAT）绑定账号。',
     setup: '设置 Qoder', manage: '管理账号', setupRequired: '需要设置', cliMissingShort: '未找到 Qoder CLI。',
     connectedAccountsOne: '{count} 个已连接账号', connectedAccounts: '{count} 个已连接账号',
+    identityUnavailable: 'Qoder 未返回可识别的账号信息。可用备注区分此连接。',
+    accountAdded: '已添加账号：{account}',
     create: '打开 Qoder 账号集成设置', refresh: '刷新账号', loading: '正在检查 Qoder 账号…',
     noModels: 'Qoder 暂未返回可选模型。', unavailable: '未能读取模型目录，请检查连接后重试。',
     unbound: '账号尚未绑定', cliMissing: '未找到 Qoder CLI，请安装后重试，或在插件配置中填写 cliPath。',
@@ -107,12 +111,18 @@ function accountStatus(account: AccountView, t: Translate) {
   return t(account.state === 'authFailed' && account.browserLogin ? 'cliAuthFailed' : account.state);
 }
 
+function accountName({ identityLabel, remark, name }: AccountView) {
+  if (!identityLabel) return remark || name;
+  return remark && remark !== identityLabel ? `${identityLabel} · ${remark}` : identityLabel;
+}
+
 function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
   { ctx: Context; t: Translate } & ModelPickerConnectionsOwner) {
   const [accounts, setAccounts] = useState<AccountView[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
+  const [addedProvider, setAddedProvider] = useState<string>();
   const revision = useRef(0);
   const busy = loading || saving;
 
@@ -145,6 +155,7 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
     try {
       const result = await ctx.remote.dshQoderAccounts.change(change);
       if (!result.ok || !result.value) return false;
+      if (typeof result.value === 'string') setAddedProvider(result.value);
       await reload(false);
       return true;
     } catch {
@@ -154,6 +165,8 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
     }
   }
 
+  const added = accounts.find(account => account.provider === addedProvider);
+  const addedNotice = added && <p role="status" style={{ overflowWrap: 'anywhere' }}>{t('accountAdded', { account: accountName(added) })}</p>;
   const details = <section aria-label={t('title')} style={{ padding: 16, display: 'grid', gap: 12 }}>
     <h2>{t('title')}</h2>
     <p>{t('intro')}</p>
@@ -162,6 +175,7 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
     </div>}
     {busy && <p role="status">{t('loading')}</p>}
     {error && <p role="alert">{t('cannotBind')}</p>}
+    {addedNotice}
     {accounts.some(account => account.provider === 'qoder' && account.browserLogin && account.state !== 'cliMissing' && account.state !== 'connected') &&
       <LoginGuide ctx={ctx} t={t} reload={reload} />}
     {accounts.some(account => account.state === 'cliMissing') && <a href="https://docs.qoder.com/cli/installation"
@@ -195,7 +209,9 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
           : local?.state === 'authFailed' ? 'signedOut' : 'checkUnavailable')}
       </dd></div>
     </dl>
-    {local?.state === 'connected' && <AccountCard account={local} {...{ busy, t, update }} />}
+    {added?.browserLogin && addedNotice}
+    {local && (local.state === 'connected' || local.state === 'noModels') &&
+      <AccountCard account={local} {...{ busy, t, update }} />}
     {local && localAvailable && local.state !== 'connected' && <LoginGuide {...{ ctx, t, reload }} />}
     {defaultAccount?.state === 'cliMissing' && <a href="https://docs.qoder.com/cli/installation"
       target="_blank" rel="noreferrer">Qoder CLI ↗</a>}
@@ -204,6 +220,7 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
   </div>;
   const api = (configure = false) => <div className="dsh-connection-method-content">
     {error && <p role="alert">{t('cannotBind')}</p>}
+    {added && !added.browserLogin && addedNotice}
     {!error && configure && <AddAccount {...{ busy, t, update, configure }} />}
     {apiAccounts.map(account => <AccountCard key={account.provider} {...{ account, busy, t, update }} />)}
   </div>;
@@ -225,6 +242,8 @@ function AccountSettings({ ctx, t, renderCard, refresh = 0 }:
       }
     } : undefined,
     connection: { connected, busy: saving, accountCount: connectedCount, desktop: desktop(), api: api(),
+      accounts: accounts.filter(account => account.state === 'connected')
+        .map(account => ({ id: account.provider, name: accountName(account) })),
       setup: { desktop: !error && localAvailable ? desktop(true) : undefined, api: !error ? api(true) : undefined } },
   } as const;
   return renderCard(card);
@@ -288,7 +307,7 @@ function AddDesktopAccount({ busy, update, t, configure = false }: AccountAction
       onSubmit={async event => {
         event.preventDefault();
         if (!configDir.trim() || busy) return;
-        const saved = await update({ kind: 'addDesktop', configDir: configDir.trim(), remark: remark.trim() });
+        const saved = await update({ kind: 'addDesktop', configDir: configDir.trim(), remark: remark.trim(), reportProvider: true });
         setFailed(!saved);
         if (saved) { setOpen(false); setConfigDir(''); setRemark(''); }
       }}>
@@ -316,7 +335,7 @@ function AddAccount({ busy, update, t, configure = false }: AccountActions & { c
       onSubmit={async event => {
         event.preventDefault();
         if (!token.trim() || busy) return;
-        const saved = await update({ kind: 'add', token: token.trim(), remark: remark.trim() });
+        const saved = await update({ kind: 'add', token: token.trim(), remark: remark.trim(), reportProvider: true });
         setFailed(!saved);
         if (saved) {
           setOpen(false);
@@ -336,7 +355,7 @@ function AddAccount({ busy, update, t, configure = false }: AccountActions & { c
 }
 
 function AccountCard({ account, busy, update, t }: AccountActions & { account: AccountView }) {
-  const { provider, name, state } = account;
+  const { provider, state } = account;
   const [remark, setRemark] = useState(account.remark ?? '');
   const [token, setToken] = useState('');
   const [failed, setFailed] = useState(false);
@@ -348,9 +367,10 @@ function AccountCard({ account, busy, update, t }: AccountActions & { account: A
     if (removed) setToken('');
   }}>{t('remove')}</button>;
 
-  return <fieldset style={{ border: '1px solid var(--dsw-alias-border-l1, GrayText)', borderRadius: 8, padding: 12 }}>
-    <legend>{name}</legend>
+  return <fieldset style={{ border: '1px solid var(--dsw-alias-border-l1, GrayText)', borderRadius: 8, padding: 12, minWidth: 0 }}>
+    <legend style={{ maxWidth: '100%', overflowWrap: 'anywhere' }}>{accountName(account)}</legend>
     <p>{accountStatus(account, t)}{state === 'connected' ? ` · ${account.modelCount} ${t(account.modelCount === 1 ? 'model' : 'models')}` : ''}</p>
+    {!account.identityLabel && (state === 'connected' || state === 'noModels') && <p>{t('identityUnavailable')}</p>}
     {account.remark !== undefined && <>
       <form onSubmit={async event => {
         event.preventDefault();
@@ -363,7 +383,7 @@ function AccountCard({ account, busy, update, t }: AccountActions & { account: A
           onChange={event => setRemark(event.currentTarget.value)} /></label>
         <button type="submit" disabled={busy || remark.trim() === account.remark}>{t('saveRemark')}</button>
       </form>
-      {account.browserLogin ? remove : <form style={{ marginTop: 8 }} onSubmit={async event => {
+      {provider !== 'qoder' && (account.browserLogin ? remove : <form style={{ marginTop: 8 }} onSubmit={async event => {
         event.preventDefault();
         if (!token.trim() || busy) return;
         const saved = await update({ kind: 'replace', provider, token: token.trim() });
@@ -376,7 +396,7 @@ function AccountCard({ account, busy, update, t }: AccountActions & { account: A
           <button type="submit" disabled={busy || !token.trim()}>{t(state === 'unbound' ? 'save' : 'replace')}</button>
           {state !== 'unbound' && remove}
         </div>
-      </form>}
+      </form>)}
       {failed && <p role="alert">{t('failed')}</p>}
     </>}
   </fieldset>;

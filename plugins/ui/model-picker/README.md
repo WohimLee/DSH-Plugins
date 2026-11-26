@@ -39,7 +39,7 @@ Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filte
 
 适配器在账号就绪后发布可用模型，解绑后撤回相应路由，并通过 DSH 的模型目录事件通知界面刷新。可用路由自动进入模型管理页和模型选择器。
 
-需要提供连接表单的适配器可通过 `ctx.slots.inject` 注册 `modelPicker.connections`。它是 root 作用域的 list 插槽，贡献 ID 使用厂商标识。贡献组件通过 `renderCard` 提供摘要，可附上 `connection` 声明连接状态、账号数、各方式的详情与配置内容，并监听 `refresh` 响应刷新。账号凭据由适配器使用宿主支持的机制保存。
+需要提供连接表单的适配器可通过 `ctx.slots.inject` 注册 `modelPicker.connections`。它是 root 作用域的 list 插槽，贡献 ID 使用厂商标识。贡献组件通过 `renderCard` 提供摘要，可附上 `connection` 声明连接状态、账号数、各方式的详情与配置内容，并监听 `refresh` 响应刷新。适配器可在 `connection.accounts` 提供由模型路由 ID 和显示名称组成的账号条目，用量切换据此与详情显示一致的标识。账号凭据由适配器使用宿主支持的机制保存。
 
 在 [Usage 读取](src/client/usage.ts)接入每个受支持的账号路由。需要支持厂商行 Remove 时，提供 `removeConnection` 解绑贡献，并在存在宿主管理的连接时标记 `hasExternalConnection`。
 

@@ -6,7 +6,7 @@ import type { AuthOptions, ModelInfo } from '@qoder-ai/qoder-agent-sdk';
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials';
 import { AccountStore, accountLabel, accountRoute, desktopDirectory } from './account-store.js';
 import type { AccountConfig, AccountEntry, DesktopProfile } from './account-store.js';
-import type { AccountChange, AccountView } from './remote.js';
+import type { AccountChange, AccountChangeResult, AccountView } from './remote.js';
 import type { AccountAuth } from './runtime.js';
 
 interface CatalogEntry {
@@ -73,6 +73,7 @@ export class QoderAccounts {
     private readonly readCatalog: (auth: AccountAuth) => Promise<ModelInfo[]>,
     credentials: () => CredentialProvider | undefined,
     private readonly hasAttachments: () => boolean,
+    private readonly readDisplay: (auth: AccountAuth) => Promise<string | undefined>,
   ) {
     this.store = new AccountStore(accounts, credentials, resolveSecret);
     for (const account of this.store.initial()) this.accounts.set(accountRoute(account.id), account);
@@ -87,7 +88,11 @@ export class QoderAccounts {
     this.accounts = accounts;
   }
 
-  async change(change: Exclude<AccountChange, { kind: 'addDesktop' }>): Promise<boolean> {
+  async change(change: Exclude<AccountChange, { kind: 'addDesktop' }>): Promise<AccountChangeResult> {
+    if (change.kind === 'remark' && change.provider === 'qoder') {
+      const auth = await this.auth('qoder');
+      return this.store.setDefaultRemark(auth.type === 'qodercli', change.remark);
+    }
     const account = change.kind === 'add' ? undefined : this.accounts.get(change.provider);
     if (change.kind === 'replace' && (!account || account.profile)) return false;
     if (change.kind === 'add' || change.kind === 'replace') {
@@ -101,9 +106,9 @@ export class QoderAccounts {
     return this.store.change(change, account);
   }
 
-  async addDesktop(profile: DesktopProfile, remark: string): Promise<boolean> {
+  async addDesktop(profile: DesktopProfile, remark: string, reportProvider?: true): Promise<AccountChangeResult> {
     if ([...this.accounts.values()].some(account => account.profile?.configDir === profile.configDir)) return false;
-    return this.store.addDesktop(profile, remark);
+    return this.store.addDesktop(profile, remark, reportProvider);
   }
 
   get providers(): string[] {
@@ -178,7 +183,7 @@ export class QoderAccounts {
     return routes;
   }
 
-  async statusOf(provider: string): Promise<AccountView> {
+  async statusOf(provider: string, includeIdentity = false): Promise<AccountView> {
     const config = this.accounts.get(provider);
     const account = { provider, name: config ? accountLabel(config) : 'Qoder CLI', remark: config?.remark };
     let browserLogin = config?.profile !== undefined;
@@ -186,7 +191,12 @@ export class QoderAccounts {
       const auth = await this.auth(provider);
       browserLogin = auth.type === 'qodercli';
       const models = await this.listModels(provider, auth);
-      return { ...account, browserLogin, state: models.length ? 'connected' : 'noModels', modelCount: models.length };
+      const [identityLabel, remark] = includeIdentity ? await Promise.all([
+        this.readDisplay(auth).catch(() => undefined),
+        config ? config.remark : this.store.defaultRemark(browserLogin).catch(() => undefined),
+      ]) : [undefined, account.remark];
+      return { ...account, name: !config && !browserLogin ? 'Qoder PAT' : account.name, remark, identityLabel, browserLogin,
+        state: models.length ? 'connected' : 'noModels', modelCount: models.length };
     } catch (error) {
       const code = error instanceof LlmError ? error.failure.code : undefined;
       const state = code === 'MISSING_CREDENTIAL' ? 'unbound'

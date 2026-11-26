@@ -5,7 +5,7 @@ import { isAbsolute, join } from 'node:path';
 import { credentialKey, credentialKeyId, credentialKeyScope, credentialRef } from '@deepseek-ai/dsh-credentials';
 import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials';
 import { LlmError } from '@deepseek-ai/dsh-llm';
-import type { AccountChange } from './remote.js';
+import type { AccountChange, AccountChangeResult } from './remote.js';
 
 const scope = 'dsh-qoder';
 const prefix = 'qoder-account-';
@@ -138,11 +138,26 @@ export class AccountStore {
     return record?.version === 1 ? record.token : undefined;
   }
 
+  async defaultRemark(browserLogin: boolean): Promise<string | undefined> {
+    const credentials = this.credentials();
+    if (!credentials) return;
+    const key = credentialKey(scope, browserLogin ? 'default-cli-remark' : 'default-pat-remark');
+    return readRecord(await credentials.readRecord(key))?.remark ?? '';
+  }
+
+  async setDefaultRemark(browserLogin: boolean, remark: string): Promise<boolean> {
+    const credentials = this.credentials();
+    if (!credentials) return false;
+    const key = credentialKey(scope, browserLogin ? 'default-cli-remark' : 'default-pat-remark');
+    await credentials.modifyRecord(key, async () => ({ kind: 'grant', payload: { version: 1, remark } }));
+    return true;
+  }
+
   private profileId(profile: DesktopProfile): string {
     return 'd-' + profile.identity.slice(0, 24);
   }
 
-  async addDesktop(profile: DesktopProfile, remark: string): Promise<boolean> {
+  async addDesktop(profile: DesktopProfile, remark: string, reportProvider = false): Promise<AccountChangeResult> {
     const credentials = this.credentials();
     const id = this.profileId(profile);
     if (!credentials || this.configured.some(account => account.id === id)) return false;
@@ -152,19 +167,20 @@ export class AccountStore {
       added = true;
       return { kind: 'grant', payload: { version: 2, remark, profile } };
     });
-    return added;
+    return added && reportProvider ? accountRoute(id) : added;
   }
 
-  async change(change: Exclude<AccountChange, { kind: 'addDesktop' }>, account?: AccountEntry): Promise<boolean> {
+  async change(change: Exclude<AccountChange, { kind: 'addDesktop' }>, account?: AccountEntry): Promise<AccountChangeResult> {
     const credentials = this.credentials();
     if (!credentials) return false;
     if (change.kind === 'add') {
-      const key = credentialKey(scope, `a-${randomBytes(12).toString('hex')}`);
+      const id = `a-${randomBytes(12).toString('hex')}`;
+      const key = credentialKey(scope, id);
       await credentials.modifyRecord(key, async current => {
         if (current) throw new Error('Qoder account ID collision');
         return { kind: 'grant', payload: { version: 1, remark: change.remark, token: change.token } };
       });
-      return true;
+      return change.reportProvider ? accountRoute(id) : true;
     }
 
     if (!account) return false;

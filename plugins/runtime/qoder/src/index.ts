@@ -13,14 +13,14 @@ import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepse
 import { ControlRequestError } from '@qoder-ai/qoder-agent-sdk';
 import type { SDKUserMessage } from '@qoder-ai/qoder-agent-sdk';
 import { advertiseTools, buildPrompt } from './request.js';
-import { openQoderSession, readQoderDesktopIdentity, readQoderModels, readQoderUsage } from './runtime.js';
+import { openQoderSession, readQoderAccountDisplay, readQoderDesktopIdentity, readQoderModels, readQoderUsage } from './runtime.js';
 import { BrowserLogin } from './login.js';
 import type { LoginAction, LoginView } from './remote.js';
 import { QoderAccounts } from './accounts.js';
 import { desktopDirectory, isQoderAccountRecord } from './account-store.js';
 import type { AccountConfig } from './account-store.js';
 import { accountService, contribution, parseAccountChange } from './remote.js';
-import type { AccountChange, AccountView } from './remote.js';
+import type { AccountChange, AccountChangeResult, AccountView } from './remote.js';
 import type { QoderSession } from './runtime.js';
 import { authError, readResponse } from './stream.js';
 
@@ -77,19 +77,23 @@ export class QoderAdapter extends LlmAdapter {
     credentials: () => CredentialProvider | undefined = () => undefined,
     private readonly attachments: () => Pick<Context['attachments'], 'readImageRequest'> | undefined = () => undefined,
     private readonly readDesktopIdentity = readQoderDesktopIdentity,
+    readAccountDisplay = readQoderAccountDisplay,
   ) {
     super();
     this.accounts = new QoderAccounts(config.accounts, resolveSecret, async auth => {
       const executable = await resolveCli(config.cliPath);
       return this.readModels(executable, auth, this.lifetime.signal);
-    }, credentials, () => !!this.attachments());
+    }, credentials, () => !!this.attachments(), async auth => {
+      const executable = await resolveCli(config.cliPath);
+      return readAccountDisplay(executable, auth, this.lifetime.signal);
+    });
   }
 
   get providers(): string[] {
     return this.accounts.providers;
   }
 
-  async addDesktop({ configDir, remark }: Extract<AccountChange, { kind: 'addDesktop' }>): Promise<boolean> {
+  async addDesktop({ configDir, remark, reportProvider }: Extract<AccountChange, { kind: 'addDesktop' }>): Promise<AccountChangeResult> {
     const directory = await desktopDirectory(configDir);
     const executable = await resolveCli(this.config.cliPath);
     const signal = this.lifetime.signal;
@@ -100,7 +104,7 @@ export class QoderAdapter extends LlmAdapter {
       if (current === identity) return false;
     }
     signal.throwIfAborted();
-    return this.accounts.addDesktop({ configDir: directory, identity }, remark);
+    return this.accounts.addDesktop({ configDir: directory, identity }, remark, reportProvider);
   }
 
   async usage(provider: string, signal: AbortSignal) {
@@ -239,7 +243,7 @@ class QoderAccountSettings extends TypertRemoteService {
     ctx: Context,
     private readonly readAccounts: (refresh: boolean) => Promise<AccountView[]>,
     private readonly browserLogin: (action: LoginAction) => Promise<LoginView>,
-    private readonly changeAccount: (change: AccountChange) => Promise<boolean>,
+    private readonly changeAccount: (change: AccountChange) => Promise<AccountChangeResult>,
   ) {
     super(ctx, accountService);
     ctx.effect(() => ctx.typert.register({
@@ -261,7 +265,7 @@ class QoderAccountSettings extends TypertRemoteService {
   }
 
   @Remote
-  async change(change: unknown): Promise<boolean> {
+  async change(change: unknown): Promise<AccountChangeResult> {
     if (this.ctx.invocation?.peer.principal.kind !== 'owner') return false;
     try {
       return await this.changeAccount(parseAccountChange(change));
@@ -298,10 +302,10 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
     else if (routes.length) registration = ctx.llm.registerAdapter(routes, adapter);
   }
 
-  async function check(provider: string, refresh = false): Promise<AccountView> {
+  async function check(provider: string, refresh = false, includeIdentity = false): Promise<AccountView> {
     const ticket = {};
     checks.set(provider, ticket);
-    const result = await adapter.accounts.statusOf(provider);
+    const result = await adapter.accounts.statusOf(provider, includeIdentity);
     if (live && checks.get(provider) === ticket && adapter.providers.includes(provider)) {
       const label = result.state === 'connected' ? adapter.providerInfo(provider).name : undefined;
       if (label !== available.get(provider)) {
@@ -321,7 +325,7 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
     await next;
   }
 
-  async function readAccounts(refresh: boolean): Promise<AccountView[]> {
+  async function readAccounts(refresh: boolean, includeIdentity = false): Promise<AccountView[]> {
     await reloadDirectory();
     if (!live) return [];
     const providers = new Set(adapter.providers);
@@ -333,10 +337,10 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
     }
     if (changed) publish();
     if (refresh) adapter.accounts.refreshCatalogs();
-    return Promise.all([...providers].map(provider => check(provider, refresh)));
+    return Promise.all([...providers].map(provider => check(provider, refresh, includeIdentity)));
   }
 
-  async function changeAccount(change: AccountChange): Promise<boolean> {
+  async function changeAccount(change: AccountChange): Promise<AccountChangeResult> {
     await reloadDirectory();
     if (!live) return false;
     return change.kind === 'addDesktop' ? adapter.addDesktop(change) : adapter.accounts.change(change);
@@ -359,7 +363,7 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
   ctx.on('credentials/record-updated', key => {
     if (isQoderAccountRecord(key)) refreshDirectory();
   });
-  ctx.inject(['typert'], child => { new QoderAccountSettings(child, readAccounts, async action => {
+  ctx.inject(['typert'], child => { new QoderAccountSettings(child, refresh => readAccounts(refresh, true), async action => {
     if (action === 'status') return login.view;
     if (action === 'cancel') return login.cancel();
     try {

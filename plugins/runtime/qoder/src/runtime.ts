@@ -1,5 +1,5 @@
 import { query, qodercliAuth, startDaemon } from '@qoder-ai/qoder-agent-sdk';
-import type { AuthOptions, Daemon, Options, SDKMessage, SDKUserMessage } from '@qoder-ai/qoder-agent-sdk';
+import type { AccountInfo, AuthOptions, Daemon, Options, SDKMessage, SDKUserMessage } from '@qoder-ai/qoder-agent-sdk';
 import { createHash } from 'node:crypto';
 import { addAbortListener } from 'node:events';
 import { LlmError } from '@deepseek-ai/dsh-llm';
@@ -144,6 +144,21 @@ export function readQoderModels(cliPath: string, auth: AccountAuth, signal: Abor
       }
     }
   });
+}
+
+function accountDisplay(info: AccountInfo, auth: AccountAuth): string | undefined {
+  for (const value of [info.email, info.name, info.organizationName]) {
+    if (typeof value !== 'string') continue;
+    const label = value.trim();
+    if (!label || label.length > 254 || /[\p{Cc}\p{Cf}]/u.test(label)) continue;
+    if (auth.type === 'accessToken' && typeof auth.accessToken === 'string' && auth.accessToken && label.includes(auth.accessToken)) continue;
+    return label;
+  }
+}
+
+export function readQoderAccountDisplay(cliPath: string, auth: AccountAuth, signal: AbortSignal) {
+  return readAccount(cliPath, auth, signal, 10_000, async (daemon, wait) =>
+    accountDisplay(await wait(daemon.accountInfo()), auth));
 }
 
 export async function readQoderUsage(cliPath: string, auth: AccountAuth, signal: AbortSignal) {

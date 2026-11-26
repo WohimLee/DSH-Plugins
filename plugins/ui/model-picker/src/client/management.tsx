@@ -307,6 +307,7 @@ export function ModelManagement({ ctx, t, renderSlot, language }: Props) {
 
   function providerUsage(id: string, name: string) {
     return <CardUsage group={snapshot.groups.find(group => group.id === id)} {...{ name, readUsage, refresh, t, language }}
+      accountNames={cards.get(id)?.connection?.accounts}
       includeDeepSeekAccount={id === 'deepseek' && snapshot.deepseekSignedIn}
       unavailable={t(id === 'grok' ? 'usageInXaiConsole' : 'unavailable')} />;
   }

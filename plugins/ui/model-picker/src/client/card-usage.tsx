@@ -7,10 +7,13 @@ type UsageProps = PropsLocale<'modelPicker'> & {
   language: string; readUsage: ReadUsage; refresh: number; name: string; unavailable: string;
 };
 
-export function CardUsage({ group, includeDeepSeekAccount, ...props }:
-UsageProps & { group?: ProviderGroup; includeDeepSeekAccount: boolean }) {
+export function CardUsage({ group, accountNames, includeDeepSeekAccount, ...props }:
+UsageProps & { group?: ProviderGroup; accountNames?: readonly { id: string; name: string }[]; includeDeepSeekAccount: boolean }) {
   const [preferred, setPreferred] = useState<string>();
-  const accounts = group?.routes.map(route => ({ id: route.id, name: routeName(route, props.t) })) ?? [];
+  const accounts = group?.routes.map(route => ({
+    id: route.id,
+    name: accountNames?.find(account => account.id === route.id)?.name ?? routeName(route, props.t),
+  })) ?? [];
   if (includeDeepSeekAccount && !accounts.some(account => account.id === 'deepseek-account')) {
     accounts.unshift({ id: 'deepseek-account', name: props.t('deepseekAccount') });
   }
@@ -19,7 +22,7 @@ UsageProps & { group?: ProviderGroup; includeDeepSeekAccount: boolean }) {
 
   return <div className="dsh-connection-usage-controls">
     {accounts.length > 1 && <select aria-label={props.t('accountFor', { name: props.name })}
-      value={account.id} onChange={event => setPreferred(event.currentTarget.value)}>
+      value={account.id} title={account.name} onChange={event => setPreferred(event.currentTarget.value)}>
       {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
     </select>}
     <UsageRing key={account?.id} provider={account?.id} {...props} />

@@ -96,7 +96,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   } }));
   if (request.type === 'daemon.initialize') {
     const auth = JSON.stringify(request.auth);
-    remaining = auth.includes('fixture-work') ? 240 : auth.includes('fixture-personal') ? 60 : undefined;
+    remaining = auth.includes('fixture-work') ? 240 : auth.includes('fixture-personal') ? 60 : auth.includes('fixture-no-identity') ? 1 : undefined;
     reply({ daemon_protocol_version: 2, daemon_version: 'fixture', capabilities: ['multi_session_v2', 'daemon_queries_v1'] });
   }
   if (request.type === 'daemon.open_session' && remaining === undefined) {
@@ -105,10 +105,16 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
     } }));
   }
   if (request.type === 'daemon.get_models') {
-    const models = remaining === 60 ? [{ value: 'auto', displayName: 'Auto', description: '' }]
+    const models = remaining === 60 || remaining === 1 ? [{ value: 'auto', displayName: 'Auto', description: '' }]
       : remaining === 240 ? [{ value: 'lite', displayName: 'Lite', description: '' }]
       : [];
     reply({ models });
+  }
+  if (request.type === 'daemon.account_info') {
+    const account = remaining === 60 ? { email: 'personal@example.test', name: 'Personal fixture', userId: 'private-fixture-id' }
+      : remaining === 240 ? { name: 'Work fixture' }
+      : {};
+    reply({ account });
   }
   if (request.type === 'daemon.get_usage_info') {
     reply({ usage: remaining === undefined ? null : { userQuota: { total: 300, remaining },
@@ -436,8 +442,10 @@ globalThis.fetch = async (input, options = {}) => {
     if (previous === null) document.documentElement.removeAttribute('data-platform');
     else document.documentElement.setAttribute('data-platform', previous);
   }, platformBeforeLayout);
-  const managedQoder = management.getByRole('group', { name: 'Managed from sidebar' });
+  const managedQoderName = 'personal@example.test · Managed from sidebar';
+  const managedQoder = management.getByRole('group', { name: managedQoderName, exact: true });
   await managedQoder.waitFor();
+  assert.equal(await management.getByText('private-fixture-id').count(), 0);
   await overview.click();
   const connectedQoder = available.locator('summary').filter({ hasText: 'Qoder' });
   await connectedQoder.waitFor();
@@ -535,23 +543,34 @@ globalThis.fetch = async (input, options = {}) => {
   await openSettings();
   const settings = page.getByRole('dialog').filter({ hasText: 'Settings' });
   const qoderSettings = settings.getByRole('region', { name: 'Qoder accounts' });
-  const bind = async (remark, token) => {
+  const bind = async (remark, token, visibleName) => {
     await qoderSettings.getByRole('button', { name: 'Add account', exact: true }).click();
     const form = qoderSettings.getByRole('form', { name: 'Add account' });
     await form.getByLabel('Personal access token').fill(token);
     if (remark) await form.getByLabel('Remark (optional)').fill(remark);
     await form.getByRole('button', { name: 'Bind account' }).click();
     await form.waitFor({ state: 'detached' });
-    const card = qoderSettings.getByRole('group', { name: remark || /^Account /, exact: true });
+    const card = qoderSettings.getByRole('group', { name: visibleName ?? remark, exact: true });
     await card.getByText('Connected · 1 available model').waitFor();
     return card;
   };
   assert.equal(await qoderSettings.getByRole('group', { name: /^(Personal|Work|Account )/ }).count(), 0);
-  const unnamed = await bind('', 'fixture-personal');
+  const fallback = await bind('', 'fixture-no-identity', /^Account /);
+  await fallback.getByText('Qoder could not identify this account.', { exact: false }).waitFor();
+  await fallback.getByLabel('Remark', { exact: true }).fill('No identity');
+  await fallback.getByRole('button', { name: 'Save remark' }).click();
+  const namedFallback = qoderSettings.getByRole('group', { name: 'No identity', exact: true });
+  await namedFallback.waitFor();
+  await namedFallback.getByRole('button', { name: 'Unbind', exact: true }).click();
+  await namedFallback.waitFor({ state: 'detached' });
+  const unnamed = await bind('', 'fixture-personal', 'personal@example.test');
+  await qoderSettings.getByRole('status').getByText('Account added: personal@example.test', { exact: true }).waitFor();
   await unnamed.getByLabel('Remark', { exact: true }).fill('Personal');
   await unnamed.getByRole('button', { name: 'Save remark' }).click();
-  await qoderSettings.getByRole('group', { name: 'Personal', exact: true }).waitFor();
-  await bind('Work', 'fixture-work');
+  const personalLabel = 'personal@example.test · Personal';
+  const workLabel = 'Work fixture · Work';
+  await qoderSettings.getByRole('group', { name: personalLabel, exact: true }).waitFor();
+  await bind('Work', 'fixture-work', workLabel);
 
   const options = page.locator('[data-dsh-model-picker]').getByLabel('Account', { exact: true }).locator('option');
   const workOption = options.filter({ hasText: /^Work · API$/ });
@@ -563,10 +582,10 @@ globalThis.fetch = async (input, options = {}) => {
   await closeModels();
 
   await openSettings();
-  const work = qoderSettings.getByRole('group', { name: 'Work', exact: true });
+  const work = qoderSettings.getByRole('group', { name: workLabel, exact: true });
   await work.getByLabel('Remark', { exact: true }).fill('Research');
   await work.getByRole('button', { name: 'Save remark' }).click();
-  const renamed = qoderSettings.getByRole('group', { name: 'Research', exact: true });
+  const renamed = qoderSettings.getByRole('group', { name: 'Work fixture · Research', exact: true });
   await renamed.waitFor();
   await settings.getByRole('button', { name: 'Close', exact: true }).click();
   await openModels();
@@ -585,7 +604,7 @@ globalThis.fetch = async (input, options = {}) => {
   await closeModels();
 
   await openSettings();
-  await bind('Work', 'fixture-work');
+  await bind('Work', 'fixture-work', workLabel);
   await settings.getByRole('button', { name: 'Close', exact: true }).click();
   await openModels();
   await visibleProviders.filter({ hasText: 'Qoder' }).hover();
@@ -597,21 +616,32 @@ globalThis.fetch = async (input, options = {}) => {
   const qoderAccount = qoderConnection.getByRole('combobox', { name: 'Qoder account' });
   const qoderUsage = qoderConnection.getByRole('button', { name: 'Qoder usage' });
   const qoderTooltip = qoderConnection.getByRole('tooltip');
-  await qoderAccount.selectOption({ label: 'Personal' });
+  await qoderAccount.selectOption({ label: personalLabel });
   await qoderUsage.getByText('Plan · 60 / 300 Credits left', { exact: true }).waitFor();
   await qoderUsage.focus();
   await qoderTooltip.getByText('Plan · 60 / 300 Credits left', { exact: true }).waitFor();
   assert.equal(await qoderUsage.getAttribute('data-remaining'), '20');
-  await qoderAccount.selectOption(workRoute);
+  assert.deepEqual(await qoderAccount.selectOption({ label: workLabel }), [workRoute]);
   await qoderUsage.getByText('Plan · 240 / 300 Credits left', { exact: true }).waitFor();
   await qoderUsage.hover();
   await qoderTooltip.getByText('Plan · 240 / 300 Credits left', { exact: true }).waitFor();
   await qoderTooltip.getByText('Add-on · 20 / 100 Credits left', { exact: true }).waitFor();
   assert.equal(await qoderUsage.getAttribute('data-remaining'), '80');
   assert.equal(await management.getByRole('dialog').count(), 0, 'account and usage controls must not open details');
+  await qoderConnection.getByRole('button', { name: 'Manage accounts' }).click();
+  const qoderDetailAccounts = management.getByRole('region', { name: 'API', exact: true });
+  await qoderDetailAccounts.getByRole('group', { name: workLabel, exact: true }).waitFor();
+  const detailUsage = management.getByRole('region', { name: 'Usage', exact: true });
+  assert.deepEqual(await detailUsage.getByRole('combobox', { name: 'Qoder account' }).selectOption({ label: workLabel }), [workRoute]);
+  await management.getByRole('button', { name: 'Refresh connections', exact: true }).click();
+  await detailUsage.getByRole('button', { name: 'Qoder usage' }).getByText('Plan · 240 / 300 Credits left', { exact: true }).waitFor();
+  await qoderDetailAccounts.getByRole('group', { name: personalLabel, exact: true }).waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'qoder-account-identities.png') });
+  }
   await page.getByRole('button', { name: 'New session', exact: true }).filter({ hasText: 'New Session' }).click();
 
-  console.log('PASS isolated Web Qoder accounts: no preset accounts, optional remarks, stable routes on rename and removal on unbind.');
+  console.log('PASS isolated Web Qoder accounts: recognizable identity, identity fallback, addition feedback, refresh, usage matching, stable routes on rename and removal on unbind.');
 
   await trigger.click();
   const browse = page.getByRole('menuitem', { name: /^Models(?: |$)/ });

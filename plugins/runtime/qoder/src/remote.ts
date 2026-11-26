@@ -14,6 +14,7 @@ const accountView = z.object({
   provider: z.string(),
   name: z.string(),
   remark: z.string().optional(),
+  identityLabel: z.string().min(1).max(254).optional(),
   state: z.enum(['connected', 'unbound', 'cliMissing', 'authFailed', 'noModels', 'unavailable']),
   browserLogin: z.boolean().optional(),
   modelCount: z.number().int().nonnegative(),
@@ -23,14 +24,17 @@ const provider = z.string().regex(/^qoder-account-[a-z0-9][a-z0-9-]{0,31}$/);
 const remark = z.string().trim().max(80);
 const token = z.string().trim().min(1).max(8192);
 const accountChange = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('add'), remark, token }),
-  z.strictObject({ kind: z.literal('addDesktop'), remark, configDir: z.string().trim().min(1).max(4096) }),
-  z.strictObject({ kind: z.literal('remark'), provider, remark }),
+  z.strictObject({ kind: z.literal('add'), remark, token, reportProvider: z.literal(true).optional() }),
+  z.strictObject({ kind: z.literal('addDesktop'), remark, configDir: z.string().trim().min(1).max(4096),
+    reportProvider: z.literal(true).optional() }),
+  z.strictObject({ kind: z.literal('remark'), provider: z.union([provider, z.literal('qoder')]), remark }),
   z.strictObject({ kind: z.literal('replace'), provider, token }),
   z.strictObject({ kind: z.literal('unbind'), provider }),
 ]);
 
+const accountChangeResult = z.union([z.boolean(), provider]);
 export type AccountChange = z.infer<typeof accountChange>;
+export type AccountChangeResult = z.infer<typeof accountChangeResult>;
 export const parseAccountChange = (value: unknown) => accountChange.parse(value);
 
 export type AccountView = z.infer<typeof accountView>;
@@ -40,7 +44,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     dshQoderAccounts: {
       login(action: LoginAction): Promise<RemoteResult<LoginView>>;
       list(refresh: boolean): Promise<RemoteResult<AccountView[]>>;
-      change(change: AccountChange): Promise<RemoteResult<boolean>>;
+      change(change: AccountChange): Promise<RemoteResult<AccountChangeResult>>;
     };
   }
 }
@@ -64,6 +68,6 @@ export const contribution: TypertRemoteContribution = {
     invocation: { kind: 'direct' },
     parameters: [{ name: 'change', wire: 'change', source: 'json',
       codec: { mode: 'strict', typeSymbol: 'AccountChange', create: () => accountChange } }],
-    result: { mode: 'strict', typeSymbol: 'boolean', create: () => z.boolean() },
+    result: { mode: 'strict', typeSymbol: 'AccountChangeResult', create: () => accountChangeResult },
   }],
 };

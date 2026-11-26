@@ -31,6 +31,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     connection?: {
       connected: boolean;
       accountCount?: number;
+      accounts?: readonly { id: string; name: string }[];
       busy?: boolean;
       desktop?: ReactNode;
       api?: ReactNode;
