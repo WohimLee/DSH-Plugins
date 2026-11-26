@@ -13,6 +13,8 @@ export const workspaceStyles = `
 .wb-tree-section { flex: none; }
 .wb-tree-section + .wb-tree-section { margin-block-start: 10px; }
 .wb-tree-row {
+  --wb-tree-action-size: 25px;
+  --wb-tree-action-inset: 4px;
   position: relative;
   display: flex;
   align-items: center;
@@ -73,13 +75,13 @@ export const workspaceStyles = `
   align-items: center;
   flex: none;
   gap: 1px;
-  margin-inline-end: 4px;
+  margin-inline-end: var(--wb-tree-action-inset);
 }
 .wb-tree-action {
   display: grid;
   place-items: center;
-  inline-size: 25px;
-  block-size: 25px;
+  inline-size: var(--wb-tree-action-size, 25px);
+  block-size: var(--wb-tree-action-size, 25px);
   padding: 0;
   color: var(--dsw-alias-label-secondary, #999);
 }
@@ -94,7 +96,8 @@ export const workspaceStyles = `
   outline-offset: -2px;
 }
 @media (hover: hover) {
-  .wb-tree-row[data-wb-kind="session"]:is(:hover, :has(:focus-visible)) > .wb-status-unread { display: none; }
+  .wb-tree-row[data-wb-kind="session"]:is(:hover, :has(:focus-visible)) > .wb-status-unread,
+  .wb-tree-row[data-wb-kind="session"]:hover > .wb-status-scheduled { display: none; }
   .wb-tree-row:not(:hover):not(:focus-within),
   .wb-tree-row[data-wb-kind="session"]:not(:hover):not(:has(:focus-visible)) {
     & .wb-tree-actions .wb-tree-action:not([data-pinned]) {
@@ -136,6 +139,9 @@ export const workspaceStyles = `
   color: var(--dsw-alias-label-secondary, #999);
 }
 .wb-status-scheduled svg { inline-size: 100%; block-size: 14px; }
+.wb-tree-row > .wb-status-scheduled {
+  margin-inline-end: calc(var(--wb-tree-action-inset) + (var(--wb-tree-action-size) - 14px) / 2);
+}
 .wb-status-running {
   flex: none;
   inline-size: 11px;
@@ -147,6 +153,39 @@ export const workspaceStyles = `
 @media (prefers-reduced-motion: reduce) { .wb-status-running { animation: none; } }
 .wb-status-unread { flex: none; inline-size: 6px; block-size: 6px; border-radius: 50%; background: #4c95f6; }
 .wb-tree-error { margin: 4px 6px; font-size: 12px; }
+.wb-sidebar-notice {
+  position: fixed;
+  z-index: 1001;
+  inset-inline-end: 16px;
+  inset-block-end: 16px;
+  box-sizing: border-box;
+  max-inline-size: min(360px, calc(100vw - 32px));
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--dsw-alias-border-primary, #8884);
+  border-radius: 10px;
+  background: var(--dsw-specific-input-major, Canvas);
+  color: var(--dsw-alias-label-primary, CanvasText);
+  box-shadow: 0 6px 20px #0003;
+  font: 13px/20px var(--wb-nav-font, system-ui);
+}
+.wb-sidebar-notice p { margin: 0; min-inline-size: 0; overflow-wrap: anywhere; }
+.wb-sidebar-notice button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.wb-sidebar-notice button:hover { background: var(--dsw-alias-background-hover, #8882); }
 .wb-tree-compact { margin: 6px auto; }
 .wb-tree-tail { min-block-size: 30px; flex: 1 0 30px; }
 .wb-tree-tail[data-drop] { box-shadow: inset 0 2px #4c95f6; }

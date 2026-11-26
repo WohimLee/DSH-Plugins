@@ -4,6 +4,7 @@ import type { GlobalStandardProps, PropsLocale } from '@deepseek-ai/dsh-client-u
 import { RowMenu, type MenuEntry, type MenuTarget } from '../workspace/RowMenu.js';
 import type { scheduleAction, ScheduledAction, ScheduledActionFailure } from './scheduled-actions.js';
 import { Glyph } from '../workspace/Glyph.js';
+import { SidebarNotice } from '../workspace/SidebarNotice.js';
 import type {} from '../messages.js';
 import type { ScheduledTask, ScheduledTasks } from './scheduled-source.js';
 import {
@@ -183,7 +184,7 @@ export function ScheduledNavigation({ useScheduledTasks, useRemoteAccess, native
     <div className="wb-scheduled-title">{title}</div>
     <button type="button" className="wb-scheduled-new" data-workbench-scheduled-new
       onClick={() => act(page => createNativeTask(page, nativeText))}><Glyph icon="add" />{t('scheduledNewTask')}</button>
-    {failure && !confirmation && <p className="wb-scheduled-message" role="alert">{t(failure)}</p>}
+    {failure && !confirmation && <SidebarNotice message={t(failure)} closeLabel={t('close')} onClose={() => setFailure(undefined)} />}
     <div className="wb-scheduled-group" data-workbench-scheduled-group="active">
       <div className="wb-scheduled-group-title">{active}</div>
       {activeTasks}

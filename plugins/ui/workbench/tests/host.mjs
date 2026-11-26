@@ -295,9 +295,39 @@ try {
   assert.equal(scheduledIcon.width, 14);
   assert.ok(scheduledIcon.x >= scheduledTitle.x + scheduledTitle.width);
   if (process.env.DSH_TEST_ARTIFACTS) await alpha.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'session-clock-after.png') });
+  const actionBoxes = async row => {
+    const menu = row.getByRole('button', { name: 'Session menu', exact: true });
+    const pin = row.getByRole('button', { name: 'Pin Chat', exact: true });
+    await menu.waitFor();
+    await pin.waitFor();
+    return [await menu.boundingBox(), await pin.boundingBox()];
+  };
   await alpha.hover();
-  await alpha.getByRole('button', { name: 'Session menu', exact: true }).waitFor();
+  const scheduledActions = await actionBoxes(alpha);
+  if (process.env.DSH_TEST_ARTIFACTS) await alpha.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'session-clock-hover.png') });
+  assert.equal(await scheduledMark(alpha).isVisible(), false, 'hover hides the scheduled clock');
+  const alphaBox = await alpha.boundingBox();
+  const hoveredPin = scheduledActions[1];
+  assert.equal(scheduledIcon.x + scheduledIcon.width / 2, hoveredPin.x + hoveredPin.width / 2,
+    'resting clock and hover pin share a horizontal center');
+  assert.equal(scheduledIcon.y + scheduledIcon.height / 2, alphaBox.y + alphaBox.height / 2,
+    'clock is centered vertically in the row');
+  await beta.hover();
+  const ordinaryActions = await actionBoxes(beta);
+  assert.deepEqual(scheduledActions.map(({ x, width }) => [x, width]), ordinaryActions.map(({ x, width }) => [x, width]));
   await scheduledMark(alpha).waitFor();
+  const alphaTop = (await alpha.boundingBox()).y;
+  await alpha.click({ button: 'right' });
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('menuitem', { name: 'Permanently delete', exact: true }).click();
+  const sidebarNotice = page.locator('[data-workbench-sidebar-notice]');
+  const deleteFailure = 'Could not delete this session. Check that it has finished and try again.';
+  await sidebarNotice.getByRole('alert').getByText(deleteFailure).waitFor();
+  assert.equal(await tree.getByText(deleteFailure).count(), 0);
+  assert.equal((await alpha.boundingBox()).y, alphaTop, 'feedback does not move the session list');
+  if (process.env.DSH_TEST_ARTIFACTS) await sidebarNotice.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'sidebar-delete-notice.png') });
+  await sidebarNotice.getByRole('button', { name: 'Close', exact: true }).click();
+  await sidebarNotice.waitFor({ state: 'detached' });
   await recordMessage('schedule-clock-fixture', 'pause');
   await scheduledMark(alpha).waitFor({ state: 'detached' });
   await recordMessage('schedule-clock-fixture', 'resume');
@@ -1577,7 +1607,9 @@ try {
   await archivedCold.waitFor({ state: 'detached' });
   await assert.rejects(access(dirname(locations.cold)), { code: 'ENOENT' });
   await confirmDelete(live, true);
-  await tree.getByText('This session will be permanently deleted the next time DSH starts.', { exact: true }).waitFor();
+  await sidebarNotice.getByRole('status').getByText('This session will be permanently deleted the next time DSH starts.', { exact: true }).waitFor();
+  await sidebarNotice.getByRole('button', { name: 'Close', exact: true }).click();
+  await sidebarNotice.waitFor({ state: 'detached' });
   await access(locations.live);
   const deletionPort = new URL(host.url).port;
   await host.stop();

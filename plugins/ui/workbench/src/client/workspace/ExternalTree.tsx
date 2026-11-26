@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { ExternalSession, ExternalSnapshot, SessionSources } from '../integration/sessionSources.js';
 import type { WorkspaceTreeProps } from './WorkspaceTree.js';
+import { SidebarNotice } from './SidebarNotice.js';
 
 interface Folder { path: string; sessions: ExternalSession[] }
 interface Project { id: string | null; name: string; folders: Map<string, Folder> }
@@ -62,7 +63,7 @@ export function ExternalTree({ source, wide, expandSidebar, useSectionScroller, 
   if (!wide) return <button type="button" className="wb-tree-action wb-tree-compact" aria-label={t('projects')}
     title={t('projects')} onClick={expandSidebar}>▤</button>;
   return <div ref={bindScrollerRef} className="wb-tree" data-workbench-external-tree aria-label={t('codexProjects')}>
-    {error && <p className="wb-tree-error" role="alert">{t('externalOpenFailed')}</p>}
+    {error && <SidebarNotice message={t('externalOpenFailed')} closeLabel={t('close')} onClose={() => setError(false)} />}
     {!projects.length && <p className="wb-tree-error">{t('externalEmpty')}</p>}
     {projects.map(project => <Branch key={project.id ?? 'unassigned'} title={project.name || t('unassignedCodex')}
       depth={0} kind="project">

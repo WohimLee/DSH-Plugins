@@ -69,7 +69,7 @@ ${darwinHeading} { padding-block-start: calc(25px + var(--dsh-frame-top-clearanc
 .wb-scheduled-paused summary::-webkit-details-marker { display: none; }
 .wb-scheduled-paused summary svg { width: 13px; height: 13px; transform: rotate(-90deg); }
 .wb-scheduled-paused[open] summary svg { transform: none; }
-.wb-scheduled-paused p, .wb-scheduled-message { font-size: 12px; padding-inline: 8px; color: var(--dsw-alias-label-secondary); }
+.wb-scheduled-paused p { font-size: 12px; padding-inline: 8px; color: var(--dsw-alias-label-secondary); }
 .wb-scheduled-item { position: relative; }
 .wb-scheduled-navigation .wb-scheduled-row {
   display: grid;

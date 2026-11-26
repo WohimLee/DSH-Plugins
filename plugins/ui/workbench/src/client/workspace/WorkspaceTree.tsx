@@ -18,6 +18,7 @@ import { InlineName } from './InlineName.js';
 import { RenameSessionDialog } from './RenameSessionDialog.js';
 import { RemoveProjectDialog } from './RemoveProjectDialog.js';
 import { RowMenu } from './RowMenu.js';
+import { SidebarNotice } from './SidebarNotice.js';
 import type { MenuEntry, MenuTarget } from './RowMenu.js';
 import type { Draft, Drafts } from './drafts.js';
 import type { WorkspaceCommands } from './commands.js';
@@ -111,8 +112,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   const canRemoveWorkspace = useRemoteAccess('workspace/delete');
   const { bindScrollerRef } = useSectionScroller();
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [error, setError] = useState<'saveFailed' | 'pinFailed' | 'invalidMove' | 'actionFailed' | 'deleteFailed'>();
-  const [deletePending, setDeletePending] = useState(false);
+  const [notice, setNotice] = useState<'saveFailed' | 'pinFailed' | 'invalidMove' | 'actionFailed' | 'deleteFailed' | 'deletePending'>();
   const deleting = useRef(new Set<SessionId>());
   const recentsButton = useRef<HTMLButtonElement>(null);
   const [pinning, setPinning] = useState<string>();
@@ -151,12 +151,12 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     return next;
   });
   const save = (change: (current: TreeState) => TreeState) => {
-    try { updateTree(change); setError(undefined); return true; }
-    catch { setError('saveFailed'); return false; }
+    try { updateTree(change); setNotice(undefined); return true; }
+    catch { setNotice('saveFailed'); return false; }
   };
   const report = (execute: () => Promise<unknown>) => {
-    setError(undefined);
-    void execute().catch(() => setError('actionFailed'));
+    setNotice(undefined);
+    void execute().catch(() => setNotice('actionFailed'));
   };
   const createProject = async (parent: string, title: string, [root, ...extraFolders]: string[]) => {
     if (workspaces.items.some(project => project.title === title)) return 'projectNameTaken' as const;
@@ -211,7 +211,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     }
     if (source.kind === 'project') {
       const next = moveProject(tree, source.id, parent, projectIds, position);
-      if (next === tree) { setError('invalidMove'); return; }
+      if (next === tree) { setNotice('invalidMove'); return; }
       save(current => moveProject(current, source.id, parent, projectIds, position));
     } else {
       const samePinGroup = !position || pins.has(source.id) === pins.has(position.id);
@@ -229,8 +229,8 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     const pin = !pins.has(id);
     try {
       await setPinned(id, pin);
-      setError(undefined);
-    } catch { setError('pinFailed'); }
+      setNotice(undefined);
+    } catch { setNotice('pinFailed'); }
     finally {
       pinInFlight.current = false;
       setPinning(undefined);
@@ -249,12 +249,11 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
       const { id } = session;
       if (deleting.current.has(id) || !window.confirm(`${t('deleteConfirm')}\n\n${session.displayTitle}`)) return;
       deleting.current.add(id);
-      setError(undefined);
-      setDeletePending(false);
+      setNotice(undefined);
       void commands.deleteSession(id).then(result => {
-        if (result === 'restart-required') { setDeletePending(true); return; }
+        if (result === 'restart-required') { setNotice('deletePending'); return; }
         forgetDeletedSessions(new Set([id]));
-      }).catch(() => setError('deleteFailed')).finally(() => deleting.current.delete(id));
+      }).catch(() => setNotice('deleteFailed')).finally(() => deleting.current.delete(id));
     } : undefined,
   });
 
@@ -340,7 +339,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         const result = await commands.deleteSession(id);
         if (result === 'deleted') deleted.add(id);
         else {
-          setDeletePending(true);
+          setNotice('deletePending');
           if (!latestArchived.current.has(id)) await commands.archiveSession(id);
         }
       }
@@ -372,7 +371,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
         report(async () => {
           const results = await Promise.allSettled((chatGroups.get(id) ?? []).filter(chat => !archived.has(chat as SessionId))
             .map(chat => commands.archiveSession(chat as SessionId)));
-          if (results.some(result => result.status === 'rejected')) setError('actionFailed');
+          if (results.some(result => result.status === 'rejected')) setNotice('actionFailed');
         });
       } },
       { icon: 'close', divider: true, label: t('removeProject'), danger: true,
@@ -444,9 +443,9 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
   }
   return <>{activityOpen && <ActivityList sessions={sessions} statuses={statuses} archived={archived} unread={tree.unread ?? []}
     active={active} projects={projectNames} scheduledSessions={scheduledSessions} open={openChat} preview={commands.replyPreview} t={t} />}
+    {notice && <SidebarNotice message={t(notice)} closeLabel={t('close')} info={notice === 'deletePending'}
+      onClose={() => setNotice(undefined)} />}
     <div hidden={activityOpen} ref={bindScrollerRef} className="wb-tree" aria-label={t('projects')} data-workbench-tree>
-    {error && <p role="status" className="wb-tree-error">{t(error)}</p>}
-    {deletePending && <p role="status" className="wb-tree-error">{t('deletePending')}</p>}
     {draft && nameSection(draft)}
     {tree.sections.map(section => {
       const isDefault = section.id === defaultSection;
@@ -486,9 +485,9 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
           sessions={workspaceSessions.filter(session => archived.has(session.id))}
           menu={canDeleteSession ? (event, id) => openMenu(event, t('sessionMenu'), [deleteEntry(sessions.byId[id])]) : undefined}
           restore={async id => {
-            setError(undefined);
+            setNotice(undefined);
             try { await commands.unarchiveSession(id); }
-            catch { setError('actionFailed'); }
+            catch { setNotice('actionFailed'); }
           }} />}
       </Fragment>;
     })}
