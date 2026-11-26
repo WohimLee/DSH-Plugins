@@ -28,7 +28,7 @@
 
 | 插件 | 版本 | 用途 | DSH | Web / Desktop / Headless |
 | --- | --- | --- | --- | --- |
-| [dsh-model-picker](../plugins/ui/model-picker/README.md) | 0.2.5 | 为 DSH 提供厂商模型选择、连接管理与账号用量。 | 0.2.2-rc.5 | verified / verified / unsupported |
+| [dsh-model-picker](../plugins/ui/model-picker/README.md) | 0.2.6 | 为 DSH 提供厂商模型选择、连接管理与账号用量。 | 0.2.2-rc.5 | verified / verified / unsupported |
 | [dsh-workbench](../plugins/ui/workbench/README.md) | 0.5.29 | 为 DSH 提供常驻功能栏与 Codex 风格工作台布局，复用原生会话和扩展入口。 | 0.2.2-rc.5 | verified / verified / unsupported |
 
 ## 图像、语音与文档（media）

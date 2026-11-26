@@ -96,7 +96,14 @@ html[data-platform="darwin"] .dsh-model-management {
   border-radius: 10px;
   background: var(--connection-card);
 }
-.dsh-connection-icon { display: block; object-fit: contain; flex: none; width: 24px; height: 24px; }
+.dsh-connection-icon {
+  display: grid; place-items: center; grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  flex: none; width: 24px; height: 24px;
+}
+.dsh-connection-icon > img { display: block; max-width: none; object-fit: contain; }
+.dsh-connection-icon > img[data-light-edge] {
+  filter: drop-shadow(0 0 .65px light-dark(color-mix(in srgb, CanvasText 48%, transparent), transparent));
+}
 .dsh-connection-fallback, .dsh-method-icon {
   display: grid; place-items: center; flex: none; width: 33px; height: 33px;
   border-radius: 9px; background: light-dark(#eee6fc, #362d4a); color: var(--connection-accent);

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.6
+
+- 统一 Overview、侧栏和详情标题的厂商 Logo 光学尺寸，保持 24 CSS px 占位；新增厂商沿用同一校准规则。
+
 ## 0.2.5
 
 - Overview 恢复品牌 Logo、当前账号 Usage 和用量明细。添加厂商下拉箭头增加内距。厂商行 Remove 在确认后解绑适配器管理的账号。Grok 的 Desktop 选项显示 Grok Bot 安装状态。

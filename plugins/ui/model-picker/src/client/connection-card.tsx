@@ -6,16 +6,20 @@ import deepseekIcon from './icons/deepseek.svg';
 import grokIcon from './icons/grok.png';
 import qoderIcon from './icons/qoder.png';
 
-const providerLogos = new Map([
-  ['codex', codexIcon], ['deepseek', deepseekIcon], ['grok', grokIcon], ['qoder', qoderIcon],
+// Image fit boxes, not visible bounds. Keep the surrounding slot at 24px.
+const providerLogos = new Map<string, { src: string; fit: number; lightEdge?: true }>([
+  ['codex', { src: codexIcon, fit: 29 }], // Extra inset around the colored glyph.
+  ['qoder', { src: qoderIcon, fit: 23, lightEdge: true }], // Keep the white tile legible on white.
+  ['deepseek', { src: deepseekIcon, fit: 22 }], // Wide, edge-to-edge silhouette.
+  ['grok', { src: grokIcon, fit: 20 }], // Full-bleed tile.
 ]);
 
 export function ProviderIcon({ id }: { id: string }) {
   const logo = providerLogos.get(id);
-  return logo ? <img className="dsh-connection-icon" src={logo} alt="" width={24} height={24} />
-    : <span className="dsh-connection-icon dsh-connection-fallback">
-      <ManagementIcon name="cable" size={16} />
-    </span>;
+  return <span aria-hidden="true" className={logo ? 'dsh-connection-icon' : 'dsh-connection-icon dsh-connection-fallback'}>
+    {logo ? <img src={logo.src} alt="" data-light-edge={logo.lightEdge ? '' : undefined}
+      style={{ width: logo.fit, height: logo.fit }} /> : <ManagementIcon name="cable" size={16} />}
+  </span>;
 }
 
 export function ConnectionRow({ id, name, status, tone, description, footer, action, open, usage, remove, removeLabel, removeName, removeUnavailable }:

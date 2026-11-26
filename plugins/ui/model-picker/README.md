@@ -30,7 +30,7 @@ Overview 和厂商详情直接显示当前账号的 Usage。连接多个路由�
 ```sh
 pnpm --filter dsh-model-picker check
 pnpm --filter dsh-model-picker pack --pack-destination /tmp
-dsh plugin --profile web add /tmp/dsh-model-picker-0.2.5.tgz
+dsh plugin --profile web add /tmp/dsh-model-picker-0.2.6.tgz
 ```
 
 Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filter dsh-model-picker test:host`，需要本机 Chrome 或 `DSH_TEST_BROWSER_EXECUTABLE`。测试使用合成输入和临时 profile。
@@ -41,7 +41,15 @@ Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filte
 
 需要提供连接表单的适配器可通过 `ctx.slots.inject` 注册 `modelPicker.connections`。它是 root 作用域的 list 插槽，贡献 ID 使用厂商标识。贡献组件通过 `renderCard` 提供摘要，可附上 `connection` 声明连接状态、账号数、各方式的详情与配置内容，并监听 `refresh` 响应刷新。账号凭据由适配器使用宿主支持的机制保存。
 
-新厂商在 [厂商 Logo 映射](src/client/connection-card.tsx)登记厂商素材并随 Client 打包，在 [Usage 读取](src/client/usage.ts)接入每个受支持的账号路由。需要支持厂商行 Remove 时，提供 `removeConnection` 解绑贡献，并在存在宿主管理的连接时标记 `hasExternalConnection`。Codex 和 Qoder 使用 macOS 应用图标。 [DeepSeek 官方品牌素材](https://github.com/deepseek-ai/awesome-deepseek-integration/blob/main/docs/_logo%20svg/ICON.svg) · [App Store 的 Grok 应用图标](https://apps.apple.com/us/app/grok-ai/id6670324846)
+在 [Usage 读取](src/client/usage.ts)接入每个受支持的账号路由。需要支持厂商行 Remove 时，提供 `removeConnection` 解绑贡献，并在存在宿主管理的连接时标记 `hasExternalConnection`。
+
+### 厂商 Logo：统一光学尺寸
+
+1. 选用原始品牌图标，注明来源，随 Client 打包。在 [厂商 Logo 映射](src/client/connection-card.tsx#L9)用厂商 ID 登记 `src` 和 `fit`，由 `ProviderIcon` 统一渲染。
+2. Overview、左侧厂商列表和详情标题共用 **24 × 24 CSS px** 占位。`fit` 是居中的图片适配框，不是可见轮廓尺寸。按图案主体、透明留白、宽高比和底板对比度校准：留白多可放大适配框，铺满的底板可收小，横向标志可比方形标志略宽。保留原始比例、轮廓和颜色，不拉伸、不裁切，也不改变文字起点或行高。白底图标如果在浅色界面失去轮廓，可启用 `lightEdge` 添加极轻的主题描边。
+3. 在实际界面中以原尺寸并排检查新标志与 Codex、Qoder、DeepSeek：深浅主题下均无明显偏大或偏小、无偏心、无裁切；在详情页核对同一标志，并回归窄窗。相同 `width/height` 或外接框面积相等不算验收通过。
+
+现有素材：Codex 和 Qoder 使用 macOS 应用图标。 [DeepSeek 官方品牌素材](https://github.com/deepseek-ai/awesome-deepseek-integration/blob/main/docs/_logo%20svg/ICON.svg) · [App Store 的 Grok 应用图标](https://apps.apple.com/us/app/grok-ai/id6670324846)
 
 ## 源码组织评估
 

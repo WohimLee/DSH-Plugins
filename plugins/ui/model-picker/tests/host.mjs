@@ -314,15 +314,29 @@ globalThis.fetch = async (input, options = {}) => {
   assert.ok(wide.every(row => row.statusLeft > row.titleRight), 'provider status follows the name');
   await codexConnection.getByRole('button', { name: 'Codex usage' }).getByText('Weekly · 62% left', { exact: true }).waitFor();
   await deepseekConnection.getByRole('button', { name: 'DeepSeek usage' }).waitFor();
-  const codexLogo = codexConnection.locator('img');
-  const logoSize = icon => icon.evaluate(image => [image.getBoundingClientRect().width, image.getBoundingClientRect().height]);
-  const logoSrc = await codexLogo.getAttribute('src');
-  assert.equal(await codexLogo.evaluate(image => image.naturalWidth), 96);
-  assert.deepEqual(await logoSize(codexLogo), [24, 24]);
-  const codexNavLogo = nav.getByRole('button', { name: 'Codex', exact: true }).locator('img');
-  assert.equal(await codexNavLogo.getAttribute('src'), logoSrc);
-  assert.deepEqual(await logoSize(codexNavLogo), [24, 24]);
-  assert.ok(await deepseekConnection.locator('img').evaluate(image => image.naturalWidth > 0));
+  const assertLogo = async (surface, fit) => {
+    const logo = surface.locator('.dsh-connection-icon');
+    await logo.waitFor();
+    return logo.evaluate(async (slot, expectedFit) => {
+      const image = slot.querySelector('img');
+      if (!image) throw new Error('Expected a bundled provider logo');
+      await image.decode();
+      const a = slot.getBoundingClientRect();
+      const b = image.getBoundingClientRect();
+      if (a.width !== 24 || a.height !== 24 || b.width !== expectedFit || b.height !== expectedFit
+        || Math.abs(a.left + a.right - b.left - b.right) > 0.05
+        || Math.abs(a.top + a.bottom - b.top - b.bottom) > 0.05
+        || getComputedStyle(image).objectFit !== 'contain') {
+        throw new Error(`Logo geometry: ${a.width}×${a.height} slot, ${b.width}×${b.height} image; expected centered ${expectedFit}px fit`);
+      }
+      return image.getAttribute('src');
+    }, fit);
+  };
+  const codexNav = nav.getByRole('button', { name: 'Codex', exact: true });
+  const logoSrc = await assertLogo(codexConnection, 29);
+  assert.equal(await assertLogo(codexNav, 29), logoSrc);
+  const deepseekLogo = await assertLogo(deepseekConnection, 22);
+  assert.equal(await assertLogo(nav.getByRole('button', { name: 'DeepSeek', exact: true }), 22), deepseekLogo);
   assert.equal(await removeProvider('Codex').getAttribute('aria-disabled'), 'true');
   await page.setViewportSize({ width: 560, height: 900 });
   const narrow = await layout();
@@ -331,9 +345,8 @@ globalThis.fetch = async (input, options = {}) => {
   await openCodex.focus();
   await page.keyboard.press('Enter');
   await management.getByRole('heading', { name: 'Codex', exact: true, level: 1 }).waitFor();
-  const detailLogo = management.locator('.dsh-provider-header img');
-  assert.equal(await detailLogo.getAttribute('src'), logoSrc);
-  assert.deepEqual(await logoSize(detailLogo), [24, 24]);
+  const detailHeader = management.locator('.dsh-provider-header');
+  assert.equal(await assertLogo(detailHeader, 29), logoSrc);
   assert.equal(await nav.getByRole('button', { name: 'Codex', exact: true }).getAttribute('aria-current'), 'page');
   await management.getByRole('region', { name: 'Desktop', exact: true }).getByText('Signed in', { exact: true }).waitFor();
   await overview.click();
@@ -375,6 +388,7 @@ globalThis.fetch = async (input, options = {}) => {
   assert.ok(await connectedCodex.evaluate(summary => summary.parentElement.open && document.activeElement === summary),
     'the catalog shortcut opens and focuses the selected provider');
   await nav.getByRole('button', { name: 'DeepSeek', exact: true }).click();
+  assert.equal(await assertLogo(detailHeader, 22), deepseekLogo);
   await usage.getByRole('button', { name: 'DeepSeek usage' }).hover();
   await usage.getByRole('tooltip').getByText(/Bonus balance.*7\.00/).waitFor();
   await usage.getByRole('tooltip').getByText(/Account balance.*23\.48/).waitFor();
@@ -395,6 +409,7 @@ globalThis.fetch = async (input, options = {}) => {
   await qoderAddForm.getByRole('button', { name: 'Bind account' }).click();
   await management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 }).waitFor();
   const qoderTitle = management.getByRole('heading', { name: 'Qoder', exact: true, level: 1 });
+  const qoderDetailLogo = await assertLogo(detailHeader, 23);
   assert.deepEqual(await headingStyle(qoderTitle), ['20px', '28px', '500']);
   assert.equal((await overview.boundingBox()).y, overviewTop, 'provider details keep navigation in place');
   await page.setViewportSize({ width: 390, height: 815 });
@@ -429,12 +444,23 @@ globalThis.fetch = async (input, options = {}) => {
   const manageQoder = qoderConnection.getByRole('button', { name: 'Manage accounts' });
   await qoderConnection.getByText('Connected', { exact: true }).waitFor();
   assert.equal(await managedQoder.isVisible(), false);
-  assert.equal(await qoderConnection.locator('img').evaluate(image => image.naturalWidth), 96);
+  const qoderLogo = await assertLogo(qoderConnection, 23);
+  const qoderNav = nav.getByRole('button', { name: 'Qoder', exact: true });
+  assert.equal(await assertLogo(qoderNav, 23), qoderLogo);
+  assert.equal(qoderLogo, qoderDetailLogo);
   await qoderConnection.getByRole('button', { name: 'Qoder usage' })
     .getByText('Plan · 60 / 300 Credits left', { exact: true }).waitFor();
   if (process.env.DSH_TEST_ARTIFACTS) {
     await mkdir(process.env.DSH_TEST_ARTIFACTS, { recursive: true });
     await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management.png') });
+    for (const colorScheme of ['dark', 'light']) {
+      await page.emulateMedia({ colorScheme });
+      await nav.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, `provider-logos-nav-${colorScheme}.png`) });
+      await management.locator('.dsh-connection-list').screenshot({
+        path: join(process.env.DSH_TEST_ARTIFACTS, `provider-logos-overview-${colorScheme}.png`),
+      });
+    }
+    await page.emulateMedia({ colorScheme: 'dark' });
     await openCodex.click();
     await codexUsage.hover();
     await management.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'model-management-usage.png') });
