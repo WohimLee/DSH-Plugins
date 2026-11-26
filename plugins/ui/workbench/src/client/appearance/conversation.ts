@@ -56,6 +56,41 @@ html[data-dsh-workbench] body[data-ds-dark-theme] [data-conversation-content] [d
   }
 }
 
+/* Scope the question layout to the generic host card. The plan-review card
+   and normal composer have separate surfaces. */
+html[data-dsh-workbench] [data-question-key] > section {
+  container: wb-question / inline-size;
+}
+html[data-dsh-workbench] [data-question-key] > section > header:has(+ [data-question-scroll]) {
+  padding-block-start: 16px;
+}
+html[data-dsh-workbench] [data-question-key] [data-question-scroll] > div:has(> h2:first-child) {
+  margin-block-start: 2px;
+}
+html[data-dsh-workbench] [data-question-key] > section > header h2,
+html[data-dsh-workbench] [data-question-key] [data-question-scroll] > div > h2:first-child {
+  font-size: 14px;
+  line-height: 20px;
+}
+html[data-dsh-workbench] [data-question-key] [data-option-description] {
+  font-size: 14px;
+}
+html[data-dsh-workbench] [data-question-key] [data-option-row] > button > span:has(> [data-option-line]) {
+  column-gap: 8px;
+}
+html[data-dsh-workbench] [data-question-key] [data-wb-single-question-pager] { display: none; }
+@container wb-question (max-width: 512px) {
+  html[data-dsh-workbench] [data-question-key] [data-option-row] > button > span:has(> [data-option-line]) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+@media (max-width: 720px) {
+  html[data-dsh-workbench] [data-question-key] > section > header:has(+ [data-question-scroll]) {
+    padding-block-start: 10px;
+  }
+}
+
 html[data-dsh-workbench] [data-changed-files] {
   /* The single-file header is the trigger inside a native HoverCard. */
   & > button:not([aria-expanded]),

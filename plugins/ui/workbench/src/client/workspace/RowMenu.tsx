@@ -4,11 +4,11 @@ import { createPortal } from 'react-dom';
 
 export type MenuEntry = {
   label: string; icon?: Icon; shortcut?: { label: string; aria: string }; divider?: boolean;
-  run?: () => void; children?: readonly MenuEntry[]; danger?: boolean;
+  run?: () => void; children?: readonly MenuEntry[]; danger?: boolean; disabledReason?: string;
 };
-export interface MenuTarget { x: number; y: number; restore: HTMLElement; label: string; entries: readonly MenuEntry[] }
+export interface MenuTarget { x: number; y: number; align?: 'end'; restore: HTMLElement; label: string; entries: readonly MenuEntry[] }
 
-interface MenuAnchor { x: number; y: number; parent?: HTMLButtonElement }
+interface MenuAnchor { x: number; y: number; align?: 'end'; parent?: HTMLButtonElement }
 
 function MenuPanel({ label, entries, anchor, autoFocus, unavailable, onBack, onClose }: {
   label: string; entries: readonly MenuEntry[]; anchor: MenuAnchor; autoFocus: boolean;
@@ -23,7 +23,8 @@ function MenuPanel({ label, entries, anchor, autoFocus, unavailable, onBack, onC
     const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     const { width, height } = element.getBoundingClientRect();
     const parent = anchor.parent?.getBoundingClientRect();
-    const x = parent && parent.right + width > window.innerWidth - 4 ? parent.left - width : parent?.right ?? anchor.x;
+    const start = anchor.align === 'end' ? anchor.x - width : anchor.x;
+    const x = parent && parent.right + width > window.innerWidth - 4 ? parent.left - width : parent?.right ?? start;
     const y = parent?.top ?? anchor.y;
     element.style.left = Math.max(4, Math.min(x, window.innerWidth - width - 4)) / zoom + 'px';
     element.style.top = Math.max(4, Math.min(y, window.innerHeight - height - 4)) / zoom + 'px';
@@ -78,7 +79,8 @@ function MenuPanel({ label, entries, anchor, autoFocus, unavailable, onBack, onC
           aria-haspopup={entry.children?.length ? 'menu' : undefined}
           aria-keyshortcuts={entry.shortcut?.aria}
           aria-expanded={entry.children?.length ? submenu?.entry === entry : undefined}
-          title={!entry.run && !entry.children?.length ? unavailable : undefined}
+          aria-description={entry.disabledReason}
+          title={!entry.run && !entry.children?.length ? entry.disabledReason ?? unavailable : undefined}
           data-danger={entry.danger || undefined}
           onPointerEnter={event => { if (event.pointerType === 'mouse') openChild(entry, event.currentTarget, false); }}
           onClick={event => {

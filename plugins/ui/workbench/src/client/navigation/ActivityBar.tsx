@@ -5,6 +5,7 @@ import { ScheduledNavigation } from './ScheduledNavigation.js';
 import { installSidebarResize } from '../appearance/sidebar.js';
 import type { NativeScheduleText } from './scheduled-native.js';
 import type { ScheduledTasks } from './scheduled-source.js';
+import type { scheduleAction } from './scheduled-actions.js';
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client';
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
@@ -16,6 +17,7 @@ interface ActivityInjected {
   selectPanel: (id: MainPanelId | null) => void;
   openPluginsList: () => boolean;
   nativeScheduleText: NativeScheduleText;
+  scheduleAction: ReturnType<typeof scheduleAction>;
   hooks: { panels: HostObservable<readonly PanelEntry[]>; scheduledTasks: HostObservable<ScheduledTasks> };
 }
 export type ActivityBarProps = PropsRuntime<'shell.overlay'> & PropsRenderFactories & PropsLocale<'workbench'> & InjectFace<ActivityInjected>;
@@ -28,7 +30,7 @@ function HomeIcon() {
 }
 
 export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsList, renderFactorySlot, t,
-  useScheduledTasks, nativeScheduleText }: ActivityBarProps) {
+  useScheduledTasks, nativeScheduleText, scheduleAction, useRemoteAccess }: ActivityBarProps) {
   const rail = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const frame = rail.current?.closest<HTMLElement>('[data-slot="root"] > div');
@@ -60,6 +62,6 @@ export function ActivityBar({ usePanels, usePanelInfo, selectPanel, openPluginsL
       </div>
     </nav>
     {plugins && <PluginsNavigation label={plugins.label} openList={openPluginsList} t={t} />}
-    {scheduled && <ScheduledNavigation {...{ t, useScheduledTasks }} nativeText={nativeScheduleText} />}
+    {scheduled && <ScheduledNavigation {...{ t, useScheduledTasks, scheduleAction, useRemoteAccess }} nativeText={nativeScheduleText} />}
   </>;
 }
