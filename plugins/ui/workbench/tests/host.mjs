@@ -728,6 +728,29 @@ try {
     const { fontFamily, fontSize } = getComputedStyle(node);
     return [fontFamily, fontSize];
   }), ['ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace', '12.25px']);
+  const assistantCode = page.locator('[data-conversation-content] [data-chat-flow-kind="assistant-step"] [data-code-block-content]');
+  const codeFontFamily = await inlineCode.evaluate(node => getComputedStyle(node).fontFamily);
+  for (const [name, code] of [
+    ['plain', assistantCode.locator('pre > code').filter({ hasText: 'workspace/' })],
+    ['highlighted', assistantCode.locator('pre.shiki > code').filter({ hasText: 'const sample' })],
+  ]) {
+    await code.waitFor();
+    const typography = await code.evaluate(node => {
+      const { fontFamily, fontSize, lineHeight } = getComputedStyle(node);
+      return { fontFamily, fontSize, lineHeight };
+    });
+    if (process.env.DSH_TEST_ARTIFACTS) {
+      console.log(`Assistant ${name} code block typography:`, typography);
+      await code.locator('xpath=ancestor::*[@data-code-wrap][1]').screenshot({
+        path: join(process.env.DSH_TEST_ARTIFACTS, `assistant-code-block-${name}.png`),
+      });
+    }
+    assert.deepEqual(typography, {
+      fontFamily: codeFontFamily,
+      fontSize: '12px', lineHeight: '20px',
+    }, 'assistant code blocks use Codex typography with a 15px host code preference');
+  }
+  console.log('PASS assistant code block typography for plain and highlighted fences.');
   const duration = page.getByRole('button', { name: /^Completed in / });
   await duration.waitFor();
   if (process.env.DSH_TEST_ARTIFACTS) {

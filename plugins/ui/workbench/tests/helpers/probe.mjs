@@ -28,6 +28,21 @@ export async function createProbe(temp, runtimeVersion) {
     { insert: [{ id: 'dsh-workbench-probe:main', name: pkg.name,
       config: { path: workspace, activity: join(temp, 'activity'), deletionPath, deletionLocations: join(temp, 'deletion-locations.json') } }] },
   ]));
+  const assistantMarkdown = [
+    'Activity preview fixture',
+    '',
+    '校准示例：`main` 里的项目与会话。',
+    '',
+    '```',
+    'workspace/',
+    '├── README.md  # 仓库入口',
+    '└── src/       # 源代码',
+    '```',
+    '',
+    '```javascript',
+    'const sample = "项目与会话";',
+    '```',
+  ].join('\n');
   await writeFile(join(directory, 'lib/index.js'), `
 import { readFileSync, unwatchFile, watchFile } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
@@ -62,7 +77,7 @@ export async function apply(ctx, config) {
         ['step/end', { turn: 1, step: 1 }],
         ['step/start', { turn: 1, step: 2 }],
         ['assistant/message', { turn: 1, step: 2, usage: { inputTokens: 4, outputTokens: 2 }, stream: [], message: { id: randomUUID(), role: 'assistant',
-          content: [{ type: 'text', text: 'Activity preview fixture\\n\\n校准示例：\`main\` 里的项目与会话。' }, imageContent], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
+          content: [{ type: 'text', text: ${JSON.stringify(assistantMarkdown)} }, imageContent], source: { kind: 'model', provider: 'fixture', model: 'Fixture model' } } }, { surfaceOp: 'append' }],
         ['step/end', { turn: 1, step: 2 }],
         ['workspace/changes', { turn: 1 }],
       ] : []),

@@ -8,6 +8,7 @@ html[data-dsh-workbench] [data-conversation-content] {
 }
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] {
   --dsw-font-markdown-base: var(--wb-message-size) / var(--wb-message-leading) var(--wb-conversation-font);
+  --dsw-font-markdown-code-block: 12px / 20px var(--wb-conversation-mono);
   --dsw-font-markdown-h1: 600 calc(var(--wb-message-size) + 5px) / 1.4 var(--wb-conversation-font);
   --dsw-font-markdown-h2: 600 calc(var(--wb-message-size) + 3px) / 1.4 var(--wb-conversation-font);
   --dsw-font-markdown-h3: 600 calc(var(--wb-message-size) + 1px) / 1.4 var(--wb-conversation-font);
@@ -26,6 +27,10 @@ html[data-dsh-workbench] [data-conversation-content] {
 [data-conversation-content] [data-chat-flow-kind="assistant-step"] :not(pre) > code {
   font-family: var(--wb-conversation-mono);
   font-size: 12.25px;
+}
+[data-conversation-content] [data-chat-flow-kind="assistant-step"] [data-code-block-content] {
+  /* The host Markdown pre rule reads the code family separately. */
+  --ds-font-family-code: var(--wb-conversation-mono);
 }
 /* On rc.5 only completed timing labels have nested duration spans. */
 html[data-dsh-workbench] [data-conversation-content] [data-turn-process]:is([data-has-duration], :has(> span > span)) {
