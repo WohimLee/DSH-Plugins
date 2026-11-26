@@ -1,5 +1,5 @@
 import { Glyph, type Icon } from './Glyph.js';
-import { ActivityList, StatusMark } from './ActivityList.js';
+import { ActivityList, ScheduledMark, StatusMark } from './ActivityList.js';
 import { ArchivedSection } from './ArchivedSection.js';
 import { ProjectDialog } from './ProjectDialog.js';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,6 +21,7 @@ import { RowMenu } from './RowMenu.js';
 import type { MenuEntry, MenuTarget } from './RowMenu.js';
 import type { Draft, Drafts } from './drafts.js';
 import type { WorkspaceCommands } from './commands.js';
+import { activeScheduledSessionIds, type ScheduledTasks } from '../navigation/scheduled-source.js';
 
 const visibleLimit = 10;
 const rootSection = 'sections';
@@ -33,7 +34,7 @@ type Actions = {
   commands: WorkspaceCommands;
   drafts: Drafts;
   setPinned: (session: SessionId, pin: boolean) => Promise<void>;
-  hooks: { tree: HostObservable<TreeState>; draft: Drafts; activity: HostObservable<boolean> };
+  hooks: { tree: HostObservable<TreeState>; draft: Drafts; activity: HostObservable<boolean>; scheduledTasks: HostObservable<ScheduledTasks> };
 };
 export type WorkspaceTreeProps = PropsRuntime<'sidebar.workspaces'> & PropsRenderFactories & PropsLocale<'workbench'> & InjectFace<Actions>;
 
@@ -58,9 +59,9 @@ function ProjectChildren({ project, children, sessions, showMoreLabel, depth }: 
   </div>;
 }
 
-function SessionItem({ session, running, selected, depth, pinned, busy, unread, dragProps, drop, open, toggle, menu, t, useSessionAccess }: {
+function SessionItem({ session, running, selected, depth, pinned, busy, unread, scheduled, dragProps, drop, open, toggle, menu, t, useSessionAccess }: {
   session: ReturnType<Context['sessions']['list']['getSnapshot']>['byId'][SessionId];
-  running: boolean; selected: boolean; depth: number; pinned: boolean; busy: boolean; unread: boolean;
+  running: boolean; selected: boolean; depth: number; pinned: boolean; busy: boolean; unread: boolean; scheduled: boolean;
   dragProps: React.HTMLAttributes<HTMLDivElement>; drop?: string;
   open: () => void; toggle: () => void; menu: (event: MouseEvent) => void;
   t: WorkspaceTreeProps['t']; useSessionAccess: WorkspaceTreeProps['useSessionAccess'];
@@ -72,6 +73,7 @@ function SessionItem({ session, running, selected, depth, pinned, busy, unread, 
       aria-label={session.displayTitle} aria-description={unread ? t('unread') : undefined} title={session.displayTitle} onClick={open}>
       <span>{session.displayTitle}</span>
     </button>
+    {scheduled && <ScheduledMark t={t} />}
     {!running && <StatusMark running={false} unread={unread} t={t} />}
     <div className="wb-tree-actions">
       <Action label={t('sessionMenu')} icon="more" run={menu} />
@@ -82,9 +84,11 @@ function SessionItem({ session, running, selected, depth, pinned, busy, unread, 
 }
 
 export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree, useSessions, useWorkspaces,
-  usePanelInfo, useActivity, useSessionStatus, useRemoteAccess, openSession, commands, drafts, useDraft, setPinned, useSessionAccess, updateTree, t }: WorkspaceTreeProps) {
+  usePanelInfo, useActivity, useSessionStatus, useScheduledTasks, useRemoteAccess, openSession, commands, drafts, useDraft, setPinned, useSessionAccess, updateTree, t }: WorkspaceTreeProps) {
   const tree = useTree(state => state);
   const activityOpen = useActivity(value => value);
+  const tasks = useScheduledTasks(value => value);
+  const scheduledSessions = useMemo(() => activeScheduledSessionIds(tasks), [tasks]);
   const statuses = useSessionStatus(value => value);
   const draft = useDraft(value => value);
   const [menu, setMenu] = useState<MenuTarget>();
@@ -305,6 +309,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     .filter(session => !archived.has(session.id) && (!session.blank || session.title))
     .map(session => <SessionItem key={session.id} session={session} selected={session.id === active && onConversation}
         running={statuses.get(session.id)?.running ?? session.running} depth={depth} pinned={pins.has(session.id)} busy={pinning !== undefined} unread={tree.unread?.includes(session.id) ?? false}
+        scheduled={scheduledSessions.has(session.id)}
         dragProps={drag.row({ kind: 'session', id: session.id, parent: project })}
         drop={drag.highlight?.id === session.id ? drag.highlight.placement : undefined}
         menu={event => openMenu(event, t('sessionMenu'), sessionMenu(session.id, project))}
@@ -438,7 +443,7 @@ export function WorkspaceTree({ wide, expandSidebar, useSectionScroller, useTree
     for (const id of ids) projectNames.set(id, projects.get(project)?.title ?? t('ungrouped'));
   }
   return <>{activityOpen && <ActivityList sessions={sessions} statuses={statuses} archived={archived} unread={tree.unread ?? []}
-    active={active} projects={projectNames} open={openChat} preview={commands.replyPreview} t={t} />}
+    active={active} projects={projectNames} scheduledSessions={scheduledSessions} open={openChat} preview={commands.replyPreview} t={t} />}
     <div hidden={activityOpen} ref={bindScrollerRef} className="wb-tree" aria-label={t('projects')} data-workbench-tree>
     {error && <p role="status" className="wb-tree-error">{t(error)}</p>}
     {deletePending && <p role="status" className="wb-tree-error">{t('deletePending')}</p>}

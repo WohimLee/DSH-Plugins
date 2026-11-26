@@ -32,7 +32,7 @@ export async function createProbe(temp, runtimeVersion) {
 import { readFileSync, unwatchFile, watchFile } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions', 'sessionPersistence', 'attachments'];
+export const inject = ['workspaceController', 'sessionController', 'agents', 'sessions', 'sessionPersistence', 'attachments', 'schedule', 'userQuestions'];
 export async function apply(ctx, config) {
   const { workspace } = await ctx.workspaceController.create({ path: config.path });
   const image = await ctx.attachments.saveImage({
@@ -104,8 +104,39 @@ export async function apply(ctx, config) {
       ctx.emit('agent/status', { agent, status: agent.status });
     }
   };
+  let scheduledFixture;
+  async function updateScheduledFixture(action) {
+    if (action === 'create') {
+      scheduledFixture = await ctx.schedule.create({
+        title: 'Session clock fixture', prompt: 'Future test task.',
+        timing: { kind: 'at', at: new Date(Date.now() + 24 * 60 * 60_000).toISOString() },
+        target: { kind: 'session', sessionId: 'workbench-test-alpha' },
+      });
+    } else if (scheduledFixture) {
+      await ctx.schedule.edit(action === 'delete'
+        ? { id: scheduledFixture.id, action: 'delete' }
+        : { id: scheduledFixture.id, action: 'update', patch: { active: action === 'resume' } });
+    }
+  }
   const recordActivity = () => {
     const { id, text } = JSON.parse(readFileSync(config.activity, 'utf8'));
+    if (id === 'schedule-clock-fixture') {
+      void updateScheduledFixture(text).catch(error => ctx.logger.warn('Scheduled clock fixture failed: %s', error));
+      return;
+    }
+    if (id === 'question-card-fixture') {
+      const agent = ctx.agents.get('workbench-test-alpha');
+      const options = [
+        { label: 'Personal', description: 'Use the personal account.' },
+        { label: 'Work', description: 'Use the work account.' },
+      ];
+      const questions = [{ id: 'account', header: '账号', question: '选择用于本次操作的账号', options }];
+      if (text === 'batch') questions.push({ id: 'backup', question: 'Choose backup accounts', multiSelect: true, options });
+      void ctx.userQuestions.ask({ agent, questions })
+        .then(answer => writeFile(config.activity + '.answer', JSON.stringify(answer)))
+        .catch(error => ctx.logger.warn('Question card fixture failed: %s', error));
+      return;
+    }
     if (id === 'running-fixture') {
       const agent = ctx.agents.get('workbench-test-beta');
       if (!agent) return;

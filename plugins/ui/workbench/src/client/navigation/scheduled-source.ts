@@ -8,7 +8,18 @@ type Catalog = Extract<CatalogResult, { ok: true }>['value'];
 export type ScheduledTask = Catalog[number];
 export type ScheduledTasks = readonly ScheduledTask[];
 
-/** Follow the authorized catalog while the Scheduled sidebar is mounted. */
+export function activeScheduledSessionIds(tasks: ScheduledTasks): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const task of tasks) {
+    if (task.status !== 'active') continue;
+    for (const id of task.involvedSessionIds) ids.add(id);
+    const target = task.target.kind === 'new' ? task.lastDelivery?.targetSessionId : task.target.sessionId;
+    if (target) ids.add(target);
+  }
+  return ids;
+}
+
+/** Follow the authorized catalog while a Workbench view is subscribed. */
 export function scheduledSource(ctx: Context): HostObservable<ScheduledTasks> {
   let snapshot: ScheduledTasks = [];
   let refresh: (() => void) | undefined;

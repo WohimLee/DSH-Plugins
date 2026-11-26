@@ -127,7 +127,15 @@ export const workspaceStyles = `
 .wb-activity-line small { max-width: 40%; }
 .wb-activity-line small, .wb-activity-preview { color: var(--dsw-alias-label-secondary, #999); }
 .wb-activity-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; margin-top: 3px; }
-.wb-status-running, .wb-status-unread { margin-inline-end: 6px; }
+.wb-status-running, .wb-status-unread, .wb-status-scheduled { margin-inline-end: 6px; }
+.wb-status-scheduled {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  inline-size: 14px;
+  color: var(--dsw-alias-label-secondary, #999);
+}
+.wb-status-scheduled svg { inline-size: 100%; block-size: 14px; }
 .wb-status-running {
   flex: none;
   inline-size: 11px;

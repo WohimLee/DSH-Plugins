@@ -16,8 +16,18 @@ export function StatusMark({ running, unread, t }: { running: boolean; unread: b
   return unread ? <span role="img" className="wb-status-unread" aria-label={t('unread')} /> : null;
 }
 
-function ActivityRow({ chat, project, running, unread, active, preview, open, t }: {
-  chat: Chat; project?: string; running: boolean; unread: boolean; active: boolean;
+export function ScheduledMark({ t }: { t: Translator }) {
+  const label = t('sessionScheduled');
+  return <span role="img" className="wb-status-scheduled" aria-label={label} title={label}>
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+      <circle cx="8" cy="8" r="5.8" />
+      <path d="M8 4.5V8l-1.9 1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </span>;
+}
+
+function ActivityRow({ chat, project, running, unread, active, scheduled, preview, open, t }: {
+  chat: Chat; project?: string; running: boolean; unread: boolean; active: boolean; scheduled: boolean;
   preview: WorkspaceCommands['replyPreview']; open: (id: SessionId) => void; t: Translator;
 }) {
   const row = useRef<HTMLButtonElement>(null);
@@ -36,15 +46,15 @@ function ActivityRow({ chat, project, running, unread, active, preview, open, t 
   }, [chat.id, chat.updatedAt, running, preview]);
   return <button ref={row} className="wb-activity-row" aria-current={active || undefined} onClick={() => open(chat.id)}>
     <span className="wb-activity-line"><span title={chat.displayTitle}>{chat.displayTitle}</span>
-      <small title={project}>{project}</small><StatusMark running={running} unread={unread} t={t} />
+      <small title={project}>{project}</small>{scheduled && <ScheduledMark t={t} />}<StatusMark running={running} unread={unread} t={t} />
     </span>
     {text && <span className="wb-activity-preview">{text}</span>}
   </button>;
 }
 
-export function ActivityList({ sessions, statuses, archived, unread, active, projects, open, preview, t }: {
+export function ActivityList({ sessions, statuses, archived, unread, active, projects, scheduledSessions, open, preview, t }: {
   sessions: SessionListState; statuses: SessionStatusSnapshot; archived: ReadonlySet<SessionId>;
-  unread: readonly string[]; active?: SessionId; projects: ReadonlyMap<string, string>;
+  unread: readonly string[]; active?: SessionId; projects: ReadonlyMap<string, string>; scheduledSessions: ReadonlySet<string>;
   open: (id: SessionId) => void; preview: WorkspaceCommands['replyPreview']; t: Translator;
 }) {
   const groups = new Map<string, Chat[]>();
@@ -69,7 +79,7 @@ export function ActivityList({ sessions, statuses, archived, unread, active, pro
       <h3>{label}</h3>
       {chats.map(chat => <ActivityRow key={chat.id} chat={chat} project={projects.get(chat.id) ?? t('ungrouped')}
         running={statuses.get(chat.id)?.running ?? chat.running} unread={unread.includes(chat.id)}
-        active={chat.id === active} open={open} preview={preview} t={t} />)}
+        active={chat.id === active} scheduled={scheduledSessions.has(chat.id)} open={open} preview={preview} t={t} />)}
     </section>)}
   </div>;
 }

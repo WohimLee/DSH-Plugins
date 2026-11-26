@@ -1,4 +1,5 @@
 import { stylesheet } from './styles.js';
+import { installQuestionCards } from './question-card.js';
 
 /** All document changes belong to the plugin lifetime. */
 export function installAppearance(doc: Document | undefined = typeof document === 'undefined' ? undefined : document): () => void {
@@ -10,7 +11,9 @@ export function installAppearance(doc: Document | undefined = typeof document ==
   style.textContent = stylesheet;
   doc.head.append(style);
   root.setAttribute('data-dsh-workbench', 'true');
+  const disposeQuestionCards = installQuestionCards(doc);
   return () => {
+    disposeQuestionCards();
     style.remove();
     if (root.getAttribute('data-dsh-workbench') !== 'true') return;
     if (previous === null) root.removeAttribute('data-dsh-workbench');

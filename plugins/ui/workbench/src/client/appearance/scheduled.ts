@@ -69,7 +69,8 @@ ${darwinHeading} { padding-block-start: calc(25px + var(--dsh-frame-top-clearanc
 .wb-scheduled-paused summary::-webkit-details-marker { display: none; }
 .wb-scheduled-paused summary svg { width: 13px; height: 13px; transform: rotate(-90deg); }
 .wb-scheduled-paused[open] summary svg { transform: none; }
-.wb-scheduled-paused p { font-size: 12px; padding-inline: 8px; color: var(--dsw-alias-label-secondary); }
+.wb-scheduled-paused p, .wb-scheduled-message { font-size: 12px; padding-inline: 8px; color: var(--dsw-alias-label-secondary); }
+.wb-scheduled-item { position: relative; }
 .wb-scheduled-navigation .wb-scheduled-row {
   display: grid;
   grid-template-rows: 20px 16px;
@@ -79,6 +80,32 @@ ${darwinHeading} { padding-block-start: calc(25px + var(--dsh-frame-top-clearanc
   min-block-size: 49px;
   box-sizing: border-box;
   padding-block: 5px 6px;
+  padding-inline-end: 40px;
+}
+.wb-scheduled-navigation .wb-scheduled-more {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 6px;
+  transform: translateY(-50%);
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.wb-scheduled-item:hover .wb-scheduled-more,
+.wb-scheduled-item:focus-within .wb-scheduled-more,
+.wb-scheduled-item .wb-scheduled-more[aria-expanded="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .wb-scheduled-navigation .wb-scheduled-more {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .wb-scheduled-row > :is(span, small) {
   min-inline-size: 0;

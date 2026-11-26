@@ -8,6 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
 import { ActivityBar } from './navigation/ActivityBar.js';
 import { scheduledSource } from './navigation/scheduled-source.js';
+import { scheduleAction } from './navigation/scheduled-actions.js';
 import { SourcePicker } from './integration/SourcePicker.js';
 import { sessionSources } from './integration/sessionSources.js';
 import { ExternalTree } from './workspace/ExternalTree.js';
@@ -65,6 +66,7 @@ function assemble(ctx: Context): void {
         return true;
       },
       nativeScheduleText: ctx.locale.bind('schedule.manager'),
+      scheduleAction: scheduleAction(ctx),
       hooks: { panels, scheduledTasks },
     }),
   }, ActivityBar));
@@ -80,7 +82,7 @@ function assemble(ctx: Context): void {
         else await ctx.workspaces.unpinSession(id);
         tree.promote(id);
       },
-      hooks: { tree, sources, activity, draft: drafts },
+      hooks: { tree, sources, activity, draft: drafts, scheduledTasks },
     }),
   }, ({ useSources, ...props }) => {
     const state = useSources(current => current);

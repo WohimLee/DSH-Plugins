@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 export type Icon = 'folderAdd' | 'circleAdd' | 'project' | 'projectOpen' | 'section' | 'add' | 'new' | 'pin' | 'pinOutline' | 'pinSolid' | 'more' | 'edit' | 'list' | 'archive' | 'unarchive' | 'close' | 'search'
-  | 'rename' | 'read' | 'unread' | 'fork' | 'share' | 'copy' | 'newWindow' | 'trash';
+  | 'rename' | 'read' | 'unread' | 'fork' | 'share' | 'copy' | 'newWindow' | 'trash' | 'pause' | 'resume' | 'run';
 
 const folderOutline = 'M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z';
 const strokeWidths: Partial<Record<Icon, number>> = {
@@ -32,6 +32,9 @@ export function Glyph({ icon }: { icon: Icon }) {
     share: 'M12 15V3m-4 4 4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7',
     copy: 'M8 8h10a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2ZM15 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h1',
     newWindow: 'M13 19H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v7M3 8h18m-3 7v6m-3-3h6',
+    pause: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0ZM10 9v6m4-6v6',
+    resume: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Zm-12-4 6 4-6 4V8Z',
+    run: 'M21 4v6h-6m6 0a9 9 0 1 0 .2 4',
     trash: 'M4 6h16M9 6V3h6v3m-9 0 1 15h10l1-15M10 10v7m4-7v7',
     list: 'M8 6h13M8 12h13M8 18h13M3 6h.1M3 12h.1M3 18h.1',
     unarchive: 'M3 11v9h18v-9M12 15V3m-5 5 5-5 5 5',
