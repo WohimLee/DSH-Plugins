@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- 将 xAI Responses 的明确瞬态失败交给 DSH 有限重试；插件和 SDK 不自行重发，永久或未知失败不自动重试。
+- 保留安全错误码、HTTP 状态和有效的 `Retry-After`，不透传上游错误原文。继续只使用 DSH 执行的函数工具，防止重试重复执行 xAI 服务端工具。
+
 ## 0.1.5
 
 - 支持通过 Model Picker 概览的确认操作断开 Grok API 账号，并检测 macOS 宿主上的 Grok Bot 安装。

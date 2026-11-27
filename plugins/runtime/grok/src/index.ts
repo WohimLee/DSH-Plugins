@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Context } from '@deepseek-ai/cordis';
 import { credentialKey, credentialKeyId, credentialKeyScope } from '@deepseek-ai/dsh-credentials';
 import type {} from '@deepseek-ai/dsh-fs';
-import { LlmError, contentHasImage, normalizeApiKey, resolveImageAttachmentAccess, resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
-import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
+import { LLM_FAILURE_CODES, LlmError, contentHasImage, normalizeApiKey, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm';
+import type { GenerateOptions, LlmFailure, LlmModelInfo, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai';
 import type { ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
@@ -14,6 +14,7 @@ import type { GrokModel } from './catalog.js';
 import { grokProvider, readCatalog, RejectedKey, route } from './catalog.js';
 import { change, contribution, defaultAccountId, service } from './remote.js';
 import type { AccountView, Change, ConnectionView } from './remote.js';
+import { grokAttempt, grokFailure, grokRetryPolicy } from './recovery.js';
 
 export const name = 'dsh-grok';
 export const inject = ['llm', 'credentials'];
@@ -28,19 +29,60 @@ async function* safeStream(
   acceptsImages: boolean,
 ): AsyncGenerator<StreamChunk> {
   const signal = options.signal ? AbortSignal.any([connection, options.signal]) : connection;
-  signal.throwIfAborted();
+  if (signal.aborted) throw new DOMException('Grok request was cancelled.', 'AbortError');
   if (!acceptsImages && options.messages.some(message => contentHasImage(message.content))) {
     throw new LlmError('此 Grok 路由当前无法接收图片，请检查模型目录及宿主附件服务。', 'UNSUPPORTED_CONTENT');
   }
-  for await (const chunk of start({ ...options, signal })) {
-    if (chunk.type === 'finish' && chunk.reason.kind === 'error') {
-      const { code } = chunk.reason.failure;
-      // Remote diagnostics may contain portions of requests, including credentials.
-      yield { type: 'finish', reason: { kind: 'error', failure: { code, message: `Grok request failed (${code}).` } } };
-    } else if (chunk.type === 'finish' && chunk.reason.kind === 'aborted') {
-      yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'Grok request was cancelled.' } } };
-    } else {
+  const attempt: NonNullable<ReturnType<typeof grokAttempt.getStore>> = {};
+  let iterator: AsyncIterator<StreamChunk> | undefined;
+  let exhausted = false;
+  let failure: LlmFailure | undefined;
+  try {
+    iterator = grokAttempt.run(attempt, () => start({ ...options, signal })[Symbol.asyncIterator]());
+    const source = iterator;
+    while (true) {
+      const step = await grokAttempt.run(attempt, () => source.next());
+      if (step.done) { exhausted = true; break; }
+      const chunk = step.value;
+      if (chunk.type === 'finish') {
+        if (signal.aborted || chunk.reason.kind === 'aborted') {
+          failure = grokFailure('ABORTED');
+          break;
+        }
+        if (attempt.failure) {
+          failure = attempt.failure; // Never promote a failed attempt to a message or a tool request.
+          break;
+        }
+        if (chunk.reason.kind === 'error') {
+          const { code, message } = chunk.reason.failure;
+          // Generic pi-ai classification scans service prose; only trust the local EOF sentinel.
+          failure = code === 'EMPTY_RESPONSE' ? grokFailure('EMPTY_RESPONSE')
+            : attempt.eof && message === 'OpenAI Responses stream ended before a terminal response event'
+              ? grokFailure('TRANSPORT') : grokFailure('PI_AI_ERROR');
+          break;
+        }
+      }
       yield chunk;
+    }
+  } catch (error) {
+    // Preserve built-in host preflight codes (including image-offload count),
+    // never an unknown exception's code/message/cause.
+    if (signal.aborted) failure = grokFailure('ABORTED');
+    else if (attempt.failure) failure = attempt.failure;
+    else {
+      const code = error instanceof LlmError && Object.hasOwn(LLM_FAILURE_CODES, error.code) ? error.code : 'UNKNOWN';
+      const offloadImages = error instanceof LlmError && code === 'IMAGE_OFFLOAD_REQUIRED' ? error.failure.offloadImages : undefined;
+      throw LlmError.fromFailure(grokFailure(code === 'STREAM_CLOSED' ? 'TRANSPORT' : code,
+        offloadImages === undefined ? undefined : { offloadImages }));
+    }
+  } finally {
+    if (!exhausted && iterator) await iterator.return?.().catch(() => {});
+  }
+  if (failure) {
+    if (signal.aborted || failure.code === 'ABORTED') {
+      yield { type: 'finish', reason: { kind: 'aborted', failure: grokFailure('ABORTED') } };
+    } else {
+      yield { type: 'finish', reason: { kind: 'error', failure } };
     }
   }
 }
@@ -193,7 +235,7 @@ export function apply(ctx: Context): void {
     const profile: ResolvedPiAiProviderProfile = {
       provider, displayName: label ? `Grok · ${label}` : 'Grok', piProvider: grokProvider(models, provider),
       modelErrors: new Map(), configuredMaxTokens: new Map(),
-      retryPolicy: resolveRetryPolicy(undefined, 'grok.retryPolicy'),
+      retryPolicy: grokRetryPolicy,
       streamIdleTimeoutMs: 300_000,
       maxRequestImageBytes: 20 * 1024 * 1024, maxRequestImages: 50, imageOffloadCountQuantum: 10,
       requestImagePixelBudget: 4_194_304, requestImageMaxBytes: 2 * 1024 * 1024,

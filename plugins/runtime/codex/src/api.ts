@@ -3,11 +3,12 @@ import type { Context } from '@deepseek-ai/cordis';
 import { credentialKey } from '@deepseek-ai/dsh-credentials';
 import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials';
 import { LlmAdapter, LlmError, ReasoningEffortId, attributionHeaders } from '@deepseek-ai/dsh-llm';
-import type { BuiltinLlmFailureCode, GenerateOptions, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
+import type { GenerateOptions, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { fetch as proxyFetch } from 'undici';
 import { record } from './local.js';
 import { systemProxy } from './proxy.js';
 import { buildRequest } from './request.js';
+import { httpFailure } from './failure.js';
 import { parseStream } from './stream.js';
 
 const API = 'https://api.openai.com/v1';
@@ -148,18 +149,14 @@ export class CodexApiAdapter extends LlmAdapter {
         ) : undefined;
       const body = await buildRequest(options, readImage);
       if (options.maxTokens !== undefined) body.max_output_tokens = options.maxTokens;
-      transport = await apiTransport(this.fetchImpl, this.account.key, signal);
+      const key = this.account.key;
+      transport = await apiTransport(this.fetchImpl, key, signal);
       const response = await transport.request('/responses', {
         method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify(body),
       });
-      if (!response.ok) {
-        await response.body?.cancel();
-        const code: BuiltinLlmFailureCode = response.status === 401 || response.status === 403 ? 'AUTH'
-          : response.status === 429 ? 'RATE_LIMIT' : response.status >= 500 ? 'SERVER' : `HTTP_${response.status}`;
-        throw new LlmError(`OpenAI API 请求失败（HTTP ${response.status}）。`, code, { status: response.status });
-      }
+      if (!response.ok) throw await httpFailure(response, 'OpenAI API', [key], signal);
       if (!response.body) throw new LlmError('OpenAI API 没有返回数据流。', 'INVALID_RESPONSE');
-      yield* parseStream(response.body);
+      yield* parseStream(response.body, response.headers, 'OpenAI API', [key]);
     } catch (error) {
       const reason = signal.aborted
         ? { kind: 'aborted' as const, failure: { code: 'ABORTED', message: 'OpenAI API 请求已取消。' } }

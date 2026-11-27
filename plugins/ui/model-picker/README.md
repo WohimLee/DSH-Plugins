@@ -23,6 +23,12 @@ Overview 和厂商详情直接显示当前账号的 Usage。连接多个路由�
 - **接入方式**。向 `conversation.input.model.options` 加入 `id: 'dsh-model-picker'`、`order: -100` 的「Models / 模型」菜单项，复用会话的模型目录和模型选择操作。另以 `dsh-model-picker` 为键在 `main` 注册管理页，并在 `sidebar.panellist` 增加入口。停用时这些贡献随插件移除。 [客户端注册](src/client/index.tsx)
 - **验证证据**。DSH `0.2.2-rc.5` 的隔离 Web 已验证模型选择和热启停，Desktop 已验证管理页入口及原生推理强度菜单。 [plugin.meta.json](plugin.meta.json)
 
+### DeepSeek API 请求恢复
+
+通过模型管理添加的命名 API 账号复用 DSH `0.2.2-rc.5` 的官方 DeepSeek Messages 适配器。该适配器负责 HTTP、SSE、空闲超时与取消；命名路由保留官方有界重试策略，在默认的 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT` 和 `TRANSPORT` 之外加入 HTTP 408 和未收到 `message_stop` 的干净 EOF（`STREAM_CLOSED`）。标准 Desktop/Web 组合中的 `dsh-llm-retry` 在同一轮次内对失败的模型步骤最多重试五次，接受策略上限内的有效 `Retry-After`，不重跑先前已完成的工具步骤。直接调用 `ctx.llm.stream()` 和未挂载重试执行器的自定义组合不会自动重试。
+
+鉴权失败、额度不足、内容拒绝、取消及已识别的协议格式错误不纳入重试。命名路由不向会话诊断传递上游错误原文或响应体，只保留稳定错误码、可用的 HTTP 状态、重试延迟和符合格式的请求 ID。rc.5 对无法归类的流内 `error` 帧仍统一返回 `SERVER`，不保留能与已知过载区分的原始类型；流内失败也不携带 HTTP 响应头里的请求 ID。这两处需由官方 Messages 适配器改进。插件不改写宿主的 `deepseek-official`（配置 API Key）和 `deepseek-account`（DSH 登录）路由；它们的 408/EOF 恢复仍取决于各自的 provider 策略，默认不重试这两种失败。
+
 ## 安装与验证
 
 需要 DSH `0.2.2-rc.5`、Node.js >=24.9.0。该插件可以与 Workbench 独立安装。
@@ -30,7 +36,7 @@ Overview 和厂商详情直接显示当前账号的 Usage。连接多个路由�
 ```sh
 pnpm --filter dsh-model-picker check
 pnpm --filter dsh-model-picker pack --pack-destination /tmp
-dsh plugin --profile web add /tmp/dsh-model-picker-0.2.6.tgz
+dsh plugin --profile web add /tmp/dsh-model-picker-0.2.8.tgz
 ```
 
 Desktop 可以在插件页安装 tarball。隔离 Web 验证使用 `pnpm --filter dsh-model-picker test:host`，需要本机 Chrome 或 `DSH_TEST_BROWSER_EXECUTABLE`。测试使用合成输入和临时 profile。

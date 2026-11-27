@@ -25,7 +25,7 @@ pnpm --filter dsh-qoder pack --pack-destination /tmp
 Web 使用对应版本的 DSH CLI 安装。安装参数 `--ignore-scripts` 跳过 SDK 自带的运行时下载脚本，插件使用已安装的 Qoder CLI。
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-qoder-0.1.12.tgz --ignore-scripts
+dsh plugin --profile web add /tmp/dsh-qoder-0.1.14.tgz --ignore-scripts
 ```
 
 Desktop 可以用桌面自带的 DSH CLI 把 `--profile web` 改为 `--profile desktop`。若从 Desktop 插件页安装，在该 profile 的 `pnpm-workspace.yaml` 现有 `allowBuilds` 下添加 `'@qoder-ai/qoder-agent-sdk': false`，即可跳过该 SDK 的下载脚本。重启宿主后，打开 **设置 → Qoder** 查看账号状态。
@@ -81,7 +81,9 @@ qodercli --config-dir /absolute/path/to/qoder-profile login
 
 插件从 CLI 登录会话的 `getAvailableModels()` 或 PAT 的 `getModels()` 读取视觉标记 `isVl`。只有所选账号模型明确声明视觉能力且宿主提供附件服务时才接收图片，包括目录中明确声明该能力的 auto 路由。未披露或关闭视觉能力时仅接收文本，模型说明标明原因。刷新账号后目录重新评估能力。发送时从宿主读取本次请求规格的图片，通过 Qoder SDK 原生图片块发送；已卸载的历史图片保留为文字占位。
 
-如果 Qoder 的模型队列在内部恢复后仍未完成，DSH 会显示 `QODER_MODEL_QUEUE_EXHAUSTED`。请稍后重试，或从输入框手动切换模型后再发送。插件不会自动更改账号或模型，也不会在 Qoder 自身的队列恢复之后额外重试。
+DSH 会话使用宿主 `llm-retry` 时，明确的暂时限流、服务端故障、超时、传输中断或正常结束却无输出，会在宿主退避后对当前失败步骤最多重试一次；直接调用 `ctx.llm.stream()` 只尝试一次。重试使用原账号和模型，并创建新的 SDK 会话；已经执行的 DSH 工具只作为历史结果发送，失败尝试中尚未交出的工具不会执行。工具调用只有在 Qoder 完成响应且会话清理成功后才交给 DSH。
+
+认证、额度、无效请求、未知失败及无法确认旧会话已关闭的情况均不会自动重试。如果 Qoder 自己的模型队列恢复已耗尽，DSH 会显示 `QODER_MODEL_QUEUE_EXHAUSTED`，不会叠加宿主重试。请稍后再发，或从输入框手动切换模型。自动重试本身会发起新的上游请求，可能额外计费；取消会中止待开始的重试。
 
 ## 验证
 
@@ -90,7 +92,7 @@ pnpm --filter dsh-qoder check
 pnpm --filter dsh-qoder test:host
 ```
 
-合成测试覆盖未绑定时隐藏模型、备注持久化、旧版绑定兼容、账号目录与凭据隔离、历史和工具定义、流式响应、取消及卸载。宿主测试检查 tarball 并在隔离 Web profile 中安装、启动。2026-11-20 本机已登录 CLI 目录的 17 个启用模型均声明视觉能力，默认上下文为 200000，均未声明最大输出。本次适配器使用合成 PNG 及真实登录，在 auto 和 smodel 两条路由分别读对随机八位码并正常结束。PAT 目录与账号切换通过合成测试。
+合成测试覆盖未绑定时隐藏模型、备注持久化、旧版绑定兼容、账号目录与凭据隔离、历史和工具定义、流式响应、取消及卸载。`check` 还使用 rc.5 的 Agent Loop 和重试执行器，配合合成 Qoder SDK 流验证单次恢复、预算耗尽、退避取消和已执行工具不重放。`test:host` 检查 tarball 并在隔离 Web profile 中安装、启动。日常 Desktop 复验需要启用插件、连接真实 Qoder 账号，再在新会话输入框选择该账号可用的模型发送消息；真实故障发生时可在会话日志核对 `llm/retry` 和 `llm/retry-started`。2026-11-20 本机已登录 CLI 目录的 17 个启用模型均声明视觉能力，默认上下文为 200000，均未声明最大输出。本次适配器使用合成 PNG 及真实登录，在 auto 和 smodel 两条路由分别读对随机八位码并正常结束。PAT 目录与账号切换通过合成测试。
 
 ## 源码组织评估
 

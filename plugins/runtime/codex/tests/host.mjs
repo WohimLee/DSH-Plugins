@@ -25,7 +25,7 @@ try {
   if (!artifactDir) await run('pnpm', ['pack', '--pack-destination', temp], { cwd: directory });
   const tarball = resolve(artifactDir ?? temp, `dsh-codex-${version}.tgz`);
   const listing = await run('tar', ['-tzf', tarball]);
-  for (const file of ['lib/index.js', 'lib/index.d.ts', 'lib/api.js', 'lib/desktop.js', 'lib/local.js', 'lib/model-cache.js', 'lib/request.js', 'lib/proxy.js', 'lib/stream.js', 'cordis.patch.yml', 'package.json', 'README.md', 'locale/zh.json']) {
+  for (const file of ['lib/index.js', 'lib/index.d.ts', 'lib/api.js', 'lib/desktop.js', 'lib/failure.js', 'lib/local.js', 'lib/model-cache.js', 'lib/request.js', 'lib/proxy.js', 'lib/stream.js', 'cordis.patch.yml', 'package.json', 'README.md', 'locale/zh.json']) {
     assert.ok(listing.includes(`package/${file}`), `tarball missing ${file}`);
   }
   assert.doesNotMatch(listing, /(?:node_modules|auth\.json|tests\/)/);

@@ -2,50 +2,9 @@ import { LlmError, ToolCallId } from '@deepseek-ai/dsh-llm';
 import type { StreamChunk, ToolCallBlock } from '@deepseek-ai/dsh-llm';
 import type { SDKMessage } from '@qoder-ai/qoder-agent-sdk';
 
+import { modelResponseError, modelResultError, preferModelFailure, unknownResponseError } from './failure.js';
+
 type TextBlock = { type: 'text' | 'reasoning'; text: string };
-
-export function authError(): LlmError {
-  return new LlmError('Qoder 登录失效或无访问权限。请在 Qoder CLI 重新登录或更新 QODER_PERSONAL_ACCESS_TOKEN。', 'AUTH');
-}
-
-function responseError(code: unknown): LlmError | undefined {
-  switch (code) {
-    case 'authentication_failed':
-    case 401:
-    case 403:
-      return authError();
-    case 'rate_limit':
-    case 429:
-      return new LlmError('Qoder 请求频率或用量已达限制。', 'RATE_LIMIT');
-    case 'server_error':
-    case 500:
-    case 502:
-    case 503:
-    case 504:
-      return new LlmError('Qoder 服务暂时不可用。', 'SERVER');
-    case 'billing_error':
-      return new LlmError('Qoder 账户额度不足，请检查账户用量。', 'QUOTA');
-    case 'invalid_request':
-      return new LlmError('Qoder 拒绝了模型请求，请检查模型档位及参数。', 'INVALID_REQUEST');
-    default:
-      return undefined;
-  }
-}
-
-function queueError(details: readonly unknown[]): LlmError | undefined {
-  // Match only the CLI's known queue failure, never forward upstream diagnostics.
-  if (!details.some(detail => typeof detail === 'string' &&
-      /^(?:API Error:\s*)?Model queue recovery attempts exceeded\.?$/i.test(detail.trim()))) return;
-  // The CLI already exhausted queue recovery; don't invoke DSH's default retry policy again.
-  return LlmError.fromFailure({
-    code: 'QODER_MODEL_QUEUE_EXHAUSTED',
-    message: 'Qoder 模型排队未能完成。请稍后重试，或在输入框切换模型后再发。',
-  });
-}
-
-function unknownResponseError(): LlmError {
-  return new LlmError('Qoder 未能完成模型请求。', 'UNKNOWN');
-}
 
 function tokenCount(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
@@ -85,6 +44,7 @@ export async function* readResponse(
 
   for await (const message of messages) {
     signal.throwIfAborted();
+    if (assistantFailure && message.type !== 'result' && message.type !== 'assistant') continue;
     if (message.type === 'stream_event' && !message.parent_tool_use_id) {
       const event = message.event;
       if (event.type === 'content_block_start' && event.content_block) {
@@ -112,13 +72,13 @@ export async function* readResponse(
 
     if (message.type === 'assistant' && !message.parent_tool_use_id) {
       if (message.error || message.isApiErrorMessage) {
-        const knownFailure = responseError(message.error);
-        if (knownFailure) throw knownFailure;
-        // A synthetic assistant error can precede the terminal result with more detail.
-        assistantFailure = queueError(message.message.content.map(block => block.type === 'text' ? block.text : undefined))
-          ?? assistantFailure ?? unknownResponseError();
+        // A synthetic assistant error can precede a more specific terminal result.
+        const failure = modelResponseError(message.error, message.message.content.map(block =>
+          block.type === 'text' ? block.text : undefined));
+        assistantFailure = preferModelFailure(failure, assistantFailure) ?? unknownResponseError();
         continue;
       }
+      if (assistantFailure || message.aborted) continue;
       stopReason = message.message.stop_reason ?? stopReason;
       for (const block of message.message.content) {
         if (block.type === 'tool_use') {
@@ -150,10 +110,16 @@ export async function* readResponse(
     }
 
     if (message.type !== 'result') continue;
-    if ((message.subtype !== 'success' || message.is_error) &&
-        !(message.subtype === 'error_max_turns' && calls.size)) {
-      const details = message.subtype === 'success' ? [message.result] : [message.error_message, ...(message.errors ?? [])];
-      throw responseError(message.error_code) ?? queueError(details) ?? assistantFailure ?? unknownResponseError();
+    if (message.subtype !== 'success' || message.is_error || message.error_code !== undefined) {
+      const failure = preferModelFailure(modelResultError(message), assistantFailure);
+      if (failure) throw failure;
+      // The SDK can end our deliberately single-turn query with the CLI's
+      // normal turn-limit result. An unrelated failure must not release tools.
+      const cappedToolHandoff = message.subtype === 'error_max_turns' && calls.size > 0 &&
+        message.error_code === undefined && message.error_message === undefined &&
+        (message.errors ?? []).every(detail => typeof detail === 'string' &&
+          /^Reached maximum number of turns(?: \(1\))?\.?$/.test(detail.trim()));
+      if (!cappedToolHandoff) throw unknownResponseError();
     }
     if (assistantFailure) throw assistantFailure;
 

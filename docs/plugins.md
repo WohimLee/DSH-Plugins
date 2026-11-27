@@ -28,7 +28,7 @@
 
 | 插件 | 版本 | 用途 | DSH | Web / Desktop / Headless |
 | --- | --- | --- | --- | --- |
-| [dsh-model-picker](../plugins/ui/model-picker/README.md) | 0.2.7 | 为 DSH 提供厂商模型选择、连接管理与账号用量。 | 0.2.2-rc.5 | verified / verified / unsupported |
+| [dsh-model-picker](../plugins/ui/model-picker/README.md) | 0.2.8 | 为 DSH 提供厂商模型选择、连接管理与账号用量。 | 0.2.2-rc.5 | verified / verified / unsupported |
 | [dsh-workbench](../plugins/ui/workbench/README.md) | 0.5.35 | 为 DSH 提供常驻功能栏与 Codex 风格工作台布局，复用原生会话和扩展入口。 | 0.2.2-rc.5 | verified / verified / unsupported |
 
 ## 图像、语音与文档（media）
@@ -39,9 +39,9 @@
 
 | 插件 | 版本 | 用途 | DSH | Web / Desktop / Headless |
 | --- | --- | --- | --- | --- |
-| [dsh-codex](../plugins/runtime/codex/README.md) | 0.1.10 | 将 Codex 桌面登录与 OpenAI API 账号可用的模型接入 DSH 原生模型循环。 | >=0.2.2-rc.4 <0.2.3-0 | verified / verified / unverified |
-| [dsh-grok](../plugins/runtime/grok/README.md) | 0.1.5 | 使用 xAI API Key 将 Grok 语言模型接入 DSH 模型选择器。 | 0.2.2-rc.5 | verified / unverified / unverified |
-| [dsh-qoder](../plugins/runtime/qoder/README.md) | 0.1.13 | 通过 Qoder Agent SDK 将 Qoder 模型接入 DSH 原生模型循环。 | 0.2.2-rc.5 | verified / verified / unverified |
+| [dsh-codex](../plugins/runtime/codex/README.md) | 0.1.11 | 将 Codex 桌面登录与 OpenAI API 账号可用的模型接入 DSH 原生模型循环。 | >=0.2.2-rc.4 <0.2.3-0 | verified / verified / unverified |
+| [dsh-grok](../plugins/runtime/grok/README.md) | 0.1.6 | 使用 xAI API Key 将 Grok 语言模型接入 DSH 模型选择器。 | 0.2.2-rc.5 | verified / unverified / unverified |
+| [dsh-qoder](../plugins/runtime/qoder/README.md) | 0.1.14 | 通过 Qoder Agent SDK 将 Qoder 模型接入 DSH 原生模型循环。 | 0.2.2-rc.5 | verified / verified / unverified |
 
 ## 安全与治理（security）
 

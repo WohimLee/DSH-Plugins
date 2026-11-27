@@ -1,5 +1,6 @@
 import { LlmError, ToolCallId } from '@deepseek-ai/dsh-llm';
 import type { StreamChunk, ContentBlock } from '@deepseek-ai/dsh-llm';
+import { streamFailure, type HeaderReader } from './failure.js';
 import { record } from './local.js';
 
 type ByteStream = ReadableStream<Uint8Array> | import('node:stream/web').ReadableStream<Uint8Array>;
@@ -34,7 +35,8 @@ async function* frames(body: ByteStream): AsyncGenerator<Record<string, unknown>
     reader.releaseLock();
   }
 }
-export async function* parseStream(body: ByteStream): AsyncGenerator<StreamChunk> {
+export async function* parseStream(body: ByteStream, headers?: HeaderReader,
+  source: 'Codex' | 'OpenAI API' = 'Codex', credentials: readonly string[] = []): AsyncGenerator<StreamChunk> {
   let nextIndex = 0, sawTool = false;
   let active: { index: number; type: 'text' | 'reasoning'; text: string } | undefined;
   function* close(): Generator<StreamChunk> {
@@ -80,8 +82,7 @@ export async function* parseStream(body: ByteStream): AsyncGenerator<StreamChunk
         }
         yield { type: 'finish', reason: { kind: type === 'response.incomplete' ? 'max-tokens' : sawTool ? 'tool-calls' : 'stop' } }; return;
       } else if (type === 'error' || type === 'response.failed') {
-        // Provider payloads can echo prompts or credentials; retain only safe taxonomy.
-        throw new LlmError('Codex 服务返回响应失败。', 'UNKNOWN');
+        throw streamFailure(event, headers, source, credentials);
       } else if (type === 'response.refusal.delta') {
         throw new LlmError('Codex 拒绝了此请求。', 'INVALID_REQUEST');
       }

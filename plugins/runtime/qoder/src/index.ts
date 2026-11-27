@@ -8,9 +8,8 @@ import type { CredentialProvider } from '@deepseek-ai/dsh-credentials';
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type {} from '@deepseek-ai/dsh-typert-registry';
 import Schema from '@deepseek-ai/schemastery';
-import { LlmAdapter, LlmError } from '@deepseek-ai/dsh-llm';
+import { LlmAdapter, LlmError, resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm';
-import { ControlRequestError } from '@qoder-ai/qoder-agent-sdk';
 import type { SDKUserMessage } from '@qoder-ai/qoder-agent-sdk';
 import { advertiseTools, buildPrompt } from './request.js';
 import { openQoderSession, readQoderAccountDisplay, readQoderDesktopIdentity, readQoderModels, readQoderUsage } from './runtime.js';
@@ -22,7 +21,20 @@ import type { AccountConfig } from './account-store.js';
 import { accountService, contribution, parseAccountChange } from './remote.js';
 import type { AccountChange, AccountChangeResult, AccountView } from './remote.js';
 import type { QoderSession } from './runtime.js';
-import { authError, readResponse } from './stream.js';
+import { readResponse } from './stream.js';
+import { authError, retryableRequestCodes, sdkRequestError, sessionCleanupError } from './failure.js';
+
+// The CLI already retries some upstream requests. A fresh daemon is useful for
+// explicit transient failures, but avoid multiplying the CLI's retry budget.
+const retryPolicy = resolveRetryPolicy({
+  mode: 'normal', maxRetries: 1, retryableCodes: retryableRequestCodes,
+}, 'qoder.retryPolicy');
+const cancelled = (): Extract<StreamChunk, { type: 'finish' }> => ({
+  type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'Qoder 请求已取消。' } },
+});
+const errorFinish = (error: LlmError): Extract<StreamChunk, { type: 'finish' }> => ({
+  type: 'finish', reason: { kind: 'error', failure: error.failure },
+});
 
 export const name = 'dsh-qoder';
 export const inject = ['llm'];
@@ -122,6 +134,10 @@ export class QoderAdapter extends LlmAdapter {
     return { id: provider, name: this.accounts.providerName(provider) };
   }
 
+  override providerRetryPolicy() {
+    return retryPolicy;
+  }
+
   override async listModels(provider: string): Promise<LlmResolvedModelInfo[]> {
     try {
       return await this.accounts.listModels(provider, await this.accounts.auth(provider));
@@ -152,6 +168,7 @@ export class QoderAdapter extends LlmAdapter {
     let session: QoderSession | undefined;
     let failedAuth = false;
     let finish: Extract<StreamChunk, { type: 'finish' }> | undefined;
+    const handoff: StreamChunk[] = [];
 
     try {
       signal.throwIfAborted();
@@ -214,27 +231,41 @@ export class QoderAdapter extends LlmAdapter {
 
       for await (const chunk of readResponse(session.events, toolNames, signal)) {
         if (chunk.type === 'finish') finish = chunk;
+        else if (chunk.type === 'tool-call-delta' || chunk.type === 'usage' ||
+            (chunk.type === 'block-start' && chunk.blockType === 'tool-call') ||
+            (chunk.type === 'block-end' && chunk.block.type === 'tool-call')) handoff.push(chunk);
         else yield chunk;
       }
     } catch (error) {
-      if (signal.aborted) {
-        finish = { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'Qoder 请求已取消。' } } };
-      } else {
-        const needsLogin = failedAuth ||
-          (error instanceof ControlRequestError && error.message.startsWith('Authentication required.'));
-        const diagnostic = needsLogin ? authError() : error instanceof LlmError ? error
-          : new LlmError('无法完成 Qoder 请求，请检查 Qoder CLI 版本及连接。', 'TRANSPORT');
-        finish = { type: 'finish', reason: { kind: 'error', failure: diagnostic.failure } };
-      }
+      finish = signal.aborted ? cancelled() : errorFinish(failedAuth ? authError() : sdkRequestError(error));
     } finally {
-      signal.removeEventListener('abort', abort);
+      let cleanupFailed = false;
       try {
         await session?.close();
+      } catch {
+        cleanupFailed = true;
       } finally {
-        if (cwd) await rm(cwd, { recursive: true, force: true });
+        signal.removeEventListener('abort', abort);
+        if (cwd) {
+          try { await rm(cwd, { recursive: true, force: true }); }
+          catch { cleanupFailed = true; }
+        }
+      }
+      // Do not let cleanup replace a known permanent failure with a raw SDK
+      // diagnostic or release tool calls from an attempt that did not settle.
+      if (cleanupFailed && finish) {
+        const reason = finish.reason;
+        if (reason.kind !== 'aborted' && (reason.kind !== 'error' || retryableRequestCodes.includes(reason.failure.code))) {
+          finish = errorFinish(sessionCleanupError());
+        }
       }
     }
-    if (finish) yield finish;
+    if (signal.aborted) finish = cancelled();
+    else if (failedAuth) finish = errorFinish(authError());
+    if (finish) {
+      if (finish.reason.kind !== 'error' && finish.reason.kind !== 'aborted') yield* handoff;
+      yield finish;
+    }
   }
 }
 

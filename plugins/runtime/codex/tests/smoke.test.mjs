@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
 import { LlmRuntime, BlockAssembler, attributionHeaders } from '@deepseek-ai/dsh-llm';
 import * as plugin from '../lib/index.js';
+import { CodexApiAdapter } from '../lib/api.js';
 import { buildRequest } from '../lib/request.js';
 import { macProxyForHost } from '../lib/proxy.js';
 import { loadModels, loadCredential } from '../lib/local.js';
@@ -78,6 +79,63 @@ test('truncated, malformed, failed and incomplete streams have explicit outcomes
   const invalid = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('data: {broken}\n\n')); c.close(); } });
   await assert.rejects(collect(parseStream(invalid)), { code: 'INVALID_RESPONSE' });
 });
+test('Responses failure frames classify only allowlisted codes and preserve safe retry metadata', async () => {
+  const headers = new Headers({ 'x-request-id': 'req_0123456789abcdef', 'retry-after': '2' });
+  for (const [type, providerCode, expected, delay] of [
+    ['response.failed', 'server_error', 'SERVER', 2000], ['error', 'server_overloaded', 'SERVER', 2000],
+    ['error', 'rate_limit_exceeded', 'RATE_LIMIT', 2000], ['error', 'usage_limit_reached', 'QUOTA', undefined],
+    ['response.failed', 'context_length_exceeded', 'CONTEXT_WINDOW_EXCEEDED', undefined],
+    ['response.failed', 'private-code', 'UNKNOWN', undefined],
+  ]) {
+    const error = { code: providerCode, type: 'server_error', message: 'private echo', param: 'private parameter' };
+    const payload = type === 'response.failed' ? event(type, { response: { error } }) : { ...error, type };
+    await assert.rejects(collect(parseStream(body([payload]), headers)), actual => {
+      assert.equal(actual.failure.code, expected);
+      assert.equal(actual.failure.requestId, 'req_0123456789abcdef');
+      assert.equal(actual.failure.providerRetryAfterMs, delay);
+      assert.doesNotMatch(JSON.stringify(actual.failure), /private/);
+      return true;
+    });
+  }
+  await assert.rejects(collect(parseStream(body([event('error', {
+    error: { code: 'server_is_overloaded', message: 'private echo', headers: { 'Retry-After': '3', 'retry-after': '7' } },
+  })]), headers, 'Codex', ['req_0123456789abcdef'])), error => {
+    assert.equal(error.code, 'SERVER');
+    assert.equal(error.failure.providerRetryAfterMs, 7000);
+    assert.equal(error.failure.requestId, undefined);
+    return true;
+  });
+});
+
+test('both connection paths distinguish exhausted quota from a retryable 429', async t => {
+  const codexHome = await fixture(t);
+  const provider = 'codex-api-account-0123456789abcdef01234567';
+  for (const [status, upstream, code, requestId, timing, type] of [
+    ...['insufficient_quota', 'credit_balance_exhausted', 'organization_spend_limit_exceeded', 'project_spend_limit_exceeded']
+      .map(upstream => [429, upstream, 'QUOTA', 'req_0123456789abcdef', undefined]),
+    [429, 'rate_limit_exceeded', 'RATE_LIMIT', undefined, 2000],
+    [408, undefined, 'TIMEOUT', 'req_0123456789abcdef', undefined],
+    [501, undefined, 'HTTP_501', undefined, undefined],
+    [429, 'private provider detail', 'QUOTA', undefined, undefined, 'usage_not_included'],
+  ]) {
+    const send = async () => Response.json({ error: { code: upstream, type, message: 'private echo' } }, {
+      status, headers: { 'retry-after': '2', 'x-request-id': requestId ?? 'private echo' },
+    });
+    const routes = [
+      [new plugin.CodexAdapter({ codexHome, models }, send), request],
+      [new CodexApiAdapter({ provider, key: 'synthetic-key', label: 'test', models: ['gpt-5.3-codex'] },
+        () => undefined, send), { ...request, provider, model: 'gpt-5.3-codex' }],
+    ];
+    for (const [adapter, input] of routes) {
+      const { failure } = (await collect(adapter.stream(input))).at(-1).reason;
+      assert.equal(failure.code, code);
+      assert.equal(failure.requestId, requestId);
+      assert.equal(failure.providerRetryAfterMs, timing);
+      assert.doesNotMatch(JSON.stringify(failure), /private|synthetic-key/);
+    }
+  }
+});
+
 test('adapter dispatch uses fixed HTTPS endpoint, attribution and host-readable terminal chunks', async t => {
   const home = await fixture(t), before = await readFile(join(home, 'auth.json'), 'utf8');
   let calls = 0;
@@ -117,6 +175,23 @@ test('HTTP and network failures never expose credentials or response text', asyn
   const adapter = new plugin.CodexAdapter({ codexHome: home, models }, async () => { throw new Error('synthetic-secret'); });
   assert.doesNotMatch(JSON.stringify(await collect(adapter.stream(request))), /synthetic-secret/);
 });
+test('cancellation releases a stalled HTTP error body without waiting for diagnostics', async t => {
+  const codexHome = await fixture(t);
+  const signal = new AbortController();
+  let notify, cancelled = 0;
+  const pulled = new Promise(resolve => { notify = resolve; });
+  const stalled = new ReadableStream({ pull() { notify(); }, cancel() { cancelled++; } }, { highWaterMark: 0 });
+  const adapter = new plugin.CodexAdapter({ codexHome, models }, async () => new Response(stalled, {
+    status: 429, headers: { 'content-type': 'application/json' },
+  }));
+  const result = collect(adapter.stream({ ...request, signal: signal.signal }));
+  await pulled;
+  signal.abort();
+  assert.equal((await result).at(-1).reason.kind, 'aborted');
+  assert.equal(stalled.locked, false);
+  assert.equal(cancelled, 1);
+});
+
 test('cancel and unload abort in-flight requests and block new dispatch', async t => {
   const home = await fixture(t);
   for (const unload of [false, true]) {

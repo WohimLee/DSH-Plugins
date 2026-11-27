@@ -15,7 +15,36 @@ import { z } from 'zod';
 const scope = 'dsh-model-picker';
 const prefix = 'deepseek-api-account-';
 const accountRoute = /^deepseek-api-account-[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/;
-const defaults = resolveAdapterOptions({ baseURL: PUBLIC_BASE_URL });
+const official = resolveAdapterOptions({ baseURL: PUBLIC_BASE_URL });
+const standardRetry = official.retryPolicy;
+const defaults = {
+  ...official,
+  // rc.5 emits these for a request timeout and EOF before message_stop; neither is in its default retry set.
+  retryPolicy: standardRetry.mode === 'normal' ? Object.freeze({
+    ...standardRetry,
+    retryableCodes: Object.freeze([...new Set([...standardRetry.retryableCodes, 'HTTP_408', 'STREAM_CLOSED'])]),
+  }) : standardRetry,
+};
+const providerMessageCodes = new Set([
+  'AUTH', 'QUOTA', 'RATE_LIMIT', 'CONTEXT_WINDOW_EXCEEDED', 'INVALID_REQUEST',
+  'SERVER', 'CONTENT_REFUSED', 'MALFORMED_RESPONSE', 'UNSUPPORTED_CONTENT',
+]);
+
+function safeProviderFailure(error: unknown, key: string): unknown {
+  if (!(error instanceof LlmError)) return error;
+  const { status, code, requestId, providerRetryAfterMs } = error.failure;
+  if (status === undefined && !providerMessageCodes.has(code)) return error;
+  // The official adapter may include the provider body in `cause` and provider text in `message`.
+  // Neither belongs in the session log; keep only structured facts and a recognizable request ID.
+  const id = requestId && /^(?:[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}|[\da-f]{16,64}|req_[\da-z]{8,64})$/i.test(requestId)
+    && !requestId.toLowerCase().includes(key.toLowerCase()) ? requestId : undefined;
+  return LlmError.fromFailure({
+    code, message: `DeepSeek Messages request failed (${status === undefined ? code : `HTTP ${status}: ${code}`}).`,
+    ...status === undefined ? {} : { status },
+    ...providerRetryAfterMs === undefined ? {} : { providerRetryAfterMs },
+    ...id === undefined ? {} : { requestId: id },
+  });
+}
 const stored = z.object({
   version: z.literal(1),
   label: z.string().trim().min(1).max(80),
@@ -107,7 +136,10 @@ export function createDeepSeekApi(ctx: Context) {
       },
       discoverModels: async () => connection.catalog.offered
         .map(model => catalogModelInfo(provider, model, connection.catalog.badges.get(model.id))),
-      resolveAuth: async current => ({ headers: { 'x-api-key': current.key } }),
+      resolveAuth: async current => ({
+        headers: { 'x-api-key': current.key },
+        onRequestError: async error => safeProviderFailure(error, current.key),
+      }),
       resolveUserId: () => userId ??= getOrCreateAnonymousUserId(),
       resolveAttachments: () => ctx.get('attachments'),
       resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(

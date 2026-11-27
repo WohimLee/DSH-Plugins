@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import Schema from '@deepseek-ai/schemastery';
 import { LlmAdapter, LlmError, attributionHeaders } from '@deepseek-ai/dsh-llm';
-import type { BuiltinLlmFailureCode, GenerateOptions, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
+import type { GenerateOptions, LlmResolvedModelInfo, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm';
 import { applyCodexApi } from './api.js';
 import { describeModel } from './catalog.js';
 import { accountIdentity, desktopAccountsKey, findCodexCli, readDesktopAccounts, updateDesktopAccounts } from './desktop.js';
@@ -12,6 +12,7 @@ import { ModelCache } from './model-cache.js';
 import { systemProxy } from './proxy.js';
 import { fetch as proxyFetch, type ProxyAgent } from 'undici';
 import { buildRequest } from './request.js';
+import { httpFailure } from './failure.js';
 import { parseStream } from './stream.js';
 import { readCodexUsage } from './usage.js';
 import { unwatchFile, watchFile } from 'node:fs';
@@ -117,13 +118,10 @@ export class CodexAdapter extends LlmAdapter {
           originator: 'codex_cli_rs', 'content-type': 'application/json', accept: 'text/event-stream', ...attributionHeaders() },
         body: JSON.stringify(body), redirect: 'error' as const };
       const response = dispatcher ? await proxyFetch(RESPONSES_URL, { ...init, dispatcher }) : await this.fetchImpl(RESPONSES_URL, init);
-      if (!response.ok) {
-        await response.body?.cancel();
-        const code: BuiltinLlmFailureCode = response.status === 401 || response.status === 403 ? 'AUTH' : response.status === 429 ? 'RATE_LIMIT' : response.status >= 500 ? 'SERVER' : `HTTP_${response.status}`;
-        throw new LlmError(code === 'AUTH' ? 'Codex 登录失效或无访问权限，请运行 codex login。' : `Codex 请求失败（HTTP ${response.status}）。`, code, { status: response.status });
-      }
+      const privateIds = [credential.accessToken, credential.accountId];
+      if (!response.ok) throw await httpFailure(response, 'Codex', privateIds, signal);
       if (!response.body) throw new LlmError('Codex 响应没有数据流。', 'INVALID_RESPONSE');
-      yield* parseStream(response.body);
+      yield* parseStream(response.body, response.headers, 'Codex', privateIds);
     } catch (error) {
       const aborted = signal.aborted;
       const failure = error instanceof LlmError ? error.failure : { code: 'TRANSPORT', message: 'Codex 网络请求失败，请检查连接。' };
