@@ -96,7 +96,7 @@ html[data-dsh-workbench] [data-window-drag]:has([data-workbench-brand]) { height
 }
 .wb-summary-heading {
   display: flex; align-items: center; gap: 5px; width: 100%; min-block-size: 28px;
-  padding: 2px 4px; border: 0; text-align: start; background: transparent;
+  margin: 0; padding: 2px 4px; border: 0; text-align: start; background: transparent;
   color: var(--wb-summary-label); font: inherit;
 }
 .wb-summary-heading > span {
@@ -119,13 +119,11 @@ html[data-dsh-workbench] [data-window-drag]:has([data-workbench-brand]) { height
   text-align: start; background: transparent; font-size: 13px; line-height: 18px;
 }
 .wb-pinned-summary button.wb-summary-row:enabled:hover { background: var(--dsw-alias-background-hover, #8882); }
-.wb-summary-row > span:nth-child(2), .wb-summary-change-label > small, .wb-summary-task-label > span {
+.wb-summary-row > span:nth-child(2), .wb-summary-task-label > span {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.wb-pinned-summary > .wb-summary-changes { padding-inline: 4px; font-size: 14px; line-height: 20px; }
-.wb-summary-task-label > :is(span, small), .wb-summary-change-label > small { display: block; }
-.wb-summary-task-label > small, .wb-summary-change-label > small { line-height: 16px; }
-.wb-summary-task-label > small { white-space: normal; overflow-wrap: anywhere; }
+.wb-summary-task-label > :is(span, small) { display: block; }
+.wb-summary-task-label > small { line-height: 16px; white-space: normal; overflow-wrap: anywhere; }
 .wb-summary-value { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .wb-agent-list h3, .wb-agent-list p, .wb-agent-list small, .wb-agent-detail small { color: var(--dsw-alias-label-secondary, #aaa); font-weight: normal; }
 .wb-agent-list { width: 100%; height: 100%; overflow: auto; padding: 16px 14px; box-sizing: border-box; font-size: 13px; line-height: 18px; }

@@ -82,6 +82,7 @@ function SummaryContents(props: HeaderProps) {
   const canOpenTask = useNativeScheduleDetail(value => value);
   const taskTime = new Intl.DateTimeFormat(t('summaryTimeLocale'), { dateStyle: 'medium', timeStyle: 'short' });
   const changes = useLocalChanges(props);
+  const changesHeading = useId();
   const changesDescription = useId();
   const [openFailed, setOpenFailed] = useState(false);
 
@@ -117,16 +118,21 @@ function SummaryContents(props: HeaderProps) {
           : <div key={task.id} className="wb-summary-row" {...row}>{content}</div>;
       })}
     </SummaryGroup>}
-    {changes && <button type="button" className="wb-control wb-summary-row wb-summary-changes" data-summary-group="changes"
-      data-summary-checkout-root={changes.root} aria-label={t('changes')} aria-describedby={changesDescription}
-      title={`${t('localChangesScope')} · ${changes.root}`} onClick={() => run(() => openChanges(sessionId))}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-        <rect x="4" y="3" width="16" height="18" rx="3" /><path d="M8 9h8m-4-4v8m-4 4h8" />
-      </svg>
-      <span className="wb-summary-change-label">{t('changes')}<small data-summary-checkout-label title={changes.root}>{directoryName(changes.root)}</small></span>
-      {changes.counts && <span className="wb-summary-value"><b>+{changes.counts.added}</b> <em>−{changes.counts.deleted}</em></span>}
-      <span id={changesDescription} hidden>{changes.root}{changes.counts ? ` · +${changes.counts.added} −${changes.counts.deleted}` : ''}</span>
-    </button>}
+    {changes && <section data-summary-group="changes" aria-labelledby={changesHeading}>
+      <h3 id={changesHeading} className="wb-summary-heading">{t('changes')}</h3>
+      <div className="wb-summary-items">
+        <button type="button" className="wb-control wb-summary-row wb-summary-changes" data-summary-checkout-root={changes.root}
+          aria-label={directoryName(changes.root)} aria-describedby={changesDescription}
+          title={`${t('localChangesScope')} · ${changes.root}`} onClick={() => run(() => openChanges(sessionId))}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+            <rect x="4" y="3" width="16" height="18" rx="3" /><path d="M8 9h8m-4-4v8m-4 4h8" />
+          </svg>
+          <span data-summary-checkout-label>{directoryName(changes.root)}</span>
+          {changes.counts && <span className="wb-summary-value"><b>+{changes.counts.added}</b> <em>−{changes.counts.deleted}</em></span>}
+          <span id={changesDescription} hidden>{changes.root}{changes.counts ? ` · +${changes.counts.added} −${changes.counts.deleted}` : ''}</span>
+        </button>
+      </div>
+    </section>}
     {chats.length > 0 && <SummaryGroup kind="chats" label={t('createdChats')} count={chats.length}>
       {chats.map(chat => <button type="button" className="wb-control wb-summary-row" key={chat.id}
         title={chat.displayTitle} onClick={() => run(() => openChat(chat.id))}>

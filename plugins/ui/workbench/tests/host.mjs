@@ -1060,6 +1060,7 @@ try {
   const summaryGroups = () => summary.locator(':scope > [data-summary-group]').evaluateAll(groups =>
     groups.map(group => group.getAttribute('data-summary-group')));
   const summaryChanges = summary.locator('[data-summary-group="changes"]');
+  const changesCheckout = summaryChanges.getByRole('button');
   const summaryScheduled = summary.locator('[data-summary-group="scheduled"]');
   assert.deepEqual(await summaryGroups(), ['agents', 'project-folders'], 'unavailable and empty sections do not show');
   const primarySummaryPath = await realpath(join(temp, 'workspace', 'child-project'));
@@ -1080,13 +1081,20 @@ try {
     window.dispatchEvent(new CustomEvent('workbench-probe-forge', { detail: value })), detail);
   await configureForge({ 'workbench-test-beta': fixtureCheckout });
   await summaryChanges.waitFor();
-  assert.equal(await summaryChanges.getAttribute('data-summary-checkout-root'), fixtureCheckout);
-  assert.match(await summaryChanges.innerText(), /\+12\s*−3/);
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await summary.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-changes-hierarchy.png') });
+  }
+  assert.equal(await summaryChanges.getByRole('heading', { name: 'Changes', exact: true }).count(), 1,
+    'Changes has its own noninteractive section heading');
+  assert.equal(await changesCheckout.getAttribute('data-summary-checkout-root'), fixtureCheckout);
+  assert.match(await changesCheckout.innerText(), /\+12\s*−3/);
   assert.deepEqual(await summary.evaluate(element => {
     const heading = getComputedStyle(element.querySelector('.wb-summary-heading'));
+    const changesHeading = getComputedStyle(element.querySelector('[data-summary-group="changes"] h3'));
     const changes = getComputedStyle(element.querySelector('.wb-summary-changes'));
-    return [heading.fontSize, heading.fontWeight, changes.fontSize, changes.lineHeight];
-  }), ['13px', '400', '14px', '20px']);
+    return [heading.fontSize, heading.fontWeight, changesHeading.fontSize, changesHeading.color === heading.color,
+      changes.color !== changesHeading.color];
+  }), ['13px', '400', '13px', true, true]);
   await recordMessage('schedule-clock-fixture', 'create');
   await scheduledMark(alpha).waitFor();
   assert.equal(await summaryScheduled.count(), 0, 'the other session’s task is not shown');
@@ -1156,7 +1164,7 @@ try {
   assert.deepEqual(await summaryHeadingFit(), expectedSummaryFit);
   if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-open-narrow.png') });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await summaryChanges.click();
+  await changesCheckout.click();
   await right.getByText('Fixture Git diff body', { exact: true }).waitFor();
   await right.locator('[data-sidebar-right-toggle]:visible').click();
   await right.waitFor({ state: 'detached' });
