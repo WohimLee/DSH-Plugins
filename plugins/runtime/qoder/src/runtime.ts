@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { addAbortListener } from 'node:events';
 import { LlmError } from '@deepseek-ai/dsh-llm';
 import { withDaemonStdinGuard } from './daemon-stdin.js';
+import { authError, retryableRequestCodes, sdkRequestError, sessionCleanupError } from './failure.js';
 
 export interface QoderSession {
   events: AsyncIterable<SDKMessage>;
@@ -69,28 +70,35 @@ export async function openQoderSession(
     return {
       events,
       async close() {
+        // The daemon is private to this attempt. Its confirmed shutdown is
+        // sufficient even if a dead transport could not acknowledge close.
         try {
           await events.close();
-        } finally {
-          await daemon.stop();
+        } catch {
+          // Still stop the daemon rather than treating the close RPC as proof.
         }
+        await daemon.stop();
       },
     };
   } catch (error) {
-    await daemon.stop();
+    try {
+      await daemon.stop();
+    } catch {
+      // Preserve a permanent startup error, but never retry with uncertain teardown.
+      if (retryableRequestCodes.includes(sdkRequestError(error).code)) throw sessionCleanupError();
+    }
     throw error;
   }
 }
 
 function accountReadError(error: unknown): LlmError {
-  if (error instanceof LlmError) return error;
   const code = error instanceof Error && 'code' in error ? error.code : undefined;
   if ((typeof code === 'string' && /^(?:AUTH(?:_|$)|INVALID_(?:TOKEN|CREDENTIAL))/.test(code))
     || (error instanceof Error && (error.message.startsWith('Authentication required.')
       || error.message.startsWith('daemon auth is not initialized;')))) {
-    return new LlmError('Qoder 认证失败，请检查绑定的 PAT 或 Qoder CLI 登录。', 'AUTH');
+    return authError();
   }
-  return new LlmError('无法读取 Qoder 账号信息，请检查连接后重试。', 'TRANSPORT');
+  return sdkRequestError(error);
 }
 
 async function readAccount<T>(

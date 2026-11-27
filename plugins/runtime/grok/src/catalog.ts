@@ -3,11 +3,16 @@ import type { Model, ThinkingLevelMap } from '@earendil-works/pi-ai';
 import { xaiProvider } from '@earendil-works/pi-ai/providers/xai';
 import { z } from 'zod';
 import { fetchGrok } from './transport.js';
+import { allowLocalTools, fetchGrokResponses, observeGrokEvent } from './recovery.js';
 
 export const route = 'grok';
 const baseUrl = 'https://api.x.ai/v1';
 const vendor = xaiProvider();
 const knownModels = new Map(vendor.getModels().map(model => [model.id, model]));
+// pi-ai and the OpenAI client must each dispatch only once; DSH owns retries.
+const responsesOptions = {
+  fetch: fetchGrokResponses, maxRetries: 0, onPayload: allowLocalTools, onProviderStreamEvent: observeGrokEvent,
+};
 
 const modelId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/);
 const positive = z.number().int().positive();
@@ -153,7 +158,7 @@ export function grokProvider(models: readonly Model<'openai-responses'>[], provi
         resolve: async ({ credential }) => credential?.key ? { auth: { apiKey: credential.key }, source: 'Grok' } : undefined,
       },
     },
-    stream: (model, context, options) => vendor.stream({ ...model, provider: 'xai' }, context, Object.assign({ fetch: fetchGrok }, options)),
-    streamSimple: (model, context, options) => vendor.streamSimple({ ...model, provider: 'xai' }, context, Object.assign({ fetch: fetchGrok }, options)),
+    stream: (model, context, options) => vendor.stream({ ...model, provider: 'xai' }, context, Object.assign({}, options, responsesOptions)),
+    streamSimple: (model, context, options) => vendor.streamSimple({ ...model, provider: 'xai' }, context, Object.assign({}, options, responsesOptions)),
   };
 }

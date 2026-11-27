@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 import { Context } from '@deepseek-ai/cordis';
 import { LlmRuntime } from '@deepseek-ai/dsh-llm';
+import { ControlRequestError, DaemonHeartbeatTimeoutError, ProtocolVersionMismatchError, QoderCliInitializationError } from '@qoder-ai/qoder-agent-sdk';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import * as plugin from '../lib/index.js';
@@ -202,7 +203,9 @@ test('keeps structured errors authoritative and never classifies ordinary model 
   const errorResult = result({ subtype: 'error_during_execution', is_error: true, errors: [text] });
   const errorAssistant = { ...assistant([{ type: 'text', text: `API Error: ${text}` }]), isApiErrorMessage: true };
   await assert.rejects(read([errorAssistant, { ...errorResult, error_code: 401 }]), { code: 'AUTH' });
-  await assert.rejects(read([{ ...errorAssistant, error: 'rate_limit' }, result()]), { code: 'RATE_LIMIT' });
+  await assert.rejects(read([{ ...errorAssistant, error: 'rate_limit' }, result()]), { code: 'QODER_MODEL_QUEUE_EXHAUSTED' });
+  await assert.rejects(read([errorAssistant, { ...errorResult, error_code: 503 }]), { code: 'QODER_MODEL_QUEUE_EXHAUSTED' });
+  await assert.rejects(read([{ ...errorAssistant, error: 'server_error' }, { ...errorResult, error_code: 402 }]), { code: 'QUOTA' });
   await assert.rejects(read([errorAssistant, { ...errorResult, errors: [] }]), { code: 'QODER_MODEL_QUEUE_EXHAUSTED' });
   await assert.rejects(read([errorAssistant]), { code: 'QODER_MODEL_QUEUE_EXHAUSTED' });
   await assert.rejects(read([{ ...errorResult, errors: ['Unrelated private diagnostic'] }]), {
@@ -211,6 +214,69 @@ test('keeps structured errors authoritative and never classifies ordinary model 
   const output = await read([assistant([{ type: 'text', text }]), result()]);
   assert.equal(output.find(chunk => chunk.type === 'text-delta').text, text);
   assert.equal(output.at(-1).reason.kind, 'stop');
+});
+
+test('hands only evidenced transient SDK failures to the registered host retry policy', async () => {
+  const diagnostic = 'synthetic credential or local path';
+  const cases = [
+    [new DaemonHeartbeatTimeoutError(5), 'TIMEOUT', true],
+    [Object.assign(new Error(diagnostic), { code: 'EPIPE' }), 'TRANSPORT', true],
+    [new QoderCliInitializationError(result({ is_error: true, error_code: '503', result: diagnostic })), 'SERVER', true],
+    [new QoderCliInitializationError(result({ is_error: true, error_code: 403, result: diagnostic })), 'AUTH', false],
+    [new ControlRequestError({ requestId: diagnostic, message: 'Authentication required.', retryable: true }), 'AUTH', false],
+    [new ProtocolVersionMismatchError('1', '2'), 'INVALID_CONFIG', false],
+    [new Error('ECONNRESET ' + diagnostic), 'UNKNOWN', false],
+    [Object.assign(new Error(diagnostic), { code: 'ENOENT' }), 'UNKNOWN', false],
+    [new ControlRequestError({ requestId: diagnostic, message: diagnostic, retryable: true }), 'UNKNOWN', false],
+  ];
+  for (const [thrown, code, retryable] of cases) {
+    const ctx = new Context();
+    const runtime = ctx.plugin(LlmRuntime);
+    const adapter = new plugin.QoderAdapter({ cliPath: process.execPath }, async () => { throw thrown; }, liteModels, async () => undefined);
+    try {
+      await setImmediate();
+      ctx.llm.registerAdapter(['qoder'], adapter);
+      const prepared = await ctx.llm.prepareCall({ provider: 'qoder', model: 'lite' });
+      assert.equal(prepared.retryPolicy.mode, 'normal');
+      assert.equal(prepared.retryPolicy.maxRetries, 1);
+      const chunks = await collect(prepared.stream(request));
+      assert.equal(chunks.at(-1).reason.failure.code, code);
+      assert.equal(prepared.retryPolicy.retryableCodes.includes(code), retryable);
+      assert.doesNotMatch(JSON.stringify(chunks), /synthetic credential|ECONNRESET/);
+    } finally {
+      adapter.dispose();
+      await runtime.dispose();
+    }
+  }
+});
+
+test('never hands staged tool calls to DSH when the model attempt fails', async () => {
+  const serverFailure = result({ subtype: 'error_max_turns', is_error: true, error_code: 503, errors: [] });
+  const cases = [
+    { frames: [assistant([call]), serverFailure], code: 'SERVER' },
+    { frames: [assistant([call]), result({ is_error: true, stop_reason: 'tool_use', error_code: 403 })], code: 'AUTH' },
+    { frames: [assistant([call]), result({ subtype: 'error_max_turns', is_error: true, errors: ['synthetic unclassified error'] })], code: 'UNKNOWN' },
+    { frames: [assistant([call])], code: 'INVALID_RESPONSE' },
+    { frames: [assistant([call]), result({ stop_reason: 'tool_use' })], code: 'QODER_SESSION_CLEANUP_FAILED', failClose: true },
+    { frames: [assistant([call]), serverFailure], code: 'QODER_SESSION_CLEANUP_FAILED', failClose: true },
+    { frames: [assistant([call]), result({ is_error: true, error_code: 403 })], code: 'AUTH', failClose: true },
+  ];
+  for (const { frames, code, failClose } of cases) {
+    let closed = 0;
+    let cwd;
+    const adapter = new plugin.QoderAdapter({ cliPath: process.execPath }, async (_path, _input, options) => {
+      cwd = options.cwd;
+      return { events: source(frames), async close() { closed++; if (failClose) throw new Error('private cleanup diagnostic'); } };
+    }, liteModels, async () => undefined);
+    try {
+      const chunks = await collect(adapter.stream({ ...request, tools: [tool] }));
+      assert.equal(chunks.at(-1).reason.failure.code, code);
+      assert.ok(!chunks.some(chunk => chunk.type === 'tool-call-delta'));
+      assert.doesNotMatch(JSON.stringify(chunks), /private cleanup diagnostic|synthetic unclassified error/);
+      assert.equal(closed, 1);
+      await assert.rejects(access(cwd), { code: 'ENOENT' });
+    } finally { adapter.dispose(); }
+  }
 });
 
 test('uses the selected model’s advertised efforts for the main Qoder call', async () => {
