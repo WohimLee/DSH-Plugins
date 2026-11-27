@@ -338,6 +338,14 @@ try {
   await scheduledMark(scheduledActivity).waitFor();
   await activityToggle.click();
   await tree.waitFor({ state: 'visible' });
+  await recordMessage('schedule-clock-fixture', 'target:workbench-test-beta');
+  await scheduledMark(beta).waitFor();
+  assert.equal(await scheduledMark(alpha).count(), 0, 'the prior target loses its clock after reassignment');
+  await recordMessage('schedule-clock-fixture', 'target:new');
+  await scheduledMark(beta).waitFor({ state: 'detached' });
+  assert.equal(await scheduledMark(alpha).count(), 0, 'runs in new sessions have no current sidebar target');
+  await recordMessage('schedule-clock-fixture', 'target:workbench-test-alpha');
+  await scheduledMark(alpha).waitFor();
   await recordMessage('schedule-clock-fixture', 'delete');
   await scheduledMark(alpha).waitFor({ state: 'detached' });
   const archive = tree.locator('[data-workbench-archived]');

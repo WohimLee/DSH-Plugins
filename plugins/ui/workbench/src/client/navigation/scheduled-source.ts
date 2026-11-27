@@ -11,10 +11,9 @@ export type ScheduledTasks = readonly ScheduledTask[];
 export function activeScheduledSessionIds(tasks: ScheduledTasks): ReadonlySet<string> {
   const ids = new Set<string>();
   for (const task of tasks) {
-    if (task.status !== 'active') continue;
-    for (const id of task.involvedSessionIds) ids.add(id);
-    const target = task.target.kind === 'new' ? task.lastDelivery?.targetSessionId : task.target.sessionId;
-    if (target) ids.add(target);
+    if (task.status === 'active' && task.target.kind !== 'new') {
+      ids.add(task.target.sessionId);
+    }
   }
   return ids;
 }

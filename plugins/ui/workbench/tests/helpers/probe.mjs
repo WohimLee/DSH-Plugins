@@ -127,6 +127,10 @@ export async function apply(ctx, config) {
         timing: { kind: 'at', at: new Date(Date.now() + 24 * 60 * 60_000).toISOString() },
         target: { kind: 'session', sessionId: 'workbench-test-alpha' },
       });
+    } else if (scheduledFixture && action.startsWith('target:')) {
+      const sessionId = action.slice('target:'.length);
+      const target = sessionId === 'new' ? { kind: 'new' } : { kind: 'session', sessionId };
+      await ctx.schedule.edit({ id: scheduledFixture.id, action: 'update', patch: { target } });
     } else if (scheduledFixture) {
       await ctx.schedule.edit(action === 'delete'
         ? { id: scheduledFixture.id, action: 'delete' }
