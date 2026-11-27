@@ -1,10 +1,15 @@
 // Shared surfaces for the four Workbench destinations. Provider details keep
 // their semantic/status colors and the host retains ownership of window controls.
-const frame = 'html[data-dsh-workbench] [data-slot="root"] > div';
-const managed = `${frame}:is(:not(:has(> div > [data-global-panel])), :has(:is([data-plugin-panel], [data-testid="task-manager-page"], .dsh-model-management)))`;
-const darwin = managed.replace('html[data-dsh-workbench]', 'html[data-dsh-workbench][data-platform="darwin"]');
-const sidebar = 'div:has(> [data-slot="sidebar"])';
 const management = ':is([data-plugin-panel], [data-testid="task-manager-page"], .dsh-model-management)';
+const frame = '[data-slot="root"] > div';
+const globalPanel = '> div > [data-global-panel]';
+const managedFrame = `${frame}:is(:not(:has(${globalPanel})), :has(${management}))`;
+const managed = `html[data-dsh-workbench] ${managedFrame}`;
+const darwinRoot = 'html[data-dsh-workbench][data-platform="darwin"]';
+const darwin = `${darwinRoot} ${managedFrame}`;
+const blockedFrame = `${frame}:is([data-sidebar-drawer]:not([data-sidebar-collapsed]), [data-rightbar-fullscreen])`;
+const dragRoot = `${darwinRoot}:not([data-fullscreen], :has(dialog:modal)) #root:not(:has(${blockedFrame})):is(:not(:has(${frame} ${globalPanel})), :has(${frame} ${management}))`;
+const sidebar = 'div:has(> [data-slot="sidebar"])';
 const title = ':is([data-plugin-header-part="title"], [data-testid="task-manager-page"] h1, .dsh-model-management h1)';
 const nav = ':is(.wb-plugins-navigation, [data-workbench-scheduled-navigation], .dsh-model-management-nav)';
 const sidebarTitle = ':is(.wb-plugins-navigation-title, .dsh-model-management-nav > h2, .wb-scheduled-title)';
@@ -95,6 +100,22 @@ ${managed} [data-slot="conversation.session.header"] nav::before {
   mask: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.65'%3E%3Cpath d='M3 5h6l2 2h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z'/%3E%3C/svg%3E");
 }
 .wb-window-caption { display: none; }
+/* Electron combines drag rectangles in layout order. A leading pseudo-element
+   fills the gaps before the host rows and their no-drag controls are collected. */
+${dragRoot}::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  block-size: var(--dsh-frame-top-clearance, 48px);
+  pointer-events: none;
+  -webkit-app-region: drag;
+}
+/* On management pages controls can scroll into the top strip. They are not
+   necessarily inside a native drag row, so preserve their hit targets too. */
+${darwin} ${management} :is(button, a[href], input, select, textarea, summary, [contenteditable="true"], [role="button"], [role="link"], [role="tab"]),
+${darwin} > :is([data-side="sidebar"], [data-side="rightbar"]) {
+  -webkit-app-region: no-drag;
+}
 @media (min-width: 824px) {
   ${managed} [data-window-drag]:has([data-workbench-brand]) { height: var(--wb-sidebar-header-height); }
   ${darwin}:not([data-sidebar-collapsed]) [data-window-drag] + [data-window-drag]:has([data-workbench-brand]) { margin-block-start: -4px; }

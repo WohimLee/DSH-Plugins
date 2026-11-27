@@ -208,6 +208,16 @@ const React = require('react');
 return {inject:['slots'],apply(ctx){
 ctx.slots.inject('main',()=>ctx.slots.register({name:'main',key:'workbench-probe'},()=>React.createElement('h1',{'data-workbench-probe':''},'Workbench extension probe')));
 ctx.slots.inject('sidebar.panellist',()=>ctx.slots.register({name:'sidebar.panellist',id:'workbench-probe',label:'Workbench probe',order:999},()=>React.createElement('span',null,'◇')));
+// Only the Model Picker panel contract is needed here. Its actual UI is tested by that plugin.
+function ModelsFixture() {
+  const [selected, select] = React.useState(false);
+  return React.createElement('main', {className:'dsh-model-management','data-workbench-models-fixture':'',style:{height:'100%',minHeight:0}},
+    React.createElement('div', {className:'dsh-model-management-body',style:{height:'100%',boxSizing:'border-box',overflow:'auto'}},
+      React.createElement('button', {type:'button','aria-pressed':selected,onClick:()=>select(value=>!value)},'Fixture provider'),
+      React.createElement('div', {style:{height:'120vh'},'aria-hidden':true})));
+}
+ctx.slots.inject('main',()=>ctx.slots.register({name:'main',key:'dsh-model-picker'},ModelsFixture));
+ctx.slots.inject('sidebar.panellist',()=>ctx.slots.register({name:'sidebar.panellist',id:'dsh-model-picker',label:'Model management fixture',order:998},()=>React.createElement('span',null,'◇')));
 }};}});`);
   return directory;
 }

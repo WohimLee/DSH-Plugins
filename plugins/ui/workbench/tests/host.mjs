@@ -6,6 +6,7 @@ import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { createProbe } from './helpers/probe.mjs';
+import { checkWindowDrag } from './helpers/window-drag.mjs';
 
 const directory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const root = resolve(directory, '../../..');
@@ -142,6 +143,7 @@ try {
   await preview.click();
   await dismissSignIn();
   await page.locator('[data-workbench-rail]').waitFor({ state: 'visible' });
+  await checkWindowDrag(page);
   assert.equal(await page.locator('[data-workbench-brand]').textContent(), 'DSH');
   const tree = page.locator('[data-workbench-tree]');
   const recents = tree.locator('[data-row-key="section:projects"]');
