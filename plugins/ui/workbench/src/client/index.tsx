@@ -47,14 +47,14 @@ function assemble(ctx: Context): void {
   ctx.effect(() => installAppearance());
   const tree = createTreeStore(ctx);
   const activity = createViewToggle();
-  registerRightPanels(ctx, tree, workspaceCommands(ctx, lifetime.signal));
+  const scheduledTasks = scheduledSource(ctx);
+  registerRightPanels(ctx, tree, workspaceCommands(ctx, lifetime.signal), scheduledTasks);
   registerZoom(ctx);
   ctx.slots.inject('conversation.chat.user.images', () => ctx.slots.register({
     name: 'conversation.chat.user.images', priority: 90,
   }, ({ images, loadImage, align, renderFactorySlot }: MessageImagesProps) =>
     renderFactorySlot('conversation.images.content', { images, loadImage, align, compact: true })));
   const panels = panelSource(ctx);
-  const scheduledTasks = scheduledSource(ctx);
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'dsh-workbench:activity', order: -100, locale: 'workbench',
     inject: () => ({

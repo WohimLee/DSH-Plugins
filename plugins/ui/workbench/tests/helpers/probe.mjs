@@ -20,7 +20,7 @@ export async function createProbe(temp, runtimeVersion) {
     exports: { '.': './lib/index.js', './client': './lib/client.js', './package.json': './package.json' },
     files: ['lib', 'cordis.patch.yml'],
     peerDependencies: { '@deepseek-ai/cordis': '4.1.0', react: '18.3.1' },
-    dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-ui-renderer', '@deepseek-ai/dsh-client-ui-sidebar'] } },
+    dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-ui-renderer', '@deepseek-ai/dsh-client-ui-sidebar', '@deepseek-ai/dsh-client-ui-sidebar-right'] } },
   };
   await writeFile(join(directory, 'package.json'), JSON.stringify(pkg, null, 2));
   await writeFile(join(directory, 'cordis.patch.yml'), stringify([
@@ -205,7 +205,37 @@ export async function apply(ctx, config) {
 `);
   await writeFile(join(directory, 'lib/client.js'), `window.__ModuleLoader__.load({id:'dsh-workbench-probe',factory:require=>{
 const React = require('react');
-return {inject:['slots'],apply(ctx){
+return {inject:['slots','sidebarRightTabs'],apply(ctx){
+ // Register on demand so tests cover both absent and available providers.
+ let disposeForge;
+ ctx.effect(()=>{
+   const configure = event => {
+     disposeForge?.();
+     disposeForge = undefined;
+     if (!event.detail) return;
+     const paths = event.detail;
+     const release = ctx.provide('remote.forgePanel', {
+       follow(sessionId, signal) {
+         const stopped = Promise.withResolvers();
+         signal.addEventListener('abort', stopped.resolve, { once: true });
+         return {
+           async *[Symbol.asyncIterator]() {
+             const root = paths[sessionId];
+             yield root ? { checkout:{state:'ready',checkout:{root}}, local:{files:[{additions:12,deletions:3}]} }
+               : { checkout:{state:'none'}, local:null };
+             if (!signal.aborted) await stopped.promise;
+           },
+           dispose() { signal.removeEventListener('abort', stopped.resolve); stopped.resolve(); },
+         };
+       },
+     });
+     const unregister = ctx.sidebarRightTabs.register({id:'workbench-probe-forge',kind:'forge-changes',patterns:['dsh-resource://forge-changes/**'],title:()=> 'Fixture Git diff'});
+     disposeForge = () => { unregister(); release(); };
+   };
+   window.addEventListener('workbench-probe-forge',configure);
+   return () => { window.removeEventListener('workbench-probe-forge',configure); disposeForge?.(); };
+ });
+ ctx.slots.inject('sidebar.right.pane.tab',()=>ctx.slots.register({name:'sidebar.right.pane.tab',key:'workbench-probe-forge'},()=>React.createElement('div',null,'Fixture Git diff body')));
 ctx.slots.inject('main',()=>ctx.slots.register({name:'main',key:'workbench-probe'},()=>React.createElement('h1',{'data-workbench-probe':''},'Workbench extension probe')));
 ctx.slots.inject('sidebar.panellist',()=>ctx.slots.register({name:'sidebar.panellist',id:'workbench-probe',label:'Workbench probe',order:999},()=>React.createElement('span',null,'◇')));
 // Only the Model Picker panel contract is needed here. Its actual UI is tested by that plugin.

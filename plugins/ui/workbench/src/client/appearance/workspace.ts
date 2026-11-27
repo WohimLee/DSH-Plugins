@@ -1,5 +1,8 @@
 export const workspaceStyles = `
 .wb-tree {
+  --wb-session-tail-size: 25px;
+  --wb-session-tail-gap: 1px;
+  --wb-session-tail-inset: 4px;
   flex: 1;
   block-size: 100%;
   display: flex;
@@ -96,10 +99,7 @@ export const workspaceStyles = `
   outline-offset: -2px;
 }
 @media (hover: hover) {
-  .wb-tree-row[data-wb-kind="session"]:is(:hover, :has(:focus-visible)) > .wb-status-unread,
-  .wb-tree-row[data-wb-kind="session"]:hover > .wb-status-scheduled { display: none; }
-  .wb-tree-row:not(:hover):not(:focus-within),
-  .wb-tree-row[data-wb-kind="session"]:not(:hover):not(:has(:focus-visible)) {
+  .wb-tree-row:not(:hover):not(:focus-within) {
     & .wb-tree-actions .wb-tree-action:not([data-pinned]) {
       inline-size: 0;
       overflow: clip;
@@ -122,15 +122,62 @@ export const workspaceStyles = `
 .wb-bell .wb-status-unread { position: absolute; right: 4px; top: 4px; margin: 0; }
 .wb-bell[aria-pressed="true"] { color: var(--dsw-alias-accent-primary, #4c95f6); }
 [data-workbench-activity-list] h3 { color: var(--dsw-alias-label-secondary, #999); font-size: 12px; margin: 8px 6px 4px; }
-.wb-activity-row { display: block; width: 100%; text-align: start; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 7px 6px; border-radius: 7px; }
+.wb-activity-row { display: block; width: 100%; text-align: start; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 7px 0; border-radius: 7px; }
 .wb-activity-row:hover, .wb-activity-row[aria-current] { background: var(--dsw-alias-background-hover, #8882); }
-.wb-activity-line { display: flex; align-items: center; gap: 5px; }
-.wb-activity-line > span:first-child, .wb-activity-line small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wb-activity-line > span:first-child { flex: 1; }
-.wb-activity-line small { max-width: 40%; }
-.wb-activity-line small, .wb-activity-preview { color: var(--dsw-alias-label-secondary, #999); }
-.wb-activity-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; margin-top: 3px; }
-.wb-status-running, .wb-status-unread, .wb-status-scheduled { margin-inline-end: 6px; }
+.wb-activity-line { display: flex; align-items: center; padding-inline-start: 6px; }
+.wb-activity-heading { display: flex; flex: 1; min-inline-size: 0; align-items: baseline; gap: 5px; }
+.wb-activity-heading > * { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-activity-heading > span { flex: 1; }
+.wb-activity-heading small { max-inline-size: 40%; }
+.wb-activity-heading small, .wb-activity-preview { color: var(--dsw-alias-label-secondary, #999); }
+.wb-activity-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; margin: 3px 6px 0; }
+
+/* Keep all end tracks anchored independently of label indentation and state.
+   Activity needs only the last two; touch reserves an extra track for four simultaneous items. */
+.wb-session-tail {
+  --wb-tail-col: var(--wb-session-tail-size);
+  display: grid;
+  flex: none;
+  grid-template-columns: [menu] var(--wb-tail-col) [primary] var(--wb-tail-col);
+  column-gap: var(--wb-session-tail-gap);
+  place-items: center;
+  margin-inline-end: var(--wb-session-tail-inset);
+}
+.wb-session-tail[data-actions] {
+  grid-template-columns: [auxiliary] var(--wb-tail-col) [menu] var(--wb-tail-col) [primary] var(--wb-tail-col);
+}
+.wb-session-tail > * { grid-row: 1; }
+.wb-session-tail > [data-wb-tail-slot] { justify-self: stretch; block-size: var(--wb-tail-col); }
+.wb-session-tail > [data-wb-tail-slot="touch"] { display: none; grid-column: touch; }
+.wb-session-tail > [data-wb-tail-slot="auxiliary"] { grid-column: auxiliary; }
+.wb-session-tail > :is([data-wb-tail-slot="menu"], [aria-haspopup="menu"]) { grid-column: menu; }
+.wb-session-tail > :is([data-wb-tail-slot="primary"], [aria-pressed], .wb-status-running, .wb-status-unread, .wb-status-scheduled) { grid-column: primary; }
+/* The persistent pin owns the primary track. Otherwise status (running before unread)
+   takes it, and a simultaneous clock uses the unoccupied menu track. */
+.wb-session-tail:has(> [data-pinned]) > :is(.wb-status-running, .wb-status-unread) { grid-column: auxiliary; }
+.wb-session-tail:has(> :is([data-pinned], .wb-status-running, .wb-status-unread)) > .wb-status-scheduled { grid-column: menu; }
+.wb-session-tail:has(> .wb-status-running) > [aria-pressed="false"] { grid-column: auxiliary; }
+.wb-session-tail > .wb-tree-action { inline-size: var(--wb-tail-col); block-size: var(--wb-tail-col); }
+@media (hover: hover) {
+  /* Keep the same buttons and tab stops while reserving their space. */
+  .wb-tree-row[data-wb-kind="session"]:not(:hover, :has(:focus-visible)) .wb-session-tail > .wb-tree-action:not([data-pinned]) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .wb-tree-row[data-wb-kind="session"]:is(:hover, :has(:focus-visible)) .wb-session-tail > :is(.wb-status-scheduled, .wb-status-unread) {
+    display: none;
+  }
+}
+@media (hover: none) {
+  /* Keep touch actions visible; the extra start track never changes title width. */
+  .wb-session-tail[data-actions] {
+    grid-template-columns: [touch] var(--wb-tail-col) [auxiliary] var(--wb-tail-col) [menu] var(--wb-tail-col) [primary] var(--wb-tail-col);
+  }
+  .wb-session-tail[data-actions] > [data-wb-tail-slot="touch"] { display: block; }
+  .wb-session-tail[data-actions] > .wb-status-scheduled { grid-column: auxiliary; }
+  .wb-session-tail:has(> [aria-pressed="false"]) > .wb-status-unread { grid-column: auxiliary; }
+  .wb-session-tail[data-actions]:has(> [aria-pressed]):has(> :is(.wb-status-running, .wb-status-unread)) > .wb-status-scheduled { grid-column: touch; }
+}
 .wb-status-scheduled {
   display: inline-flex;
   align-items: center;
@@ -139,9 +186,6 @@ export const workspaceStyles = `
   color: var(--dsw-alias-label-secondary, #999);
 }
 .wb-status-scheduled svg { inline-size: 100%; block-size: 14px; }
-.wb-tree-row > .wb-status-scheduled {
-  margin-inline-end: calc(var(--wb-tree-action-inset) + (var(--wb-tree-action-size) - 14px) / 2);
-}
 .wb-status-running {
   flex: none;
   inline-size: 11px;

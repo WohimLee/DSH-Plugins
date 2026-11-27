@@ -1,5 +1,6 @@
 import { Glyph, type Icon } from './Glyph.js';
-import { ActivityList, ScheduledMark, StatusMark } from './ActivityList.js';
+import { ActivityList } from './ActivityList.js';
+import { SessionTail } from './SessionTail.js';
 import { ArchivedSection } from './ArchivedSection.js';
 import { ProjectDialog } from './ProjectDialog.js';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -74,13 +75,10 @@ function SessionItem({ session, running, selected, depth, pinned, busy, unread, 
       aria-label={session.displayTitle} aria-description={unread ? t('unread') : undefined} title={session.displayTitle} onClick={open}>
       <span>{session.displayTitle}</span>
     </button>
-    {scheduled && <ScheduledMark t={t} />}
-    {!running && <StatusMark running={false} unread={unread} t={t} />}
-    <div className="wb-tree-actions">
-      <Action label={t('sessionMenu')} icon="more" run={menu} />
-      {allowed && <Action label={t(pinned ? 'unpinChat' : 'pinChat')} icon={pinned ? 'pinSolid' : 'pinOutline'} pinned={pinned} busy={busy} run={toggle} />}
-    </div>
-    {running && <StatusMark running unread={false} t={t} />}
+    <SessionTail scheduled={scheduled} running={running} unread={unread} t={t} actions={{
+      menu: <Action label={t('sessionMenu')} icon="more" run={menu} />,
+      pin: allowed ? <Action label={t(pinned ? 'unpinChat' : 'pinChat')} icon={pinned ? 'pinSolid' : 'pinOutline'} pinned={pinned} busy={busy} run={toggle} /> : undefined,
+    }} />
   </div>;
 }
 

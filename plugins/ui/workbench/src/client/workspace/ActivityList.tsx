@@ -3,28 +3,10 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client';
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 import type { SessionId, WorkspaceCommands } from './commands.js';
+import { SessionTail } from './SessionTail.js';
 
 type Translator = PropsLocale<'workbench'>['t'];
 type Chat = SessionListState['byId'][SessionId];
-
-export function StatusMark({ running, unread, t }: { running: boolean; unread: boolean; t: Translator }) {
-  if (running) return <svg role="img" className="wb-status-running" aria-label={t('running')} focusable="false"
-    viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4">
-    <circle cx="6" cy="6" r="5" opacity=".28" />
-    <circle cx="6" cy="6" r="5" pathLength="1" strokeDasharray=".72 .28" strokeLinecap="round" />
-  </svg>;
-  return unread ? <span role="img" className="wb-status-unread" aria-label={t('unread')} /> : null;
-}
-
-export function ScheduledMark({ t }: { t: Translator }) {
-  const label = t('sessionScheduled');
-  return <span role="img" className="wb-status-scheduled" aria-label={label} title={label}>
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
-      <circle cx="8" cy="8" r="5.8" />
-      <path d="M8 4.5V8l-1.9 1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  </span>;
-}
 
 function ActivityRow({ chat, project, running, unread, active, scheduled, preview, open, t }: {
   chat: Chat; project?: string; running: boolean; unread: boolean; active: boolean; scheduled: boolean;
@@ -45,8 +27,11 @@ function ActivityRow({ chat, project, running, unread, active, scheduled, previe
     return () => { controller.abort(); observer.disconnect(); };
   }, [chat.id, chat.updatedAt, running, preview]);
   return <button ref={row} className="wb-activity-row" aria-current={active || undefined} onClick={() => open(chat.id)}>
-    <span className="wb-activity-line"><span title={chat.displayTitle}>{chat.displayTitle}</span>
-      <small title={project}>{project}</small>{scheduled && <ScheduledMark t={t} />}<StatusMark running={running} unread={unread} t={t} />
+    <span className="wb-activity-line">
+      <span className="wb-activity-heading">
+        <span title={chat.displayTitle}>{chat.displayTitle}</span><small title={project}>{project}</small>
+      </span>
+      <SessionTail scheduled={scheduled} running={running} unread={unread} t={t} />
     </span>
     {text && <span className="wb-activity-preview">{text}</span>}
   </button>;

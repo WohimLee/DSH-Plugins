@@ -71,6 +71,13 @@ async function dismissSignIn() {
   await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
   if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 }
+const centerX = box => box.x + box.width / 2;
+const centerY = box => box.y + box.height / 2;
+function assertSameColumn(actual, expected, label) {
+  assert.ok(actual && expected, `${label}: both elements must be visible`);
+  assert.ok(Math.abs(centerX(actual) - centerX(expected)) <= 0.5,
+    `${label}: centers must align within 0.5 CSS px (${centerX(actual)} vs ${centerX(expected)})`);
+}
 const folderOutline = locator => locator.locator('svg').evaluate(svg => ({
   path: svg.querySelector('path').getAttribute('d'), width: svg.getBoundingClientRect().width,
   stroke: getComputedStyle(svg).strokeWidth, decorative: svg.getAttribute('aria-hidden'),
@@ -261,7 +268,7 @@ try {
   const restWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
   await alpha.hover();
   const hoverWidth = (await alpha.locator('.wb-tree-label').boundingBox()).width;
-  assert.ok(restWidth > hoverWidth, 'inactive rows give trailing action space back to the title');
+  assert.equal(hoverWidth, restWidth, 'hover does not resize the title column');
   const children = row => row.locator('xpath=following-sibling::*[1][@data-wb-project-children]');
   const projectChildren = children(project);
   const ownRows = container => container.locator(':scope > [data-wb-kind="session"]');
@@ -309,14 +316,29 @@ try {
   if (process.env.DSH_TEST_ARTIFACTS) await alpha.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'session-clock-hover.png') });
   assert.equal(await scheduledMark(alpha).isVisible(), false, 'hover hides the scheduled clock');
   const alphaBox = await alpha.boundingBox();
+  const tailSlot = (row, name) => row.locator(`.wb-session-tail > [data-wb-tail-slot="${name}"]`);
   const hoveredPin = scheduledActions[1];
-  assert.equal(scheduledIcon.x + scheduledIcon.width / 2, hoveredPin.x + hoveredPin.width / 2,
-    'resting clock and hover pin share a horizontal center');
+  assertSameColumn(scheduledIcon, hoveredPin, 'resting clock and hover pin');
+  assertSameColumn(hoveredPin, await tailSlot(alpha, 'primary').boundingBox(), 'pin occupies primary slot');
+  assertSameColumn(scheduledActions[0], await tailSlot(alpha, 'menu').boundingBox(), 'menu occupies menu slot');
   assert.equal(scheduledIcon.y + scheduledIcon.height / 2, alphaBox.y + alphaBox.height / 2,
     'clock is centered vertically in the row');
   await beta.hover();
   const ordinaryActions = await actionBoxes(beta);
   assert.deepEqual(scheduledActions.map(({ x, width }) => [x, width]), ordinaryActions.map(({ x, width }) => [x, width]));
+  const menuBeforeResize = ordinaryActions[0];
+  await startSidebarDrag();
+  await page.mouse.move(290, 200, { steps: 5 });
+  await page.mouse.up();
+  await alpha.hover();
+  const [narrowMenu, narrowPin] = await actionBoxes(alpha);
+  const narrowRow = await alpha.boundingBox();
+  assert.ok(Math.abs(narrowRow.x + narrowRow.width - centerX(narrowPin) - 16.5) <= 0.5, 'pin remains 16.5px from the row edge');
+  assert.ok(Math.abs(centerX(narrowMenu) - centerX(menuBeforeResize) + 58) <= 0.5, 'resize translates the entire icon grid');
+  await startSidebarDrag();
+  await page.mouse.move(348, 200, { steps: 5 });
+  await page.mouse.up();
+  await page.mouse.move(1200, 400);
   await scheduledMark(alpha).waitFor();
   const alphaTop = (await alpha.boundingBox()).y;
   await alpha.click({ button: 'right' });
@@ -401,10 +423,11 @@ try {
   const readPositions = await alphaActions();
   await alpha.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Mark as unread' }).click();
-  const unreadMark = alpha.locator(':scope > .wb-status-unread');
+  const unreadMark = alpha.locator('.wb-status-unread');
   await page.mouse.move(900, 200);
   await unreadMark.waitFor();
   if (process.env.DSH_TEST_ARTIFACTS) await alpha.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'sidebar-unread.png') });
+  assertSameColumn(await unreadMark.boundingBox(), hoveredPin, 'unread dot and hover pin');
   await alpha.hover();
   await unreadMark.waitFor({ state: 'hidden' });
   assert.deepEqual(await alphaActions(), readPositions);
@@ -987,14 +1010,33 @@ try {
   if (process.env.DSH_TEST_ARTIFACTS) {
     await beta.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'running-session.png'), animations: 'disabled' });
   }
+  await page.mouse.move(900, 200);
+  const runningBox = await spinner.boundingBox();
+  assertSameColumn(runningBox, hoveredPin, 'resting running ring and hover pin');
+  assert.ok(Math.abs(centerY(runningBox) - centerY(await beta.boundingBox())) <= 0.5);
+  await beta.hover();
+  const [runningMenu, runningPin] = await actionBoxes(beta);
+  assertSameColumn(await spinner.boundingBox(), runningBox, 'running ring stays fixed on hover');
+  assertSameColumn(runningMenu, await tailSlot(beta, 'menu').boundingBox(), 'running menu occupies its normal slot');
+  assertSameColumn(runningPin, await tailSlot(beta, 'auxiliary').boundingBox(), 'pin coexists with running ring');
+  const betaTitle = beta.getByRole('button', { name: 'Workbench beta', exact: true });
+  await page.mouse.move(900, 200);
+  await betaTitle.focus();
+  await page.keyboard.press('Tab');
+  assert.ok(await beta.getByRole('button', { name: 'Session menu', exact: true })
+    .evaluate(btn => btn === document.activeElement), 'keyboard can reach the menu of a running row');
+  await betaTitle.evaluate(btn => btn.focus());
   assert.deepEqual(await spinner.evaluate(element => {
     const style = getComputedStyle(element);
     return [element.localName, element.querySelector('circle')?.getAttribute('r'), style.width, style.height, style.animationName];
   }), ['svg', '5', '11px', '11px', 'wb-spin']);
   await bell.click();
-  const activitySpinner = activity.getByRole('button', { name: /Workbench beta/ }).getByRole('img', { name: 'Running', exact: true });
+  const activityBeta = activity.getByRole('button', { name: /Workbench beta/ });
+  const activitySpinner = activityBeta.getByRole('img', { name: 'Running', exact: true });
   await activitySpinner.waitFor();
   assert.equal(await activitySpinner.locator('circle').count(), 2);
+  assertSameColumn(await activitySpinner.boundingBox(), await tailSlot(activityBeta, 'primary').boundingBox(),
+    'activity ring occupies its primary slot');
   await recordMessage('running-fixture', 'idle');
   await activitySpinner.waitFor({ state: 'detached' });
   await bell.click();
@@ -1013,8 +1055,13 @@ try {
   const closedScroll = await summaryScroll.boundingBox();
   if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-closed.png') });
   await summaryButton.click();
-  const projectGroup = summary.locator('[data-summary-group="project"]');
-  const projectHeading = projectGroup.getByRole('button', { name: 'child-project', exact: true });
+  const projectGroup = summary.locator('[data-summary-group="project-folders"]');
+  const projectHeading = projectGroup.getByRole('button', { name: 'Project folders · 1', exact: true });
+  const summaryGroups = () => summary.locator(':scope > [data-summary-group]').evaluateAll(groups =>
+    groups.map(group => group.getAttribute('data-summary-group')));
+  const summaryChanges = summary.locator('[data-summary-group="changes"]');
+  const summaryScheduled = summary.locator('[data-summary-group="scheduled"]');
+  assert.deepEqual(await summaryGroups(), ['agents', 'project-folders'], 'unavailable and empty sections do not show');
   const primarySummaryPath = await realpath(join(temp, 'workspace', 'child-project'));
   const additionalSummaryPath = await realpath(join(temp, 'deletion-workspace'));
   const summaryFolder = summary.getByRole('button', { name: primarySummaryPath, exact: true });
@@ -1028,26 +1075,38 @@ try {
   await summaryFolder.waitFor();
   assert.equal(await summary.getByRole('button', { name: /Created chats/ }).count(), 0);
   assert.equal(await summary.getByRole('group', { name: 'Sources' }).count(), 0, 'project folders are not chat sources');
+  const fixtureCheckout = join(temp, 'fixture-linked-checkout-with-a-deliberately-long-name');
+  const configureForge = detail => page.evaluate(value =>
+    window.dispatchEvent(new CustomEvent('workbench-probe-forge', { detail: value })), detail);
+  await configureForge({ 'workbench-test-beta': fixtureCheckout });
+  await summaryChanges.waitFor();
+  assert.equal(await summaryChanges.getAttribute('data-summary-checkout-root'), fixtureCheckout);
+  assert.match(await summaryChanges.innerText(), /\+12\s*−3/);
   assert.deepEqual(await summary.evaluate(element => {
     const heading = getComputedStyle(element.querySelector('.wb-summary-heading'));
     const changes = getComputedStyle(element.querySelector('.wb-summary-changes'));
     return [heading.fontSize, heading.fontWeight, changes.fontSize, changes.lineHeight];
   }), ['13px', '400', '14px', '20px']);
+  await recordMessage('schedule-clock-fixture', 'create');
+  await scheduledMark(alpha).waitFor();
+  assert.equal(await summaryScheduled.count(), 0, 'the other session’s task is not shown');
+  await recordMessage('schedule-clock-fixture', 'target:workbench-test-beta');
+  const summaryTask = summaryScheduled.locator('[data-summary-task-id]');
+  await summaryTask.filter({ hasText: 'Session clock fixture' }).waitFor();
+  assert.equal(await summaryTask.getAttribute('data-summary-task-status'), 'active');
+  assert.ok((await summaryTask.locator('[data-summary-task-timing]').innerText()).trim(), 'summary exposes the actual schedule');
+  assert.deepEqual(await summaryGroups(), ['scheduled', 'changes', 'agents', 'project-folders']);
+  await recordMessage('schedule-clock-fixture', 'pause');
+  await summaryScheduled.locator('[data-summary-task-status="paused"]').waitFor();
   const summaryHeadingFit = () => summary.evaluate(card => {
     const heading = card.querySelector('.wb-summary-heading');
-    const label = heading.querySelector('span');
-    const previous = label.textContent;
-    label.textContent = 'bugfix-2026-11-23-qoder-model-request-with-a-long-checkout-name';
-    try {
-      return {
-        cardFits: card.clientWidth === card.scrollWidth,
-        titleEllipsized: label.scrollWidth > label.clientWidth && getComputedStyle(label).textOverflow === 'ellipsis',
-        fill: getComputedStyle(card).backgroundColor,
-        titleColor: getComputedStyle(heading).color,
-      };
-    } finally {
-      label.textContent = previous;
-    }
+    const label = card.querySelector('[data-summary-checkout-label]');
+    return {
+      cardFits: card.clientWidth === card.scrollWidth,
+      titleEllipsized: label.scrollWidth > label.clientWidth && getComputedStyle(label).textOverflow === 'ellipsis',
+      fill: getComputedStyle(card).backgroundColor,
+      titleColor: getComputedStyle(heading).color,
+    };
   });
   const expectedSummaryFit = { cardFits: true, titleEllipsized: true, fill: 'rgb(43, 44, 46)', titleColor: 'rgb(176, 179, 184)' };
   assert.deepEqual(await summaryHeadingFit(), expectedSummaryFit);
@@ -1062,13 +1121,13 @@ try {
     window.dispatchEvent(new StorageEvent('storage', { key }));
   }, { workspaceId: childProjectKey.slice('project:'.length), paths });
   await configureSummaryFolders([primarySummaryPath, additionalSummaryPath]);
-  await summary.getByRole('heading', { name: 'Project folders · 2' }).waitFor();
-  assert.equal(await summary.getByRole('group', { name: 'Project folders' }).getByRole('button').count(), 2);
-  assert.equal(await projectGroup.getByRole('button', { name: 'Changes', exact: true }).count(), 1);
+  await projectGroup.getByRole('button', { name: 'Project folders · 2', exact: true }).waitFor();
+  assert.equal(await projectGroup.locator('.wb-summary-items').getByRole('button').count(), 2);
+  assert.equal(await projectGroup.locator('.wb-summary-changes').count(), 0);
   await summary.getByRole('button', { name: additionalSummaryPath, exact: true }).waitFor();
   if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-multiple-folders.png') });
   await configureSummaryFolders([primarySummaryPath]);
-  await summary.getByRole('heading', { name: 'Project folders · 1' }).waitFor();
+  await projectHeading.waitFor();
   const openedPanel = await summary.boundingBox();
   const openedScroll = await summaryScroll.boundingBox();
   const openedComposer = await summaryComposer.boundingBox();
@@ -1077,6 +1136,8 @@ try {
   assert.ok(openedScroll.x + openedScroll.width <= openedPanel.x, 'the wide summary clears the message scrollport');
   assert.equal(await right.count(), 0, 'opening Summary does not open the native tool panel');
   if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-open-wide.png') });
+  // Closing the native task panel may transfer focus to its toggle, outside Summary.
+  await summary.focus();
   await page.keyboard.press('Escape');
   await summary.waitFor({ state: 'detached' });
   assert.ok(await summaryButton.evaluate(element => element === document.activeElement));
@@ -1095,6 +1156,16 @@ try {
   assert.deepEqual(await summaryHeadingFit(), expectedSummaryFit);
   if (process.env.DSH_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'summary-open-narrow.png') });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await summaryChanges.click();
+  await right.getByText('Fixture Git diff body', { exact: true }).waitFor();
+  await right.locator('[data-sidebar-right-toggle]:visible').click();
+  await right.waitFor({ state: 'detached' });
+  assert.equal(await summaryTask.evaluate(row => row.localName), 'button', 'official Scheduled detail is available in the packaged host');
+  await summaryTask.press('Enter');
+  await right.getByText('Session clock fixture', { exact: true }).first().waitFor();
+  await right.getByText('Paused', { exact: true }).waitFor();
+  await right.locator('[data-sidebar-right-toggle]:visible').click();
+  await right.waitFor({ state: 'detached' });
   const agentGroup = summary.locator('[data-summary-group="agents"]');
   const agentHeading = agentGroup.getByRole('button', { name: 'Subagents · 1', exact: true });
   const summaryAgent = agentGroup.getByRole('button', { name: /Inspect workbench fixture/ });
@@ -1136,11 +1207,19 @@ try {
   await alpha.getByRole('button', { name: 'Workbench alpha', exact: true }).click();
   await right.locator('.wb-agent-detail').waitFor({ state: 'hidden' });
   await summaryButton.click();
-  await projectGroup.getByRole('button', { name: 'workspace', exact: true }).waitFor();
-  assert.equal(await agentGroup.count(), 0);
+  await summary.getByRole('button', { name: await realpath(join(temp, 'workspace')), exact: true }).waitFor();
+  assert.deepEqual(await summaryGroups(), ['project-folders'], 'switching sessions clears the previous task, checkout and agents');
   await beta.getByRole('button', { name: 'Workbench beta', exact: true }).click();
   if (!(await summary.isVisible())) await summaryButton.click();
   await projectHeading.waitFor();
+  await summaryTask.waitFor();
+  await summaryChanges.waitFor();
+  assert.equal(await summaryTask.getAttribute('data-summary-task-status'), 'paused');
+  await recordMessage('schedule-clock-fixture', 'target:new');
+  await summaryScheduled.waitFor({ state: 'detached' });
+  await recordMessage('schedule-clock-fixture', 'delete');
+  await configureForge(null);
+  await summaryChanges.waitFor({ state: 'detached' });
   await agentHeading.waitFor();
   assert.equal(await agentHeading.getAttribute('aria-expanded'), 'false');
   await agentHeading.click();

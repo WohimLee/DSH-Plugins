@@ -7,7 +7,8 @@ import { panelSource } from '../lib/client/integration/panels.js';
 import { installAppearance } from '../lib/client/appearance/install.js';
 import { ActivityBar } from '../lib/client/navigation/ActivityBar.js';
 import { AgentIcon, agentCatalog } from '../lib/client/panels/Subagents.js';
-import { observeCounts } from '../lib/client/panels/changes.js';
+import { forgeConnectionSource, observeLocalChanges } from '../lib/client/panels/changes.js';
+import { scheduleFrequency, summaryScheduledTasks, taskNextRunAt } from '../lib/client/panels/scheduled.js';
 import { messages } from '../lib/client/messages.js';
 
 test('navigation source follows panel registration, stable order, locale changes and removal', async () => {
@@ -156,26 +157,79 @@ test('agent list follows only reachable catalogs, retains direct parents, and us
   assert.equal(renderToStaticMarkup(createElement(AgentIcon, { id: 'first' })), icons[0]);
 });
 
-test('Forge stream reports actual line totals and releases the stream when the panel closes', async () => {
-  let released = false;
+test('Changes waits for an actual Forge checkout and distinguishes missing from zero totals', async () => {
   const changes = [];
-  const roots = [];
+  let releases = 0;
+  const root = '/fixture/checkout';
+  const checkout = { state: 'ready', checkout: { root } };
+  const panel = { follow: sessionId => ({
+    async *[Symbol.asyncIterator]() {
+      assert.equal(sessionId, 'session');
+      yield { checkout: { state: 'pending' }, local: null };
+      yield { checkout, local: null };
+      yield { checkout, local: { files: [] } };
+      yield { checkout, local: { files: [{ additions: 3, deletions: 1 }, { additions: 5, deletions: 2 }] } };
+      yield { checkout: { state: 'none' }, local: null };
+      yield { checkout: { state: 'failed' }, local: null };
+    },
+    dispose() { releases++; },
+  }) };
+  await observeLocalChanges({ panel }, 'session', new AbortController().signal, value => changes.push(value));
+  assert.deepEqual(changes, [undefined, { root, counts: undefined }, { root, counts: { added: 0, deleted: 0 } },
+    { root, counts: { added: 8, deleted: 3 } }, undefined, undefined]);
+  assert.equal(releases, 1);
+});
+
+test('Forge connection invalidates on reset and abort prevents late cross-session publications', async () => {
+  const contexts = [];
+  const connection = forgeConnectionSource({ inject(deps, use) { assert.deepEqual(deps, ['remote.forgePanel']); contexts.push(use); } });
+  assert.equal(connection.getSnapshot(), undefined);
+  const root = '/fixture/old-checkout';
+  let reset, disable, releases = 0;
+  let resolveFrame;
   const panel = { follow: () => ({
     async *[Symbol.asyncIterator]() {
-      yield { local: null };
-      yield { local: { files: [] } };
-      yield {
-        checkout: { state: 'ready', checkout: { root: '/fixture/checkout' } },
-        local: { files: [{ additions: 3, deletions: 1 }, { additions: 5, deletions: 2 }] },
-      };
+      await new Promise(resolve => { resolveFrame = resolve; });
+      yield { checkout: { state: 'ready', checkout: { root } }, local: { files: [] } };
     },
-    dispose() { released = true; },
+    dispose() { releases++; },
   }) };
-  await observeCounts(panel, 'session', new AbortController().signal, (counts, checkoutRoot) => {
-    changes.push(counts);
-    roots.push(checkoutRoot);
-  });
-  assert.deepEqual(changes, [undefined, { added: 0, deleted: 0 }, { added: 8, deleted: 3 }]);
-  assert.deepEqual(roots, [undefined, undefined, '/fixture/checkout']);
-  assert.equal(released, true);
+  contexts[0]({ get: () => panel, on(event, callback) { assert.equal(event, 'connection/reset'); reset = callback; return () => { reset = undefined; }; },
+    effect(callback) { disable = callback(); } });
+  const old = connection.getSnapshot();
+  const request = new AbortController();
+  const changes = [];
+  const following = observeLocalChanges(old, 'old', request.signal, value => changes.push(value));
+  reset();
+  assert.notEqual(connection.getSnapshot(), old);
+  assert.equal(connection.getSnapshot().panel, old.panel);
+  request.abort();
+  assert.equal(releases, 1);
+  resolveFrame();
+  await following;
+  await observeLocalChanges(old, 'old', request.signal, value => changes.push(value));
+  assert.deepEqual(changes, []);
+  assert.equal(releases, 1);
+  disable();
+  assert.equal(connection.getSnapshot(), undefined);
+  assert.equal(reset, undefined);
+});
+
+test('Summary schedule follows only fixed current delivery targets and keeps paused rules distinct', () => {
+  const occurrence = '2030-01-15T12:00:00.000Z';
+  const later = '2030-01-15T12:05:00.000Z';
+  const task = (id, status, target, extra = {}) => ({ id, kind: 'at', status, target, scheduledAt: occurrence,
+    involvedSessionIds: ['alpha'], lastDelivery: { targetSessionId: 'alpha' }, ...extra });
+  const alpha = { kind: 'session', sessionId: 'alpha' };
+  const beta = { kind: 'session', sessionId: 'beta' };
+  const tasks = [task('paused', 'paused', alpha), task('history', 'active', { kind: 'new' }),
+    task('ended', 'ended', alpha), task('rebound', 'active', beta), task('active', 'active', alpha, { deliveryFloorEndsAt: later }),
+    task('reserved', 'active', { kind: 'new_once', sessionId: 'alpha' })];
+  assert.deepEqual(summaryScheduledTasks(tasks, 'alpha').map(item => item.id), ['reserved', 'active', 'paused']);
+  assert.deepEqual(summaryScheduledTasks(tasks, 'beta').map(item => item.id), ['rebound']);
+  assert.deepEqual(summaryScheduledTasks(tasks, 'other'), []);
+  assert.equal(taskNextRunAt(tasks[4]), later);
+  assert.equal(taskNextRunAt(tasks[5]), occurrence);
+  assert.equal(scheduleFrequency(tasks[0]), 'summaryFrequencyOnce');
+  assert.equal(scheduleFrequency({ kind: 'rrule', rrule: 'DTSTART:20300115T120000Z\nRRULE:FREQ=WEEKLY' }), 'summaryFrequencyWeekly');
 });

@@ -1,19 +1,25 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { changesKind, localChangesAddress, type ChangeCounts } from './changes.js';
+import { changesKind, observeLocalChanges, type ForgeConnection, type LocalChanges } from './changes.js';
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 
 import { AgentIcon, useAgentCatalog, type Refresh } from './Subagents.js';
+import type { ScheduledTask, ScheduledTasks } from '../navigation/scheduled-source.js';
+import { scheduleFrequency, summaryScheduledTasks, taskNextRunAt } from './scheduled.js';
 import type { SessionId } from '../workspace/commands.js';
 import type { TreeStore } from '../workspace/store.js';
 import { sessionGroups } from '../workspace/tree.js';
 import { Glyph } from '../workspace/Glyph.js';
 
 type HeaderProps = PropsRuntime<'conversation.session.header.utilities'> & PropsLocale<'workbench'> & InjectFace<{
-  openResource: (address: string) => void;
-  watchChanges: (id: SessionId, signal: AbortSignal, publish: (counts?: ChangeCounts, checkoutRoot?: string) => void) => Promise<void>;
+  openChanges: (id: SessionId) => void;
+  openScheduledTask: (sessionId: SessionId, id: ScheduledTask['id']) => void;
   refresh: Refresh; openAgent: (id: SessionId) => void; openChat: (id: SessionId) => void; reveal: (path: string) => Promise<void>;
-  hooks: { tree: TreeStore; nativeShare: HostObservable<boolean>; tabKinds: HostObservable<readonly string[]> };
+  hooks: {
+    tree: TreeStore; nativeShare: HostObservable<boolean>; nativeScheduleDetail: HostObservable<boolean>;
+    tabKinds: HostObservable<readonly string[]>; scheduledTasks: HostObservable<ScheduledTasks>;
+    forgeConnection: HostObservable<ForgeConnection | undefined>;
+  };
 }>;
 
 function SummaryGroup({ kind, label, count, children, defaultOpen }: {
@@ -37,7 +43,27 @@ function directoryName(path: string) {
   return path.split(/[\\/]/).filter(Boolean).at(-1) || path;
 }
 
-function SummaryContents({ sessionId, useSessions, useSessionStatus, useWorkspaces, useTabKinds, useTree, openResource, openAgent, openChat, reveal, refresh, watchChanges, t }: HeaderProps) {
+function useLocalChanges({ sessionId, useTabKinds, useForgeConnection }: HeaderProps) {
+  const provided = useTabKinds(kinds => kinds.includes(changesKind));
+  const connection = useForgeConnection(value => value);
+  const [snapshot, setSnapshot] = useState<{ connection: ForgeConnection; changes: LocalChanges }>();
+  useEffect(() => {
+    setSnapshot(undefined);
+    if (!provided || !connection) return;
+    const request = new AbortController();
+    const clear = () => { if (!request.signal.aborted) setSnapshot(undefined); };
+    void observeLocalChanges(connection, sessionId, request.signal, changes => {
+      if (!request.signal.aborted) setSnapshot(changes && { connection, changes });
+    }).then(clear, clear);
+    return () => request.abort();
+  }, [connection, provided, sessionId]);
+
+  return provided && snapshot && snapshot.connection === connection ? snapshot.changes : undefined;
+}
+
+function SummaryContents(props: HeaderProps) {
+  const { sessionId, useSessions, useSessionStatus, useWorkspaces, useTree, useScheduledTasks, useNativeScheduleDetail,
+    openScheduledTask, openChanges, openAgent, openChat, reveal, refresh, t } = props;
   const state = useSessions(value => value);
   const statuses = useSessionStatus(value => value);
   const { rows, failed } = useAgentCatalog(state, sessionId, statuses, refresh);
@@ -49,69 +75,81 @@ function SummaryContents({ sessionId, useSessions, useSessionStatus, useWorkspac
     session ? [session] : [], new Set());
   const project = projects.find(item => groups.has(item.workspaceId));
   const savedFolders = project && tree.sourceFolders?.[project.workspaceId];
-  const folders = project ? [...new Set([project.path, ...(savedFolders ?? [])])] : [];
+  const folders = project ? [...new Set([project.path, ...(savedFolders ?? [])])].filter(Boolean) : [];
   const chats = state.ids.map(id => state.byId[id]).filter(chat => chat.parentId === sessionId && chat.origin !== 'subagent' && !chat.blank);
-  const hasChanges = useTabKinds(kinds => kinds.includes(changesKind));
+  const tasks = useScheduledTasks(value => value);
+  const scheduled = summaryScheduledTasks(tasks, sessionId);
+  const canOpenTask = useNativeScheduleDetail(value => value);
+  const taskTime = new Intl.DateTimeFormat(t('summaryTimeLocale'), { dateStyle: 'medium', timeStyle: 'short' });
+  const changes = useLocalChanges(props);
+  const changesDescription = useId();
   const [openFailed, setOpenFailed] = useState(false);
-  const [changeSummary, setChangeSummary] = useState<{ counts?: ChangeCounts; checkoutRoot?: string }>();
-
-  useEffect(() => {
-    setChangeSummary(undefined);
-    if (!hasChanges) return;
-    const request = new AbortController();
-    void watchChanges(sessionId, request.signal, (counts, checkoutRoot) => {
-      if (!request.signal.aborted) setChangeSummary({ counts, checkoutRoot });
-    }).catch(() => { if (!request.signal.aborted) setChangeSummary(undefined); });
-    return () => request.abort();
-  }, [hasChanges, sessionId, watchChanges]);
 
   const run = (action: () => void | Promise<void>) => {
     setOpenFailed(false);
     try { void Promise.resolve(action()).catch(() => setOpenFailed(true)); }
     catch { setOpenFailed(true); }
   };
-  const hasAgents = rows.length > 0 || failed.length > 0;
-  const { counts, checkoutRoot } = changeSummary ?? {};
-  const separateCheckout = hasChanges && (!project || Boolean(checkoutRoot && checkoutRoot !== project.path));
-  const changes = <button type="button" className="wb-control wb-summary-row wb-summary-changes" disabled={!hasChanges}
-    title={hasChanges ? t('localChangesScope') : t('providerMissing')}
-    onClick={() => run(() => openResource(localChangesAddress(sessionId)))}>
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-      <rect x="4" y="3" width="16" height="18" rx="3" /><path d="M8 9h8m-4-4v8m-4 4h8" />
-    </svg>
-    <span>{t('changes')}</span>{counts && <span className="wb-summary-value"><b>+{counts.added}</b> <em>−{counts.deleted}</em></span>}
-  </button>;
+  const retryAgents = failed.length > 0 && <button type="button" className="wb-control" onClick={() => {
+    for (const id of failed) void refresh(id).catch(() => {});
+  }}>{t('retryCatalog')}</button>;
   return <>
-    {project && <SummaryGroup kind="project" label={project.title} defaultOpen>
-      {!separateCheckout && changes}
-      {folders.length > 0 && <div role="group" aria-label={t('summaryProjectFolders')}>
-        <h3>{t('summaryProjectFolders')} · {folders.length}</h3>
-        {folders.map(path => <button type="button" className="wb-control wb-summary-row" aria-label={path}
-          title={path} key={path} onClick={() => run(() => reveal(path))}>
-          <Glyph icon="project" /><span>{directoryName(path)}</span>
-        </button>)}
-      </div>}
+    {scheduled.length > 0 && <SummaryGroup kind="scheduled" label={t('scheduled')} count={scheduled.length} defaultOpen>
+      {scheduled.map(task => {
+        const active = task.status === 'active';
+        const status = t(active ? 'summaryScheduledActive' : 'summaryScheduledPaused');
+        const frequency = t(scheduleFrequency(task));
+        const next = active ? taskNextRunAt(task) : undefined;
+        const nextAt = next === undefined ? NaN : Date.parse(next);
+        const stamp = Number.isFinite(nextAt) ? `${t('summaryNextRun')} ${taskTime.format(nextAt)}` : undefined;
+        const timing = stamp ? `${frequency} · ${stamp}` : frequency;
+        const content = <>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" />
+          </svg>
+          <span className="wb-summary-task-label"><span title={task.title}>{task.title}</span>
+            <small title={timing}>{frequency}{stamp && next && <> · <time data-summary-task-timing dateTime={next}>{stamp}</time></>}</small>
+          </span><small>{status}</small>
+        </>;
+        const row = { 'data-summary-task-id': task.id, 'data-summary-task-status': task.status, title: task.title };
+        return canOpenTask ? <button key={task.id} type="button" className="wb-control wb-summary-row" {...row}
+          onClick={() => run(() => openScheduledTask(sessionId, task.id))}>{content}</button>
+          : <div key={task.id} className="wb-summary-row" {...row}>{content}</div>;
+      })}
     </SummaryGroup>}
-    {separateCheckout && <SummaryGroup kind="checkout" label={checkoutRoot ? directoryName(checkoutRoot) : t('summaryCheckout')} defaultOpen>
-      {changes}
-    </SummaryGroup>}
+    {changes && <button type="button" className="wb-control wb-summary-row wb-summary-changes" data-summary-group="changes"
+      data-summary-checkout-root={changes.root} aria-label={t('changes')} aria-describedby={changesDescription}
+      title={`${t('localChangesScope')} · ${changes.root}`} onClick={() => run(() => openChanges(sessionId))}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+        <rect x="4" y="3" width="16" height="18" rx="3" /><path d="M8 9h8m-4-4v8m-4 4h8" />
+      </svg>
+      <span className="wb-summary-change-label">{t('changes')}<small data-summary-checkout-label title={changes.root}>{directoryName(changes.root)}</small></span>
+      {changes.counts && <span className="wb-summary-value"><b>+{changes.counts.added}</b> <em>−{changes.counts.deleted}</em></span>}
+      <span id={changesDescription} hidden>{changes.root}{changes.counts ? ` · +${changes.counts.added} −${changes.counts.deleted}` : ''}</span>
+    </button>}
     {chats.length > 0 && <SummaryGroup kind="chats" label={t('createdChats')} count={chats.length}>
       {chats.map(chat => <button type="button" className="wb-control wb-summary-row" key={chat.id}
         title={chat.displayTitle} onClick={() => run(() => openChat(chat.id))}>
         <Glyph icon="new" /><span>{chat.displayTitle}</span>
       </button>)}
     </SummaryGroup>}
-    {hasAgents && <SummaryGroup kind="agents" label={t('agents')} count={rows.length || undefined}>
+    {rows.length > 0 && <SummaryGroup kind="agents" label={t('agents')} count={rows.length}>
       {rows.map(row => <button type="button" className="wb-control wb-summary-row" key={row.id}
         title={row.title} disabled={row.mode === 'external'} onClick={() => run(() => openAgent(row.id))}>
         <AgentIcon id={row.id} /><span>{row.title}</span>
         <small>{row.mode === 'external' ? t('unavailableRecord') : t(row.group)}</small>
       </button>)}
-      {failed.length > 0 && <button type="button" className="wb-control" onClick={() => {
-        for (const id of failed) void refresh(id).catch(() => {});
-      }}>{t('retryCatalog')}</button>}
+      {retryAgents}
     </SummaryGroup>}
-    {!project && !hasChanges && !chats.length && !hasAgents && <p className="wb-summary-empty">{t('noItems')}</p>}
+    {!rows.length && retryAgents}
+    {folders.length > 0 && <SummaryGroup kind="project-folders" label={t('summaryProjectFolders')} count={folders.length} defaultOpen>
+      {folders.map(path => <button type="button" className="wb-control wb-summary-row" aria-label={path}
+        title={path} key={path} onClick={() => run(() => reveal(path))}>
+        <Glyph icon="project" /><span>{directoryName(path)}</span>
+      </button>)}
+    </SummaryGroup>}
+    {!scheduled.length && !changes && !chats.length && !rows.length && !failed.length && !folders.length
+      && <p className="wb-summary-empty">{t('noItems')}</p>}
     {openFailed && <span role="status">{t('openFailed')}</span>}
   </>;
 }
