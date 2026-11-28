@@ -25,7 +25,7 @@ pnpm --filter dsh-codex pack --pack-destination /tmp
 在目标 DSH 环境运行（替换 tarball 路径）：
 
 ```sh
-dsh plugin --profile web add /tmp/dsh-codex-0.1.11.tgz
+dsh plugin --profile web add /tmp/dsh-codex-0.1.12.tgz
 ```
 
 重启后在模型选择器选择 **Codex** 下的模型。Desktop 应在桌面应用的插件页安装该 tarball；桌面版为插件兼容基线，随实际桌面版升级验证，不通过版本豁免安装。包保持 private，未发布 npm。
@@ -74,7 +74,9 @@ pnpm --filter dsh-codex test:host
 
 单元和契约测试使用合成凭据、临时目录和模拟响应，包含真实 Cordis/LLM 服务的注册、prepareCall、卸载与重载。`test:host` 构建 tarball，检查发布文件，然后用临时 DSH_HOME 安装并启动真实 Web 宿主，不读取日常 DSH home，不发送模型请求。2026-11-18 已在 macOS Desktop 0.2.2-rc.3 安装并启用 0.1.2，模型选择器显示 Codex 分组及 10 个本地缓存模型。2026-11-20 使用 Desktop 内置 Node 24.21.0 调用 0.1.6 适配器，在当前 macOS 手动 HTTPS 代理下使用真实账号发送简短提示，GPT-6.2-Astra high 返回文本与正常结束帧。
 
-桌面账号指定 `https://chatgpt.com/backend-api/codex/responses`，API 账号使用 `https://api.openai.com/v1` 的官方接口。两种连接均拒绝自动跟随重定向。已知过载、限流、服务端故障、超时或流中断交由 DSH 对失败的模型请求执行有限重试；插件不另建重试循环，不更换模型或账号。额度耗尽、凭据错误、无效请求和无法分类的流式错误不盲重试。
+桌面账号指定 `https://chatgpt.com/backend-api/codex/responses`，API 账号使用 `https://api.openai.com/v1` 的官方接口。两种连接均拒绝自动跟随重定向。已知过载、限流、服务端故障、超时或流中断交由 DSH 对失败的模型请求执行有限重试；额度耗尽、凭据错误、无效请求和无法分类的流式错误不盲重试。
+
+桌面账号（默认及额外绑定）在建立连接时遇到明确的网络不可达或 DNS 临时失败，会通过 DSH 的 `agent/request-error` 单独等待网络，按 5、10、20、40 秒递增，此后每 60 秒尝试一次。首次连接失败后 10 分钟内才允许发起等网重试（睡眠也计入时限）；该期限不截断已经发出的模型请求。只重发当前模型步骤，不切换账号或模型，不重跑已完成的工具，不消耗普通重试次数。聊天使用宿主的原生重试行，展开可见连接失败原因；可用原生停止按钮取消，账号解绑或插件卸载也结束等待。应用退出后不自动恢复定时器。HTTP 错误、通用超时、证书错误和响应流中断不进入此分支，API 连接策略不变。
 
 错误诊断不保存上游正文、提示词、凭据或任意自定义错误码。只保留已知归类、HTTP 状态、符合预期格式的 `x-request-id` 和可识别的 `Retry-After`。桌面端点和 Codex 本地文件格式可能随 Codex 版本变化。
 

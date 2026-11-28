@@ -25,7 +25,7 @@ try {
   if (!artifactDir) await run('pnpm', ['pack', '--pack-destination', temp], { cwd: directory });
   const tarball = resolve(artifactDir ?? temp, `dsh-codex-${version}.tgz`);
   const listing = await run('tar', ['-tzf', tarball]);
-  for (const file of ['lib/index.js', 'lib/index.d.ts', 'lib/api.js', 'lib/desktop.js', 'lib/failure.js', 'lib/local.js', 'lib/model-cache.js', 'lib/request.js', 'lib/proxy.js', 'lib/stream.js', 'cordis.patch.yml', 'package.json', 'README.md', 'locale/zh.json']) {
+  for (const file of ['lib/index.js', 'lib/index.d.ts', 'lib/api.js', 'lib/desktop.js', 'lib/failure.js', 'lib/local.js', 'lib/model-cache.js', 'lib/network-failure.js', 'lib/network-recovery.js', 'lib/request.js', 'lib/proxy.js', 'lib/stream.js', 'cordis.patch.yml', 'package.json', 'README.md', 'locale/zh.json']) {
     assert.ok(listing.includes(`package/${file}`), `tarball missing ${file}`);
   }
   assert.doesNotMatch(listing, /(?:node_modules|auth\.json|tests\/)/);
@@ -37,6 +37,11 @@ try {
   const runtimeVersion = (await run(process.execPath, [cli, '--version'], { cwd: temp, env })).trim();
   if (!override) assert.equal(runtimeVersion, devDependencies['@deepseek-ai/dsh']);
   await run(process.execPath, [cli, 'plugin', '--profile', 'web', 'add', tarball], { cwd: temp, env });
+  const recovery = await run(process.execPath, ['--test', join(directory, 'tests/recovery-host.test.mjs')], { cwd: temp, env: {
+    ...env, DSH_CODEX_TEST_CLI: cli,
+    DSH_CODEX_TEST_INSTALLED_LIB: join(home, 'profiles/web/node_modules/dsh-codex/lib'),
+  } });
+  console.log(recovery.trim());
   const config = await run(process.execPath, [cli, '--profile', 'web', '--dump-config'], { cwd: temp, env });
   assert.ok(config.includes('dsh-codex:main'));
   const child = spawn(process.execPath, [cli, 'web', '--port', '0', '--no-open'], { cwd: temp, env, stdio: ['ignore', 'pipe', 'pipe'] });

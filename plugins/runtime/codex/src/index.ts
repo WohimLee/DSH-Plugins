@@ -13,6 +13,8 @@ import { systemProxy } from './proxy.js';
 import { fetch as proxyFetch, type ProxyAgent } from 'undici';
 import { buildRequest } from './request.js';
 import { httpFailure } from './failure.js';
+import { codexConnectionFailure } from './network-failure.js';
+import { installNetworkRecovery } from './network-recovery.js';
 import { parseStream } from './stream.js';
 import { readCodexUsage } from './usage.js';
 import { unwatchFile, watchFile } from 'node:fs';
@@ -67,6 +69,7 @@ export class CodexAdapter extends LlmAdapter {
       return false;
     }
   }
+  get routeSignal(): AbortSignal { return this.lifetime.signal; }
   dispose(): void { this.lifetime.abort(); }
   override providerInfo(provider: string) { return { id: provider, name: this.account ? `Codex · ${this.account.label}` : 'Codex' }; }
   override async listModels(provider: string): Promise<LlmResolvedModelInfo[]> {
@@ -117,7 +120,9 @@ export class CodexAdapter extends LlmAdapter {
         headers: { authorization: `Bearer ${credential.accessToken}`, 'chatgpt-account-id': credential.accountId,
           originator: 'codex_cli_rs', 'content-type': 'application/json', accept: 'text/event-stream', ...attributionHeaders() },
         body: JSON.stringify(body), redirect: 'error' as const };
-      const response = dispatcher ? await proxyFetch(RESPONSES_URL, { ...init, dispatcher }) : await this.fetchImpl(RESPONSES_URL, init);
+      // Only connection establishment at the fetch boundary can enter the separate wait policy.
+      const response = await (dispatcher ? proxyFetch(RESPONSES_URL, { ...init, dispatcher }) : this.fetchImpl(RESPONSES_URL, init))
+        .catch((error: unknown) => { throw codexConnectionFailure(error) ?? error; });
       const privateIds = [credential.accessToken, credential.accountId];
       if (!response.ok) throw await httpFailure(response, 'Codex', privateIds, signal);
       if (!response.body) throw new LlmError('Codex 响应没有数据流。', 'INVALID_RESPONSE');
@@ -161,6 +166,7 @@ export function apply(ctx: Context, config: PluginConfig = {}): void {
   }
 
   register('codex', defaultHome);
+  installNetworkRecovery(ctx, provider => routes.get(provider)?.adapter.routeSignal);
   ctx.effect(() => () => {
     live = false;
     for (const route of routes.values()) route.dispose();

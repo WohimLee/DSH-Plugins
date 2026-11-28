@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "将 Codex 桌面登录与 OpenAI API 账号可用的模型接入 DSH 原生模型循环。",
   "type": "module",
@@ -45,14 +45,16 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
-    "@deepseek-ai/dsh-credentials": "0.2.2-rc.5",
-    "@types/node": "26.6.6",
-    "typescript": "7.0.2",
-    "esbuild": "0.28.2",
-    "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
-    "@deepseek-ai/schemastery": "3.19.0",
     "@deepseek-ai/dsh": "0.2.2-rc.5",
-    "@dsh-plugins/macos-proxy": "workspace:*"
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm-retry": "0.2.2-rc.5",
+    "@deepseek-ai/schemastery": "3.19.0",
+    "@dsh-plugins/macos-proxy": "workspace:*",
+    "@types/node": "26.6.6",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
   },
   "dependencies": {
     "undici": "8.11.2"
