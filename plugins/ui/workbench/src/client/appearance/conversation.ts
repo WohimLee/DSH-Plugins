@@ -74,11 +74,13 @@ html[data-dsh-workbench] [data-question-key] [data-question-scroll] > div:has(> 
 }
 html[data-dsh-workbench] [data-question-key] > section > header h2,
 html[data-dsh-workbench] [data-question-key] [data-question-scroll] > div > h2:first-child {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 20px;
 }
+html[data-dsh-workbench] [data-question-key] [data-option-line] > span:first-child,
 html[data-dsh-workbench] [data-question-key] [data-option-description] {
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 18px;
 }
 html[data-dsh-workbench] [data-question-key] [data-option-row] > button[role="radio"] > span:first-child {
   background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
@@ -96,6 +98,78 @@ html[data-dsh-workbench] [data-question-key] [data-option-row] > button > span:h
   column-gap: 8px;
 }
 html[data-dsh-workbench] [data-question-key] [data-wb-single-question-pager] { display: none; }
+
+/* Keep the host controls and tab order. The grid shares one row between its
+   inline answer field and actions, including when pagination is visible. */
+html[data-dsh-workbench] [data-question-key] [data-question-scroll] div:has(> textarea) > :is(textarea, [aria-hidden="true"]) {
+  font-size: 13px;
+  line-height: 20px;
+}
+html[data-dsh-workbench] [data-question-key] > section > footer > div:last-child:has(> button + button) {
+  gap: 6px;
+  > button {
+    block-size: 28px;
+    min-block-size: 28px;
+    padding-inline: 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    line-height: 18px;
+  }
+}
+html[data-dsh-workbench] [data-question-key] > section:has(> [data-question-scroll] > :is([role="radiogroup"], [role="group"]) > div > div > textarea):has(> footer > div:last-child > button + button) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-auto-rows: max-content;
+  grid-auto-flow: row dense;
+  column-gap: 6px;
+  padding: 0 14px 12px;
+  overflow: auto;
+
+  > header {
+    grid-column: 1 / -1;
+    padding: 12px 2px 6px;
+  }
+  > [data-question-scroll], > [data-question-scroll] > :is([role="radiogroup"], [role="group"]), > footer {
+    display: contents;
+  }
+  > [data-question-scroll] > :not(:is([role="radiogroup"], [role="group"])) {
+    grid-column: 1 / -1;
+    margin-inline: 2px;
+    margin-block-end: 6px;
+  }
+  [data-option-row] {
+    grid-column: 1 / -1;
+    min-block-size: 34px;
+    > button:is([role="radio"], [role="checkbox"]) {
+      min-block-size: 34px;
+      padding-block: 5px;
+    }
+  }
+  > [data-question-scroll] > :is([role="radiogroup"], [role="group"]) > div:has(> div > textarea) {
+    grid-column: 1;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: 32px;
+    padding: 4px 6px;
+    margin-block-start: 4px;
+  }
+  > footer > :is(div:first-child, [role="status"]) {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  > footer > [role="status"]:empty { display: none; }
+  > footer > div:last-child:has(> button + button) {
+    grid-column: 2;
+    align-self: center;
+    margin-block-start: 4px;
+  }
+
+  @container wb-question (width < 28rem) {
+    > [data-question-scroll] > :is([role="radiogroup"], [role="group"]) > div:has(> div > textarea),
+    > footer > div:last-child:has(> button + button) { grid-column: 1 / -1; }
+    > footer > div:last-child:has(> button + button) { justify-self: end; }
+  }
+}
 @container wb-question (width < 64rem) {
   html[data-dsh-workbench] [data-question-key] [data-option-row] > button > span:has(> [data-option-line]) {
     flex-direction: column;

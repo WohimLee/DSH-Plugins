@@ -149,7 +149,10 @@ export async function apply(ctx, config) {
         { label: 'Personal', description: 'Use the personal account.' },
         { label: 'Work', description: 'Use the work account.' },
       ];
-      const questions = [{ id: 'account', header: '账号', question: '选择用于本次操作的账号', options }];
+      const questions = text === 'comparison' ? [{
+        id: 'comparison', header: 'Question', question: '你希望用哪个窗口宽度对比 Codex 和 DSH 的提问卡片？',
+        options: ['按你截图里的宽度', '按窄窗口宽度', '宽窗和窄窗都看'].map(label => ({ label })),
+      }] : [{ id: 'account', header: '账号', question: '选择用于本次操作的账号', options }];
       if (text === 'batch') questions.push({ id: 'backup', question: 'Choose backup accounts', multiSelect: true, options });
       void ctx.userQuestions.ask({ agent, questions })
         .then(answer => writeFile(config.activity + '.answer', JSON.stringify(answer)))

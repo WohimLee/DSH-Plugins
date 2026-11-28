@@ -935,8 +935,10 @@ try {
   console.log('PASS composer, Edited files card and hover diff typography at 100% with 15px host preferences, plus dark and light user bubbles.');
   const question = page.locator('[data-question-key]');
   const questionPager = question.locator('footer > div:first-child');
+  const questionCard = question.locator(':scope > section');
   const questionRadio = question.getByRole('radio');
   const questionSubmit = question.getByRole('button', { name: 'Submit', exact: true });
+  const answerBox = question.locator('textarea');
   const questionNumber = questionRadio.first().locator(':scope > span:first-child');
   const markerStyle = element => {
     const { color, backgroundColor, borderTopWidth, fontSize, fontWeight, lineHeight, width, height } = getComputedStyle(element);
@@ -958,11 +960,21 @@ try {
   await recordMessage('question-card-fixture', 'single');
   await question.waitFor();
   await questionPager.waitFor({ state: 'hidden' });
-  assert.deepEqual(await question.locator('h2').evaluate(typography), ['14px', '20px']);
-  assert.equal((await question.locator('[data-option-description]').first().evaluate(typography))[0], '14px');
   if (process.env.DSH_TEST_ARTIFACTS) {
-    await question.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'question-card-single.png') });
+    await questionCard.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'question-card-single.png') });
   }
+  assert.deepEqual(await question.locator('h2').evaluate(typography), ['13px', '20px']);
+  assert.deepEqual(await question.locator('[data-option-line] > span:first-child').first().evaluate(typography), ['13px', '18px']);
+  assert.deepEqual(await question.locator('[data-option-description]').first().evaluate(typography), ['13px', '18px']);
+  assert.deepEqual(await answerBox.evaluate(typography), ['13px', '20px']);
+  assert.deepEqual(await questionSubmit.evaluate(typography), ['13px', '18px']);
+  const wideInput = await answerBox.boundingBox();
+  const wideSubmit = await questionSubmit.boundingBox();
+  assert.equal(wideSubmit.height, 28);
+  assert.ok(wideInput.x + wideInput.width < wideSubmit.x &&
+    Math.abs(wideInput.y + wideInput.height / 2 - (wideSubmit.y + wideSubmit.height / 2)) <= 2,
+  'free text and actions are on the same row without overlapping');
+  assert.equal(await question.getByRole('radiogroup').count(), 1);
   const restingMarker = await questionNumber.evaluate(markerStyle);
   assert.deepEqual([restingMarker.fontSize, restingMarker.fontWeight, restingMarker.lineHeight,
     restingMarker.borderTopWidth, restingMarker.width, restingMarker.height], ['12px', '500', '12px', '1px', '20px', '20px']);
@@ -971,10 +983,27 @@ try {
   const questionCopy = question.locator('[data-option-line]').first().locator('..');
   assert.equal(await questionCopy.evaluate(node => getComputedStyle(node).flexDirection), 'column');
   const usualViewport = page.viewportSize();
-  await page.setViewportSize({ width: 760, height: usualViewport.height });
+  const sidebarCollapsed = '[data-sidebar-collapsed]';
+  const sidebarWasCollapsed = await page.locator(sidebarCollapsed).count() > 0;
+  await page.setViewportSize({ width: 460, height: usualViewport.height });
+  const drawer = page.locator('[data-sidebar-drawer]');
+  await drawer.waitFor();
+  if (!await drawer.getAttribute('data-sidebar-collapsed')) {
+    await drawer.locator('[data-sidebar-mask]').click({ position: { x: 435, y: 72 } });
+    await drawer.and(page.locator(sidebarCollapsed)).waitFor();
+  }
   assert.equal(await questionCopy.evaluate(node => getComputedStyle(node).flexDirection), 'column');
+  const narrowInput = await answerBox.boundingBox();
+  const narrowSubmit = await questionSubmit.boundingBox();
+  assert.ok(narrowSubmit.y >= narrowInput.y + narrowInput.height, 'narrow cards give free text a full row');
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await questionCard.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'question-card-narrow.png') });
+  }
   await page.setViewportSize(usualViewport);
-  const answerBox = question.locator('textarea');
+  await drawer.waitFor({ state: 'detached' });
+  if (!sidebarWasCollapsed && await page.locator(sidebarCollapsed).count()) {
+    await page.locator('[data-sidebar-opener]:visible, [data-sidebar-toggle]:visible').first().click();
+  }
   await answerBox.fill('中文');
   await answerBox.press('2');
   assert.equal(await answerBox.inputValue(), '中文2');
@@ -1028,7 +1057,14 @@ try {
   assert.equal(await backupOption.getAttribute('aria-checked'), 'true');
   await questionSubmit.click();
   await assertQuestionAnswer([{ id: 'account', selected: ['Work'] }, { id: 'backup', selected: ['Personal'] }]);
-  console.log('PASS question card markers and wrapping, direct single choice submission, batch navigation, multi-select, free text and IME.');
+  await recordMessage('question-card-fixture', 'comparison');
+  await questionRadio.nth(2).waitFor();
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await questionCard.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'question-card-matched-text.png') });
+  }
+  await questionRadio.first().click();
+  await assertQuestionAnswer([{ id: 'comparison', selected: ['按你截图里的宽度'] }]);
+  console.log('PASS question card sizing and shared action row, narrow wrapping, markers, single choice, multi-select, keyboard navigation and IME.');
   const tabs = page.locator('[data-conversation-tabs]');
   const chatTab = tabs.getByRole('tab', { name: 'Chat', exact: true });
   const trajectoryTab = tabs.getByRole('tab', { name: 'Trajectory' });
