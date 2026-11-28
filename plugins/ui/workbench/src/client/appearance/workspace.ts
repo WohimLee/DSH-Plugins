@@ -133,7 +133,7 @@ export const workspaceStyles = `
 .wb-activity-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; margin: 3px 6px 0; }
 
 /* Keep all end tracks anchored independently of label indentation and state.
-   Activity needs only the last two; touch reserves an extra track for four simultaneous items. */
+   Preserve the existing title width in both pointer modes. */
 .wb-session-tail {
   --wb-tail-col: var(--wb-session-tail-size);
   display: grid;
@@ -152,10 +152,9 @@ export const workspaceStyles = `
 .wb-session-tail > [data-wb-tail-slot="auxiliary"] { grid-column: auxiliary; }
 .wb-session-tail > :is([data-wb-tail-slot="menu"], [aria-haspopup="menu"]) { grid-column: menu; }
 .wb-session-tail > :is([data-wb-tail-slot="primary"], [aria-pressed], .wb-status-running, .wb-status-unread, .wb-status-scheduled) { grid-column: primary; }
-/* The persistent pin owns the primary track. Otherwise status (running before unread)
-   takes it, and a simultaneous clock uses the unoccupied menu track. */
+/* The persistent pin owns the primary track; on desktop an idle clock may share the row. */
 .wb-session-tail:has(> [data-pinned]) > :is(.wb-status-running, .wb-status-unread) { grid-column: auxiliary; }
-.wb-session-tail:has(> :is([data-pinned], .wb-status-running, .wb-status-unread)) > .wb-status-scheduled { grid-column: menu; }
+.wb-session-tail:has(> [data-pinned]) > .wb-status-scheduled { grid-column: menu; }
 .wb-session-tail:has(> .wb-status-running) > [aria-pressed="false"] { grid-column: auxiliary; }
 .wb-session-tail > .wb-tree-action { inline-size: var(--wb-tail-col); block-size: var(--wb-tail-col); }
 @media (hover: hover) {
@@ -176,7 +175,6 @@ export const workspaceStyles = `
   .wb-session-tail[data-actions] > [data-wb-tail-slot="touch"] { display: block; }
   .wb-session-tail[data-actions] > .wb-status-scheduled { grid-column: auxiliary; }
   .wb-session-tail:has(> [aria-pressed="false"]) > .wb-status-unread { grid-column: auxiliary; }
-  .wb-session-tail[data-actions]:has(> [aria-pressed]):has(> :is(.wb-status-running, .wb-status-unread)) > .wb-status-scheduled { grid-column: touch; }
 }
 .wb-status-scheduled {
   display: inline-flex;

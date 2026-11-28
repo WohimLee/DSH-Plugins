@@ -301,6 +301,8 @@ try {
   assert.equal(await scheduledMark(beta).count(), 0);
   const scheduledIcon = await scheduledMark(alpha).boundingBox();
   const scheduledTitle = await titleBounds(alpha);
+  const titleColumnWidth = async row => (await row.locator('.wb-tree-label').boundingBox()).width;
+  const scheduledTitleWidth = await titleColumnWidth(alpha);
   assert.equal(scheduledIcon.width, 14);
   assert.ok(scheduledIcon.x >= scheduledTitle.x + scheduledTitle.width);
   if (process.env.DSH_TEST_ARTIFACTS) await alpha.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'session-clock-after.png') });
@@ -360,8 +362,30 @@ try {
   await activityToggle.click();
   const scheduledActivity = page.locator('[data-workbench-activity-list]').getByRole('button', { name: /Workbench alpha/ });
   await scheduledMark(scheduledActivity).waitFor();
+  const activityClock = await scheduledMark(scheduledActivity).boundingBox();
   await activityToggle.click();
   await tree.waitFor({ state: 'visible' });
+  await alpha.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Mark as unread' }).click();
+  await page.mouse.move(1200, 400);
+  const scheduledUnread = alpha.getByRole('img', { name: 'Unread', exact: true });
+  await scheduledUnread.waitFor();
+  await saveFolderScreenshot(alpha, 'session-clock-unread');
+  assert.equal(await alpha.locator('.wb-status-scheduled').count(), 0, 'unread dot replaces the clock in the project row');
+  assertSameColumn(await scheduledUnread.boundingBox(), scheduledIcon, 'unread dot and idle clock');
+  assert.equal(await titleColumnWidth(alpha), scheduledTitleWidth, 'unread does not change the title column width');
+  await activityToggle.click();
+  const activityUnread = scheduledActivity.getByRole('img', { name: 'Unread', exact: true });
+  await activityUnread.waitFor();
+  assert.equal(await scheduledActivity.locator('.wb-status-scheduled').count(), 0, 'unread dot replaces the clock in activity');
+  assertSameColumn(await activityUnread.boundingBox(), activityClock, 'activity unread dot and idle clock');
+  await activityToggle.click();
+  await tree.waitFor({ state: 'visible' });
+  await alpha.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Mark as read' }).click();
+  await page.mouse.move(1200, 400);
+  await scheduledMark(alpha).waitFor();
+  assertSameColumn(await scheduledMark(alpha).boundingBox(), scheduledIcon, 'acknowledging unread restores the clock in place');
   await recordMessage('schedule-clock-fixture', 'target:workbench-test-beta');
   await scheduledMark(beta).waitFor();
   assert.equal(await scheduledMark(alpha).count(), 0, 'the prior target loses its clock after reassignment');
@@ -1038,6 +1062,13 @@ try {
   await beta.locator('[aria-current="true"]').waitFor();
   console.log('PASS switching to native session beta.');
 
+  await recordMessage('schedule-clock-fixture', 'create');
+  await scheduledMark(alpha).waitFor();
+  await recordMessage('schedule-clock-fixture', 'target:workbench-test-beta');
+  await page.mouse.move(900, 200);
+  await scheduledMark(beta).waitFor();
+  const betaClock = await scheduledMark(beta).boundingBox();
+  const betaTitleWidth = await titleColumnWidth(beta);
   await recordMessage('running-fixture', 'running');
   const spinner = beta.getByRole('img', { name: 'Running', exact: true });
   await spinner.waitFor();
@@ -1046,6 +1077,9 @@ try {
   }
   await page.mouse.move(900, 200);
   const runningBox = await spinner.boundingBox();
+  assert.equal(await beta.locator('.wb-status-scheduled').count(), 0, 'running ring replaces the clock in the project row');
+  assertSameColumn(runningBox, betaClock, 'running ring and idle clock');
+  assert.equal(await titleColumnWidth(beta), betaTitleWidth, 'running does not change the title column width');
   assertSameColumn(runningBox, hoveredPin, 'resting running ring and hover pin');
   assert.ok(Math.abs(centerY(runningBox) - centerY(await beta.boundingBox())) <= 0.5);
   await beta.hover();
@@ -1069,13 +1103,19 @@ try {
   const activitySpinner = activityBeta.getByRole('img', { name: 'Running', exact: true });
   await activitySpinner.waitFor();
   assert.equal(await activitySpinner.locator('circle').count(), 2);
+  assert.equal(await activityBeta.locator('.wb-status-scheduled').count(), 0, 'running ring replaces the clock in activity');
   assertSameColumn(await activitySpinner.boundingBox(), await tailSlot(activityBeta, 'primary').boundingBox(),
     'activity ring occupies its primary slot');
   await recordMessage('running-fixture', 'idle');
   await activitySpinner.waitFor({ state: 'detached' });
+  await scheduledMark(activityBeta).waitFor();
   await bell.click();
   await tree.waitFor();
-  console.log('PASS circular running indicator in the project and activity lists.');
+  await scheduledMark(beta).waitFor();
+  assertSameColumn(await scheduledMark(beta).boundingBox(), betaClock, 'returning to idle restores the clock in place');
+  await recordMessage('schedule-clock-fixture', 'delete');
+  await scheduledMark(beta).waitFor({ state: 'detached' });
+  console.log('PASS running and unread replace the clock without shifting the project or activity row.');
 
 
   const guide = page.locator('[data-workbench-guide]:visible');
