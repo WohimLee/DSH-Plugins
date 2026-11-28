@@ -1,6 +1,7 @@
 const cardSelector = '[data-question-key]';
 const pagerSelector = 'section > footer > div:first-child:has(> button[aria-label] + span + button[aria-label]:last-child)';
 const optionSelector = '[data-option-row] > button:is([role="radio"], [role="checkbox"]):enabled';
+const submitSelector = 'section > footer > div:last-child > button:last-child:enabled';
 const singlePager = 'data-wb-single-question-pager';
 
 function isVisible(element: Element): boolean {
@@ -19,7 +20,24 @@ export function installQuestionCards(doc: Document): () => void {
   const view = doc.defaultView;
   if (!view) return () => {};
   const requestFrame = view.requestAnimationFrame.bind(view);
+  const pendingChoices = new WeakMap<Element, HTMLButtonElement>();
   let active = true;
+
+  function selectLastAnswer(event: MouseEvent): void {
+    if (event.button !== 0 || !(event.target instanceof Element)) return;
+    const option = event.target.closest<HTMLButtonElement>(`${optionSelector}[role="radio"]`);
+    const card = option?.closest(cardSelector);
+    if (!option || !card?.querySelector(`:scope > ${pagerSelector} > button:last-child:disabled`)) return;
+
+    pendingChoices.set(card, option);
+    // The host must commit the answer draft before its footer can submit it.
+    requestFrame(() => {
+      if (!active || pendingChoices.get(card) !== option) return;
+      pendingChoices.delete(card);
+      if (event.defaultPrevented || !card.contains(option) || option.getAttribute('aria-checked') !== 'true') return;
+      card.querySelector<HTMLButtonElement>(`:scope > ${submitSelector}`)?.click();
+    });
+  }
 
   function keydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.isComposing || event.keyCode === 229 ||
@@ -91,10 +109,12 @@ export function installQuestionCards(doc: Document): () => void {
   });
   markSinglePager(doc);
   observer.observe(doc.body, { childList: true, subtree: true });
+  doc.addEventListener('click', selectLastAnswer, true);
   doc.addEventListener('keydown', keydown);
   return () => {
     active = false;
     observer.disconnect();
+    doc.removeEventListener('click', selectLastAnswer, true);
     doc.removeEventListener('keydown', keydown);
     for (const pager of doc.querySelectorAll(`[${singlePager}]`)) pager.removeAttribute(singlePager);
   };

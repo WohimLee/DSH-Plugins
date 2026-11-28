@@ -80,11 +80,23 @@ html[data-dsh-workbench] [data-question-key] [data-question-scroll] > div > h2:f
 html[data-dsh-workbench] [data-question-key] [data-option-description] {
   font-size: 14px;
 }
+html[data-dsh-workbench] [data-question-key] [data-option-row] > button[role="radio"] > span:first-child {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
+  border: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+html[data-dsh-workbench] [data-question-key] [data-option-row] > button[role="radio"][aria-checked="true"] > span:first-child {
+  background: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-label-primary);
+  color: var(--dsw-specific-input-major);
+}
 html[data-dsh-workbench] [data-question-key] [data-option-row] > button > span:has(> [data-option-line]) {
   column-gap: 8px;
 }
 html[data-dsh-workbench] [data-question-key] [data-wb-single-question-pager] { display: none; }
-@container wb-question (max-width: 512px) {
+@container wb-question (width < 64rem) {
   html[data-dsh-workbench] [data-question-key] [data-option-row] > button > span:has(> [data-option-line]) {
     flex-direction: column;
     align-items: flex-start;

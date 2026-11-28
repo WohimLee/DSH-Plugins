@@ -913,6 +913,11 @@ try {
   const questionPager = question.locator('footer > div:first-child');
   const questionRadio = question.getByRole('radio');
   const questionSubmit = question.getByRole('button', { name: 'Submit', exact: true });
+  const questionNumber = questionRadio.first().locator(':scope > span:first-child');
+  const markerStyle = element => {
+    const { color, backgroundColor, borderTopWidth, fontSize, fontWeight, lineHeight, width, height } = getComputedStyle(element);
+    return { color, backgroundColor, borderTopWidth, fontSize, fontWeight, lineHeight, width, height };
+  };
   const questionAnswer = join(temp, 'activity.answer');
   const assertQuestionAnswer = async expected => {
     await question.waitFor({ state: 'hidden' });
@@ -931,6 +936,20 @@ try {
   await questionPager.waitFor({ state: 'hidden' });
   assert.deepEqual(await question.locator('h2').evaluate(typography), ['14px', '20px']);
   assert.equal((await question.locator('[data-option-description]').first().evaluate(typography))[0], '14px');
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await question.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'question-card-single.png') });
+  }
+  const restingMarker = await questionNumber.evaluate(markerStyle);
+  assert.deepEqual([restingMarker.fontSize, restingMarker.fontWeight, restingMarker.lineHeight,
+    restingMarker.borderTopWidth, restingMarker.width, restingMarker.height], ['12px', '500', '12px', '1px', '20px', '20px']);
+  await questionRadio.first().hover();
+  assert.deepEqual(await questionNumber.evaluate(markerStyle), restingMarker, 'hover preserves the resting number colors');
+  const questionCopy = question.locator('[data-option-line]').first().locator('..');
+  assert.equal(await questionCopy.evaluate(node => getComputedStyle(node).flexDirection), 'column');
+  const usualViewport = page.viewportSize();
+  await page.setViewportSize({ width: 760, height: usualViewport.height });
+  assert.equal(await questionCopy.evaluate(node => getComputedStyle(node).flexDirection), 'column');
+  await page.setViewportSize(usualViewport);
   const answerBox = question.locator('textarea');
   await answerBox.fill('中文');
   await answerBox.press('2');
@@ -940,13 +959,16 @@ try {
   await answerBox.fill('');
   await answerBox.blur();
   await page.keyboard.press('2');
-  assert.equal(await questionRadio.nth(1).getAttribute('aria-checked'), 'true');
-  assert.equal(await questionSubmit.isEnabled(), true);
-  if (process.env.DSH_TEST_ARTIFACTS) {
-    await question.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'question-card-single.png') });
-  }
-  await questionSubmit.click();
   await assertQuestionAnswer([{ id: 'account', selected: ['Work'] }]);
+
+  await recordMessage('question-card-fixture', 'single');
+  await questionRadio.first().click();
+  await assertQuestionAnswer([{ id: 'account', selected: ['Personal'] }]);
+
+  await recordMessage('question-card-fixture', 'single');
+  await answerBox.fill('自定义账号');
+  await answerBox.press('Enter');
+  await assertQuestionAnswer([{ id: 'account', selected: [], custom: '自定义账号' }]);
 
   await recordMessage('question-card-fixture', 'batch');
   await question.waitFor();
@@ -961,6 +983,18 @@ try {
   await backupOption.focus();
   await page.keyboard.press('ArrowLeft');
   await questionRadio.first().waitFor();
+  await questionRadio.first().click();
+  await backupOption.waitFor();
+  await backupOption.focus();
+  await page.keyboard.press('ArrowLeft');
+  await questionRadio.first().waitFor();
+  assert.equal(await questionRadio.first().getAttribute('aria-checked'), 'true');
+  const selectedMarker = await questionNumber.evaluate(markerStyle);
+  assert.notEqual(selectedMarker.backgroundColor, restingMarker.backgroundColor);
+  assert.notEqual(selectedMarker.color, restingMarker.color);
+  if (process.env.DSH_TEST_ARTIFACTS) {
+    await question.screenshot({ path: join(process.env.DSH_TEST_ARTIFACTS, 'question-card-selected.png') });
+  }
   await questionRadio.first().focus();
   await page.keyboard.press('2');
   await backupOption.waitFor();
@@ -970,7 +1004,7 @@ try {
   assert.equal(await backupOption.getAttribute('aria-checked'), 'true');
   await questionSubmit.click();
   await assertQuestionAnswer([{ id: 'account', selected: ['Work'] }, { id: 'backup', selected: ['Personal'] }]);
-  console.log('PASS question card typography, singleton and batch pagination, keyboard selection, IME and native submission.');
+  console.log('PASS question card markers and wrapping, direct single choice submission, batch navigation, multi-select, free text and IME.');
   const tabs = page.locator('[data-conversation-tabs]');
   const chatTab = tabs.getByRole('tab', { name: 'Chat', exact: true });
   const trajectoryTab = tabs.getByRole('tab', { name: 'Trajectory' });
