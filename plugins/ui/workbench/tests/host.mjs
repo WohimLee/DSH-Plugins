@@ -1136,6 +1136,10 @@ try {
   const summaryChanges = summary.locator('[data-summary-group="changes"]');
   const changesCheckout = summaryChanges.getByRole('button');
   const summaryScheduled = summary.locator('[data-summary-group="scheduled"]');
+  const agentGroup = summary.locator('[data-summary-group="agents"]');
+  const agentHeading = agentGroup.getByRole('button', { name: 'Subagents · 1', exact: true });
+  // The fixture file write precedes host ingestion and the client projection.
+  await agentHeading.waitFor();
   assert.deepEqual(await summaryGroups(), ['agents', 'project-folders'], 'unavailable and empty sections do not show');
   const primarySummaryPath = await realpath(join(temp, 'workspace', 'child-project'));
   const additionalSummaryPath = await realpath(join(temp, 'deletion-workspace'));
@@ -1248,8 +1252,6 @@ try {
   await right.getByText('Paused', { exact: true }).waitFor();
   await right.locator('[data-sidebar-right-toggle]:visible').click();
   await right.waitFor({ state: 'detached' });
-  const agentGroup = summary.locator('[data-summary-group="agents"]');
-  const agentHeading = agentGroup.getByRole('button', { name: 'Subagents · 1', exact: true });
   const summaryAgent = agentGroup.getByRole('button', { name: /Inspect workbench fixture/ });
   const chevron = agentHeading.locator('svg');
   await agentHeading.waitFor();
