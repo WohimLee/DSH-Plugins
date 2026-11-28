@@ -33,8 +33,9 @@ export function SessionTail({ scheduled, running, unread, actions, t }: {
     </>}
     <span data-wb-tail-slot="menu" aria-hidden="true" />
     <span data-wb-tail-slot="primary" aria-hidden="true" />
-    {scheduled && <ScheduledMark t={t} />}
-    <StatusMark running={running} unread={unread} t={t} />
+    {scheduled && !running && !unread
+      ? <ScheduledMark t={t} />
+      : <StatusMark running={running} unread={unread} t={t} />}
     {actions?.menu}{actions?.pin}
   </span>;
 }
