@@ -17,6 +17,7 @@
     ],
     "rootDirs": [
       "src",
+      "lib",
       "node_modules/@dsh-plugins/macos-proxy"
     ]
   },

@@ -13,8 +13,8 @@ import { systemProxy } from './proxy.js';
 import { fetch as proxyFetch, type ProxyAgent } from 'undici';
 import { buildRequest } from './request.js';
 import { httpFailure } from './failure.js';
-import { codexConnectionFailure } from './network-failure.js';
-import { installNetworkRecovery } from './network-recovery.js';
+import { connectionFailure } from './model-network-failure.js';
+import { assertNetworkRoute, bindNetworkFailure, clearNetworkFailure, installNetworkRecovery } from './model-network-recovery.js';
 import { parseStream } from './stream.js';
 import { readCodexUsage } from './usage.js';
 import { unwatchFile, watchFile } from 'node:fs';
@@ -113,20 +113,31 @@ export class CodexAdapter extends LlmAdapter {
           ref, this.imageRequestTarget(options.provider, options.model, ref), signal,
         ) : undefined;
       const body = await buildRequest(options, readImage);
+      if (this.fetchImpl === fetch) dispatcher = await systemProxy(new URL(RESPONSES_URL).hostname, signal);
       const credential = await this.credential();
       signal.throwIfAborted();
-      if (this.fetchImpl === fetch) dispatcher = await systemProxy(new URL(RESPONSES_URL).hostname, signal);
+      const identity = accountIdentity(credential.accountId);
+      assertNetworkRoute(options.signal, options.provider, this.routeSignal, identity);
       const init = { method: 'POST', signal,
         headers: { authorization: `Bearer ${credential.accessToken}`, 'chatgpt-account-id': credential.accountId,
           originator: 'codex_cli_rs', 'content-type': 'application/json', accept: 'text/event-stream', ...attributionHeaders() },
         body: JSON.stringify(body), redirect: 'error' as const };
       // Only connection establishment at the fetch boundary can enter the separate wait policy.
       const response = await (dispatcher ? proxyFetch(RESPONSES_URL, { ...init, dispatcher }) : this.fetchImpl(RESPONSES_URL, init))
-        .catch((error: unknown) => { throw codexConnectionFailure(error) ?? error; });
+        .catch((error: unknown) => {
+          const failure = connectionFailure(error);
+          if (failure && !signal.aborted) bindNetworkFailure(options.signal, options.provider, this.routeSignal, identity);
+          throw failure ?? error;
+        });
       const privateIds = [credential.accessToken, credential.accountId];
       if (!response.ok) throw await httpFailure(response, 'Codex', privateIds, signal);
       if (!response.body) throw new LlmError('Codex 响应没有数据流。', 'INVALID_RESPONSE');
-      yield* parseStream(response.body, response.headers, 'Codex', privateIds);
+      for await (const chunk of parseStream(response.body, response.headers, 'Codex', privateIds)) {
+        if (chunk.type === 'finish' && chunk.reason.kind !== 'error' && chunk.reason.kind !== 'aborted') {
+          clearNetworkFailure(options.signal, options.provider);
+        }
+        yield chunk;
+      }
     } catch (error) {
       const aborted = signal.aborted;
       const failure = error instanceof LlmError ? error.failure : { code: 'TRANSPORT', message: 'Codex 网络请求失败，请检查连接。' };

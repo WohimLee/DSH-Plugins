@@ -9,6 +9,8 @@ import { record } from './local.js';
 import { systemProxy } from './proxy.js';
 import { buildRequest } from './request.js';
 import { httpFailure } from './failure.js';
+import { connectionFailure } from './model-network-failure.js';
+import { assertNetworkRoute, bindNetworkFailure, clearNetworkFailure, installNetworkRecovery } from './model-network-recovery.js';
 import { parseStream } from './stream.js';
 
 const API = 'https://api.openai.com/v1';
@@ -97,6 +99,7 @@ export class CodexApiAdapter extends LlmAdapter {
     super();
   }
 
+  get routeSignal(): AbortSignal { return this.lifetime.signal; }
   update(account: ApiAccount) { this.account = account; }
   dispose() { this.lifetime.abort(); }
 
@@ -151,12 +154,23 @@ export class CodexApiAdapter extends LlmAdapter {
       if (options.maxTokens !== undefined) body.max_output_tokens = options.maxTokens;
       const key = this.account.key;
       transport = await apiTransport(this.fetchImpl, key, signal);
+      signal.throwIfAborted();
+      assertNetworkRoute(options.signal, options.provider, this.routeSignal);
       const response = await transport.request('/responses', {
         method: 'POST', headers: { 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify(body),
+      }).catch((error: unknown) => {
+        const failure = connectionFailure(error);
+        if (failure && !signal.aborted) bindNetworkFailure(options.signal, options.provider, this.routeSignal);
+        throw failure ?? error;
       });
       if (!response.ok) throw await httpFailure(response, 'OpenAI API', [key], signal);
       if (!response.body) throw new LlmError('OpenAI API 没有返回数据流。', 'INVALID_RESPONSE');
-      yield* parseStream(response.body, response.headers, 'OpenAI API', [key]);
+      for await (const chunk of parseStream(response.body, response.headers, 'OpenAI API', [key])) {
+        if (chunk.type === 'finish' && chunk.reason.kind !== 'error' && chunk.reason.kind !== 'aborted') {
+          clearNetworkFailure(options.signal, options.provider);
+        }
+        yield chunk;
+      }
     } catch (error) {
       const reason = signal.aborted
         ? { kind: 'aborted' as const, failure: { code: 'ABORTED', message: 'OpenAI API 请求已取消。' } }
@@ -229,6 +243,7 @@ export function applyCodexApi(ctx: Context, fetchImpl: typeof fetch = fetch) {
   let accounts: ApiAccount[] = [];
   let pending = Promise.resolve();
   let changes = Promise.resolve();
+  installNetworkRecovery(ctx, provider => routes.get(provider)?.adapter.routeSignal);
   ctx.effect(() => () => {
     lifetime.abort();
     for (const route of routes.values()) route.dispose();

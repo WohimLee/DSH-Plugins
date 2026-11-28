@@ -4,6 +4,8 @@ import { InMemoryCredentialStore, defaultProviderAuthContext } from '@earendil-w
 import { GrokAdapter } from '../lib/index.js';
 import { grokProvider, readCatalog } from '../lib/catalog.js';
 import { grokRetryPolicy } from '../lib/recovery.js';
+import { MODEL_CONNECTION_FAILED } from '../lib/model-network-failure.js';
+import { fetchGrok } from '../lib/transport.js';
 
 const privateText = 'fixture-sensitive-context-credential';
 const model = 'grok-recovery-fixture';
@@ -14,6 +16,9 @@ const frame = (value, name = value.type) => `event: ${name}\ndata: ${JSON.string
 const failed = code => event('response.failed', { response: { status: 'failed', error: { code, message: `network timeout 503 ${privateText}` } } });
 const headers = { 'content-type': 'text/event-stream' };
 const sse = (...events) => new Response(events.map(value => frame(value)).join(''), { headers });
+const transportError = (code, syscall = 'connect') => new TypeError(privateText, {
+  cause: Object.assign(new Error(privateText), { code, syscall }),
+});
 
 async function fixture(t, fetchImpl, tune = value => value) {
   const controller = new AbortController();
@@ -115,6 +120,47 @@ test('classifies structured SSE errors including SDK-intercepted error frames an
     assert.equal(response.body.locked, false);
   }
   assert.equal(fetch.mock.callCount(), 9);
+});
+
+test('only definite pre-response xAI connection failures use the separate wait code', async t => {
+  let result;
+  const { adapter, fetch } = await fixture(t, () => {
+    if (result instanceof Error) throw result;
+    return result;
+  });
+  for (const [error, code] of [
+    [transportError('ENETUNREACH'), MODEL_CONNECTION_FAILED],
+    [transportError('EAI_AGAIN', 'getaddrinfo'), MODEL_CONNECTION_FAILED],
+    [transportError('UND_ERR_CONNECT_TIMEOUT'), 'TIMEOUT'],
+    [transportError('ECONNRESET'), 'TRANSPORT'],
+    [transportError('CERT_HAS_EXPIRED'), 'PI_AI_ERROR'],
+  ]) {
+    result = error;
+    terminal(await Array.fromAsync(adapter.stream(options)), code);
+  }
+  result = new Response(new ReadableStream({ start(controller) {
+    controller.error(transportError('EAI_AGAIN', 'getaddrinfo'));
+  } }), { headers });
+  terminal(await Array.fromAsync(adapter.stream(options)), 'TRANSPORT');
+  assert.equal(result.body.locked, false);
+  result = sse(failed('ENETUNREACH'));
+  terminal(await Array.fromAsync(adapter.stream(options)), 'PI_AI_ERROR');
+  result = Response.json({ error: { code: 'ENETUNREACH', message: privateText } }, { status: 503 });
+  terminal(await Array.fromAsync(adapter.stream(options)), 'SERVER');
+  assert.equal(fetch.mock.callCount(), 8);
+});
+
+test('preserves catalog and non-inference fetch failures without notifying recovery', async t => {
+  const oldBypass = process.env.NO_PROXY;
+  process.env.NO_PROXY = 'api.x.ai';
+  t.after(() => { if (oldBypass === undefined) delete process.env.NO_PROXY; else process.env.NO_PROXY = oldBypass; });
+  const error = transportError('ENETDOWN');
+  const requests = t.mock.method(globalThis, 'fetch', () => { throw error; });
+  const inspect = () => assert.fail('unexpected inference recovery signal');
+  await assert.rejects(readCatalog('fixture', new AbortController().signal), e => e === error);
+  await assert.rejects(fetchGrok('https://api.x.ai/v1/models', { method: 'POST' }, inspect), e => e === error);
+  await assert.rejects(fetchGrok('https://api.x.ai/v1/responses', { method: 'GET' }, inspect), e => e === error);
+  assert.equal(requests.mock.callCount(), 3);
 });
 
 test('isolates concurrent account attempts and only retries known network failures', async t => {

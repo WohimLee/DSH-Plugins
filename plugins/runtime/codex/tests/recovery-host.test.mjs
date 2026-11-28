@@ -23,8 +23,9 @@ if (process.env.DSH_CODEX_TEST_INSTALLED_LIB) {
     return nextResolve(specifier, context);
   } });
 }
-const [CodexPlugin, { installNetworkRecovery }, { CODEX_CONNECTION_FAILED }] = await Promise.all([
-  import(new URL('index.js', plugin)), import(new URL('network-recovery.js', plugin)), import(new URL('network-failure.js', plugin)),
+const [CodexPlugin, { installNetworkRecovery }, { MODEL_CONNECTION_FAILED }, { applyCodexApi }] = await Promise.all([
+  import(new URL('index.js', plugin)), import(new URL('model-network-recovery.js', plugin)), import(new URL('model-network-failure.js', plugin)),
+  import(new URL('api.js', plugin)),
 ]);
 const { CodexAdapter, RESPONSES_URL } = CodexPlugin;
 const { Context } = await import(pathToFileURL(host.resolve('@deepseek-ai/cordis')).href);
@@ -46,16 +47,17 @@ const failed = code => ({ type: 'response.failed', response: {
   error: { code, message: privateEcho },
 } });
 
-async function fixture(t, responses, { exhaust = false, cancel = false, networkClock, unload = false, source = 'user' } = {}) {
+async function fixture(t, responses, { exhaust = false, cancel = false, networkClock, unload = false, source = 'user', api = false, unlink = false, nextAccount } = {}) {
   const codexHome = await mkdtemp(join(tmpdir(), 'dsh-codex-recovery-'));
   const ctx = new Context();
   t.after(async () => {
     try { await ctx.fiber.dispose(); }
     finally { await rm(codexHome, { recursive: true, force: true }); }
   });
-  await writeFile(join(codexHome, 'auth.json'), JSON.stringify({ auth_mode: 'chatgpt',
-    tokens: { access_token: 'synthetic-key', account_id: 'synthetic-account' },
+  const writeAccount = account => writeFile(join(codexHome, 'auth.json'), JSON.stringify({ auth_mode: 'chatgpt',
+    tokens: { access_token: 'synthetic-key', account_id: account },
   }));
+  await writeAccount('synthetic-account');
   for (const plugin of [LlmRuntime, SessionStore.default, SessionProjectionRegistry.default,
     SystemPrompt.default, Tools.default, NativeToolExecutor, AgentRegistry.default, LlmRetry, AgentLoop.default]) {
     await ctx.plugin(plugin);
@@ -63,8 +65,11 @@ async function fixture(t, responses, { exhaust = false, cancel = false, networkC
 
   const requests = [];
   const executions = [];
-  const model = 'synthetic-codex';
+  const model = api ? 'gpt-5.3-codex' : 'synthetic-codex';
+  let provider = 'codex';
+  let apiService;
   const fetchResponse = async (url, init) => {
+    if (api && url === 'https://api.openai.com/v1/models') return Response.json({ data: [{ id: model }] });
     requests.push({ url, body: JSON.parse(init.body), executions: executions.length });
     const events = responses[requests.length - 1];
     // If an extra attempt leaks through, stop immediately and let request-count assertions fail.
@@ -76,6 +81,19 @@ async function fixture(t, responses, { exhaust = false, cancel = false, networkC
   };
   const adapter = new CodexAdapter({ codexHome, models: [{ id: model }] }, fetchResponse);
   let bundle;
+  if (api) {
+    const records = new Map();
+    ctx.provide('credentials', {
+      readRecord: async key => records.get(key),
+      modifyRecord: async (key, update) => {
+        const next = await update(records.get(key));
+        if (next) records.set(key, structuredClone(next));
+      },
+    });
+    apiService = applyCodexApi(ctx, fetchResponse);
+    assert.equal(await apiService.changeApiAccount({ kind: 'add', key: 'synthetic-api-key', label: 'Test' }), 'ok');
+    [{ provider }] = (await apiService.apiAccounts()).accounts;
+  }
   if (unload) {
     // Use the real bundle entry and disable its macOS manual-proxy fallback in this test.
     const { DSH_HOME, NO_PROXY } = process.env;
@@ -95,10 +113,12 @@ async function fixture(t, responses, { exhaust = false, cancel = false, networkC
       backoff: { initialDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
     });
   }
-  if (!bundle) {
+  if (!bundle && !api) {
     ctx.effect(() => () => adapter.dispose());
     ctx.llm.registerAdapter(['codex'], adapter);
-    if (networkClock) installNetworkRecovery(ctx, provider => provider === 'codex' ? adapter.routeSignal : undefined, networkClock);
+    if (networkClock) installNetworkRecovery(ctx, provider => provider === 'codex' ? adapter.routeSignal : undefined,
+      nextAccount ? { ...networkClock, wait: async (ms, signal) => { await writeAccount(nextAccount); await networkClock.wait(ms, signal); } }
+        : networkClock);
   }
   ctx.tools.register(Tools.defineTool({
     name: toolName,
@@ -107,26 +127,29 @@ async function fixture(t, responses, { exhaust = false, cancel = false, networkC
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     async execute(_args, run) { executions.push(run.callId); return toolOutput; },
   }));
-  const agent = await ctx.agentLoop.create('codex-recovery', { provider: 'codex', model });
-  if (cancel || unload) {
+  const agent = await ctx.agentLoop.create('codex-recovery', { provider, model });
+  let removed;
+  if (cancel || unload || unlink) {
     ctx.on('session/event', (session, event) => {
       // Let the retry handler arm its timer, then cancel before it can dispatch.
       if (session !== agent.session || event.type !== 'llm/retry') return;
       queueMicrotask(() => {
         if (bundle) void bundle.dispose();
+        else if (unlink) removed = apiService.changeApiAccount({ kind: 'remove', provider });
         else agent.cancel({ kind: 'user' });
       });
     });
   }
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Run the tool and reply.' }], source: { kind: source } }));
   await agent.whenIdle();
-  return { agent, requests, executions, events: agent.session.snapshotEvents() };
+  if (unlink) assert.equal(await removed, 'ok');
+  return { agent, provider, requests, executions, events: agent.session.snapshotEvents() };
 }
 
-function assertSingleTool({ requests, executions, events }, expectedRequests) {
+function assertSingleTool({ requests, executions, events }, expectedRequests, url = RESPONSES_URL) {
   assert.equal(requests.length, expectedRequests, JSON.stringify(events.at(-1)?.data));
   assert.deepEqual(executions, [callId]);
-  assert.deepEqual(requests.map(request => request.url), Array(expectedRequests).fill(RESPONSES_URL));
+  assert.deepEqual(requests.map(request => request.url), Array(expectedRequests).fill(url));
   assert.deepEqual(requests.map(request => request.executions), [0, ...Array(expectedRequests - 1).fill(1)]);
   assert.deepEqual(requests[0].body.input.filter(item => item.type === 'function_call_output'), []);
   for (const { body } of requests.slice(1)) {
@@ -219,13 +242,13 @@ function fakeClock({ jump = 0, hold = false } = {}) {
 }
 
 function networkRetries(events) {
-  return events.filter(({ type, data }) => type === 'llm/retry' && data.failure.code === CODEX_CONNECTION_FAILED);
+  return events.filter(({ type, data }) => type === 'llm/retry' && data.failure.code === MODEL_CONNECTION_FAILED);
 }
 
-function assertNetworkWaits(events, delays, started = delays.length) {
+function assertNetworkWaits(events, delays, started = delays.length, provider = 'codex') {
   const waits = networkRetries(events);
   assert.deepEqual(waits.map(({ data }) => [data.turn, data.step, data.provider, data.retry, data.delayMs]),
-    delays.map((ms, index) => [1, 2, 'codex', index + 1, ms]));
+    delays.map((ms, index) => [1, 2, provider, index + 1, ms]));
   assert.equal(new Set(waits.map(({ data }) => data.retryId)).size, 1);
   assert.deepEqual(events.filter(({ type, data }) => type === 'llm/retry-started' && data.retryId === waits[0].data.retryId)
     .map(({ data }) => data.retry), Array.from({ length: started }, (_, index) => index + 1));
@@ -300,4 +323,32 @@ test('a response-body error and an ambiguous fetch rejection do not enter networ
   assert.deepEqual(result.events.filter(event => event.type === 'llm/retry').map(({ data }) => [data.retry, data.failure.code]),
     [[1, 'TRANSPORT'], [2, 'TRANSPORT']]);
   assert.deepEqual(turnEnd(result.events), { kind: 'completed' });
+});
+
+const openAiResponses = 'https://api.openai.com/v1/responses';
+
+test('OpenAI API safely resumes the same request after a connection failure', { timeout: 12000 }, async t => {
+  const result = await fixture(t, [[toolRequest, completed], connectionFailure(), [delta('recovered'), completed]], { api: true });
+  assertSingleTool(result, 3, openAiResponses);
+  assertNetworkWaits(result.events, [5000], 1, result.provider);
+  assert.deepEqual(result.requests[1].body, result.requests[2].body);
+  assert.deepEqual(turnEnd(result.events), { kind: 'completed' });
+});
+
+test('unlinking the OpenAI API account interrupts network wait without resending', { timeout: 3500 }, async t => {
+  const result = await fixture(t, [[toolRequest, completed], connectionFailure()], { api: true, unlink: true });
+  assertSingleTool(result, 2, openAiResponses);
+  assertNetworkWaits(result.events, [5000], 0, result.provider);
+  assert.equal(result.agent.ctx.llm.listProviders().some(({ id }) => id === result.provider), false);
+});
+
+
+test('a changed Desktop login never receives the prior account’s pending request', { timeout: 5000 }, async t => {
+  const result = await fixture(t, [[toolRequest, completed], connectionFailure()], {
+    networkClock: fakeClock(), nextAccount: 'different-synthetic-account',
+  });
+  assertSingleTool(result, 2);
+  assertNetworkWaits(result.events, [5000]);
+  assert.equal(turnEnd(result.events).error?.code, 'AUTH');
+  assert.doesNotMatch(JSON.stringify(result.events), /different-synthetic-account/);
 });

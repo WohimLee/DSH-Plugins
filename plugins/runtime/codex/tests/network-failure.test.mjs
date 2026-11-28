@@ -3,7 +3,7 @@ import dns from 'node:dns';
 import test from 'node:test';
 import { LlmError } from '@deepseek-ai/dsh-llm';
 import { ProxyAgent, errors as undiciErrors, fetch as proxyFetch } from 'undici';
-import { CODEX_CONNECTION_FAILED, codexConnectionFailure } from '../lib/network-failure.js';
+import { MODEL_CONNECTION_FAILED, connectionFailure } from '../lib/model-network-failure.js';
 
 const privateDetail = 'synthetic-hostname-and-credential';
 function systemError(code, syscall) {
@@ -13,11 +13,11 @@ function fetchError(cause) {
   return new TypeError('fetch failed', { cause });
 }
 function assertConnectionFailure(error) {
-  const failure = codexConnectionFailure(error);
+  const failure = connectionFailure(error);
   assert.ok(failure instanceof LlmError);
-  assert.equal(failure.code, 'CODEX_CONNECTION_FAILED');
-  assert.equal(CODEX_CONNECTION_FAILED, failure.code);
-  assert.deepEqual(failure.failure, { code: CODEX_CONNECTION_FAILED, message: '无法建立 Codex 连接，正在等待网络。' });
+  assert.equal(failure.code, 'MODEL_CONNECTION_FAILED');
+  assert.equal(MODEL_CONNECTION_FAILED, failure.code);
+  assert.deepEqual(failure.failure, { code: MODEL_CONNECTION_FAILED, message: '无法建立模型连接，正在等待网络。' });
   assert.equal(failure.cause, undefined);
   assert.doesNotMatch(failure.stack, new RegExp(privateDetail));
 }
@@ -37,9 +37,9 @@ test('requires all members of a Node-style multi-address aggregate to identify a
   assertConnectionFailure(fetchError(new AggregateError([host, unreachable])));
   for (const other of [systemError('ECONNREFUSED', 'connect'), systemError('ETIMEDOUT', 'connect'), new Error('unknown')]) {
     const aggregate = Object.assign(new AggregateError([unreachable, other]), { code: unreachable.code });
-    assert.equal(codexConnectionFailure(fetchError(aggregate)), undefined);
+    assert.equal(connectionFailure(fetchError(aggregate)), undefined);
   }
-  assert.equal(codexConnectionFailure(new AggregateError([])), undefined);
+  assert.equal(connectionFailure(new AggregateError([])), undefined);
 });
 
 test('does not treat timeouts, refused/reset connections, ambiguous DNS, TLS or HTTP as definite network unavailability', () => {
@@ -55,8 +55,8 @@ test('does not treat timeouts, refused/reset connections, ambiguous DNS, TLS or 
     systemError('ENOTFOUND', 'getaddrinfo'), systemError('UND_ERR_HEADERS_TIMEOUT'), systemError('UND_ERR_BODY_TIMEOUT'),
     systemError('ENETUNREACH', 'read'), systemError('EAI_AGAIN', 'read'),
     new Error('connect ENETDOWN / EAI_AGAIN'), { code: 'ENETUNREACH' }, null]) {
-    assert.equal(codexConnectionFailure(error), undefined);
-    assert.equal(codexConnectionFailure(fetchError(error)), undefined);
+    assert.equal(connectionFailure(error), undefined);
+    assert.equal(connectionFailure(fetchError(error)), undefined);
   }
 });
 
@@ -64,21 +64,21 @@ test('does not invoke accessors or let malformed cause graphs hide the original 
   const poisoned = new Error('plain error');
   let accessorReads = 0;
   Object.defineProperty(poisoned, 'code', { get: () => { accessorReads++; return 'ENETDOWN'; } });
-  assert.equal(codexConnectionFailure(fetchError(poisoned)), undefined);
+  assert.equal(connectionFailure(fetchError(poisoned)), undefined);
   assert.equal(accessorReads, 0);
   const cycle = new Error('cycle');
   cycle.cause = cycle;
-  assert.equal(codexConnectionFailure(cycle), undefined);
+  assert.equal(connectionFailure(cycle), undefined);
   const { proxy, revoke } = Proxy.revocable(new Error(), {});
   revoke();
-  assert.equal(codexConnectionFailure(proxy), undefined);
+  assert.equal(connectionFailure(proxy), undefined);
 });
 
 test('preserves the custom code through the host LlmError serialization boundary', () => {
-  const error = codexConnectionFailure(systemError('EAI_AGAIN', 'getaddrinfo'));
+  const error = connectionFailure(systemError('EAI_AGAIN', 'getaddrinfo'));
   assert.ok(error);
   const restored = LlmError.fromFailure(JSON.parse(JSON.stringify(error.failure)));
-  assert.equal(restored.code, CODEX_CONNECTION_FAILED);
+  assert.equal(restored.code, MODEL_CONNECTION_FAILED);
   assert.deepEqual(restored.failure, error.failure);
 });
 

@@ -190,7 +190,7 @@ globalThis.fetch = (input, options) => {
     tarballs.push(join(artifactDir, `${pkg.name}-${pkg.version}.tgz`));
   }
   const files = (await run('tar', ['-tzf', tarballs[0]])).trim().split('\n');
-  for (const file of ['lib/index.js', 'lib/client.js', 'lib/transport.js', 'lib/proxy.js', 'lib/proxy.d.ts', 'locale/en.json', 'locale/zh.json', 'cordis.patch.yml', 'README.md']) {
+  for (const file of ['lib/index.js', 'lib/client.js', 'lib/transport.js', 'lib/proxy.js', 'lib/proxy.d.ts', 'lib/model-network-failure.js', 'lib/model-network-recovery.js', 'locale/en.json', 'locale/zh.json', 'cordis.patch.yml', 'README.md']) {
     assert.ok(files.includes(`package/${file}`), file);
   }
   await run(process.execPath, [cli, 'plugin', '--profile', 'web', 'add', ...tarballs, '--ignore-scripts', '--prefer-offline']);

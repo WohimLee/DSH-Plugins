@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { clearTimeout, setTimeout } from 'node:timers';
-import { isContextWindowExceededError, isQuotaExceededError, resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
+import { isContextWindowExceededError, isQuotaExceededError, LlmError, resolveRetryPolicy } from '@deepseek-ai/dsh-llm';
 import type { BuiltinLlmFailureCode, LlmFailure } from '@deepseek-ai/dsh-llm';
 import { fetchGrok } from './transport.js';
 
@@ -8,7 +8,7 @@ export const grokRetryPolicy = resolveRetryPolicy({
   mode: 'normal', retryableCodes: ['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT'],
 }, 'grok.retryPolicy');
 
-type Attempt = { failure?: LlmFailure; eof?: boolean };
+type Attempt = { beforeDispatch: () => void; guardFailure?: LlmFailure; failure?: LlmFailure; eof?: boolean };
 export const grokAttempt = new AsyncLocalStorage<Attempt>();
 
 export function grokFailure(code: string, metadata?: Omit<LlmFailure, 'code' | 'message'>): LlmFailure {
@@ -209,7 +209,15 @@ function observeSse(response: Response, attempt: Attempt): Response {
 export const fetchGrokResponses: typeof fetch = async (input, init) => {
   const attempt = grokAttempt.getStore();
   try {
-    const response = await fetchGrok(input, init);
+    // Bridge only normalized connection facts across the SDK's error wrapping.
+    const response = await fetchGrok(input, init, attempt && (failure => { attempt.failure ??= failure; }), attempt && (() => {
+      try { attempt.beforeDispatch(); }
+      catch (error) {
+        attempt.guardFailure = error instanceof LlmError && (error.code === 'AUTH' || error.code === 'TRANSPORT')
+          ? error.failure : grokFailure('UNKNOWN');
+        throw new Error('Grok Responses dispatch was blocked.');
+      }
+    }));
     if (!attempt) return response;
     if (!response.ok) {
       attempt.failure = await httpFailure(response);

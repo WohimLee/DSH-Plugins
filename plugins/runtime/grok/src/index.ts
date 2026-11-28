@@ -15,6 +15,8 @@ import { grokProvider, readCatalog, RejectedKey, route } from './catalog.js';
 import { change, contribution, defaultAccountId, service } from './remote.js';
 import type { AccountView, Change, ConnectionView } from './remote.js';
 import { grokAttempt, grokFailure, grokRetryPolicy } from './recovery.js';
+import { MODEL_CONNECTION_FAILED } from './model-network-failure.js';
+import { assertNetworkRoute, bindNetworkFailure, clearNetworkFailure, installNetworkRecovery } from './model-network-recovery.js';
 
 export const name = 'dsh-grok';
 export const inject = ['llm', 'credentials'];
@@ -30,10 +32,14 @@ async function* safeStream(
 ): AsyncGenerator<StreamChunk> {
   const signal = options.signal ? AbortSignal.any([connection, options.signal]) : connection;
   if (signal.aborted) throw new DOMException('Grok request was cancelled.', 'AbortError');
+  assertNetworkRoute(options.signal, options.provider, connection);
   if (!acceptsImages && options.messages.some(message => contentHasImage(message.content))) {
     throw new LlmError('此 Grok 路由当前无法接收图片，请检查模型目录及宿主附件服务。', 'UNSUPPORTED_CONTENT');
   }
-  const attempt: NonNullable<ReturnType<typeof grokAttempt.getStore>> = {};
+  const { signal: turnSignal, provider } = options;
+  const attempt: NonNullable<ReturnType<typeof grokAttempt.getStore>> = {
+    beforeDispatch: () => assertNetworkRoute(turnSignal, provider, connection),
+  };
   let iterator: AsyncIterator<StreamChunk> | undefined;
   let exhausted = false;
   let failure: LlmFailure | undefined;
@@ -43,6 +49,7 @@ async function* safeStream(
     while (true) {
       const step = await grokAttempt.run(attempt, () => source.next());
       if (step.done) { exhausted = true; break; }
+      if (attempt.guardFailure) break;
       const chunk = step.value;
       if (chunk.type === 'finish') {
         if (signal.aborted || chunk.reason.kind === 'aborted') {
@@ -61,6 +68,7 @@ async function* safeStream(
               ? grokFailure('TRANSPORT') : grokFailure('PI_AI_ERROR');
           break;
         }
+        clearNetworkFailure(options.signal, options.provider);
       }
       yield chunk;
     }
@@ -68,8 +76,8 @@ async function* safeStream(
     // Preserve built-in host preflight codes (including image-offload count),
     // never an unknown exception's code/message/cause.
     if (signal.aborted) failure = grokFailure('ABORTED');
-    else if (attempt.failure) failure = attempt.failure;
-    else {
+    else if (!attempt.guardFailure && attempt.failure) failure = attempt.failure;
+    else if (!attempt.guardFailure) {
       const code = error instanceof LlmError && Object.hasOwn(LLM_FAILURE_CODES, error.code) ? error.code : 'UNKNOWN';
       const offloadImages = error instanceof LlmError && code === 'IMAGE_OFFLOAD_REQUIRED' ? error.failure.offloadImages : undefined;
       throw LlmError.fromFailure(grokFailure(code === 'STREAM_CLOSED' ? 'TRANSPORT' : code,
@@ -78,10 +86,16 @@ async function* safeStream(
   } finally {
     if (!exhausted && iterator) await iterator.return?.().catch(() => {});
   }
+  // Throw, rather than return a finish failure: the host must not retry a blocked dispatch.
+  if (attempt.guardFailure && !turnSignal?.aborted) throw LlmError.fromFailure(attempt.guardFailure);
+  if (attempt.guardFailure && turnSignal?.aborted) failure = grokFailure('ABORTED');
   if (failure) {
     if (signal.aborted || failure.code === 'ABORTED') {
       yield { type: 'finish', reason: { kind: 'aborted', failure: grokFailure('ABORTED') } };
     } else {
+      if (failure.code === MODEL_CONNECTION_FAILED) {
+        bindNetworkFailure(options.signal, options.provider, connection);
+      }
       yield { type: 'finish', reason: { kind: 'error', failure } };
     }
   }
@@ -208,6 +222,7 @@ export function apply(ctx: Context): void {
       ),
     },
   );
+  installNetworkRecovery(ctx, provider => active.get(provider)?.connection.signal);
   ctx.effect(() => () => {
     lifetime.abort();
     for (const account of active.values()) {
@@ -217,6 +232,8 @@ export function apply(ctx: Context): void {
     accounts.clear();
     active.clear();
     profiles = new Map();
+    registration?.();
+    registration = undefined;
   });
 
   function view(error?: ConnectionView['error']): ConnectionView {

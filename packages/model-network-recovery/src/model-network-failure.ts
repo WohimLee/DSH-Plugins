@@ -1,6 +1,6 @@
 import { LlmError } from '@deepseek-ai/dsh-llm';
 
-export const CODEX_CONNECTION_FAILED = 'CODEX_CONNECTION_FAILED';
+export const MODEL_CONNECTION_FAILED = 'MODEL_CONNECTION_FAILED';
 
 const unreachableCodes = new Set(['ENETUNREACH', 'EHOSTUNREACH', 'ENETDOWN']);
 const accessor = Symbol('unread error accessor');
@@ -11,7 +11,7 @@ function ownData(object: object, key: string | number): unknown {
 }
 
 /** Classify only a rejected fetch before HTTP response handling, not a body or stream error. */
-export function codexConnectionFailure(error: unknown): LlmError | undefined {
+export function connectionFailure(error: unknown): LlmError | undefined {
   // Node and undici errors have own data properties. Never inspect messages, stacks, or payloads.
   // Bound traversal for malformed cause graphs, including cycles.
   let remaining = 32;
@@ -47,5 +47,5 @@ export function codexConnectionFailure(error: unknown): LlmError | undefined {
     // Exotic thrown values (e.g. revoked proxies) must not mask the original failure.
     return;
   }
-  return LlmError.fromFailure({ code: CODEX_CONNECTION_FAILED, message: '无法建立 Codex 连接，正在等待网络。' });
+  return LlmError.fromFailure({ code: MODEL_CONNECTION_FAILED, message: '无法建立模型连接，正在等待网络。' });
 }

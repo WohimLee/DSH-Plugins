@@ -1,0 +1,16 @@
+{
+  "name": "@dsh-plugins/model-network-recovery",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./embed": "./embed.mjs" },
+  "scripts": { "check": "tsc -p tsconfig.json --noEmit" },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm-retry": "0.2.2-rc.5",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  }
+}

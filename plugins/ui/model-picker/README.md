@@ -27,6 +27,8 @@ Overview 和厂商详情直接显示当前账号的 Usage。连接多个路由�
 
 通过模型管理添加的命名 API 账号复用 DSH `0.2.2-rc.5` 的官方 DeepSeek Messages 适配器。该适配器负责 HTTP、SSE、空闲超时与取消；命名路由保留官方有界重试策略，在默认的 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT` 和 `TRANSPORT` 之外加入 HTTP 408 和未收到 `message_stop` 的干净 EOF（`STREAM_CLOSED`）。标准 Desktop/Web 组合中的 `dsh-llm-retry` 在同一轮次内对失败的模型步骤最多重试五次，接受策略上限内的有效 `Retry-After`，不重跑先前已完成的工具步骤。直接调用 `ctx.llm.stream()` 和未挂载重试执行器的自定义组合不会自动重试。
 
+命名路由目前不使用独立「等待网络」。rc.5 的官方 Messages 适配器未提供推理 `fetch` 注入或标注 HTTP 建连阶段的错误回调；现有错误回调覆盖发请求以及读取 HTTP 响应和 SSE，不能凭底层错误码安全区分二者。待宿主提供传输扩展点或结构化的建连阶段错误后再接入共享等网策略；在此之前保留普通有限重试，不改写全局 `fetch`。
+
 鉴权失败、额度不足、内容拒绝、取消及已识别的协议格式错误不纳入重试。命名路由不向会话诊断传递上游错误原文或响应体，只保留稳定错误码、可用的 HTTP 状态、重试延迟和符合格式的请求 ID。rc.5 对无法归类的流内 `error` 帧仍统一返回 `SERVER`，不保留能与已知过载区分的原始类型；流内失败也不携带 HTTP 响应头里的请求 ID。这两处需由官方 Messages 适配器改进。插件不改写宿主的 `deepseek-official`（配置 API Key）和 `deepseek-account`（DSH 登录）路由；它们的 408/EOF 恢复仍取决于各自的 provider 策略，默认不重试这两种失败。
 
 ## 安装与验证

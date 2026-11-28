@@ -184,6 +184,13 @@ test('named DeepSeek requests carry their bounded retry policy and safe terminal
   const messageStart = { type: 'message_start', message: { id: 'fixture', model, usage: { input_tokens: 3 } } };
   const block = { type: 'content_block_start', index: 0, content_block: { type: 'text', text: 'Uncommitted partial text' } };
   const errorEvent = type => ({ type: 'error', error: { type, message: echo } });
+  const connectionShape = () => new TypeError(echo, {
+    cause: Object.assign(new Error(echo), { code: 'ENETUNREACH', syscall: 'connect' }),
+  });
+  function unreadableResponse(status) {
+    const body = new ReadableStream({ start(controller) { controller.error(connectionShape()); } });
+    return new Response(body, { status, headers: { 'content-type': 'text/event-stream' } });
+  }
   const responses = [
     // A gateway's text/HTML body does not obscure its HTTP status.
     [() => new Response(echo, { status: 503, headers: { 'retry-after': '1.5', 'x-request-id': requestId } }), 'SERVER', true, 503, 1500, requestId],
@@ -192,6 +199,11 @@ test('named DeepSeek requests carry their bounded retry policy and safe terminal
     [() => sse([messageStart, block, errorEvent('overloaded_error')]), 'SERVER', true],
     [() => sse([messageStart, block]), 'STREAM_CLOSED', true],
     [() => { throw new TypeError(echo); }, 'TRANSPORT', true],
+    // rc.5 exposes the same terminal failure for these errors all the way through
+    // the official adapter. Without a pre-response seam none may enter network wait.
+    [() => { throw connectionShape(); }, 'TRANSPORT', true],
+    [() => unreadableResponse(503), 'TRANSPORT', true],
+    [() => unreadableResponse(200), 'TRANSPORT', true],
     [() => Response.json(errorEvent('authentication_error'), { status: 401 }), 'AUTH', false, 401],
     [() => Response.json(errorEvent('permission_error'), { status: 403 }), 'AUTH', false, 403],
     [() => Response.json({ error: { type: 'rate_limit_error', code: 'insufficient_quota', message: echo } }, { status: 429 }), 'QUOTA', false, 429],

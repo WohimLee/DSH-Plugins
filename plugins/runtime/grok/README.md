@@ -5,7 +5,7 @@
 ## DSH 原生行为与接入方式
 
 - **原生行为**。会话菜单从 DSH 模型目录读取可选模型。宿主提供凭据存储、流式回复和工具执行。
-- **接入方式**。验证密钥并读取可用模型后，通过 `ctx.llm.registerAdapter` 发布该账号的路由，断开时撤回。原版默认连接保留 `grok` 路由。客户端在 `settings.section` 提供设置入口，并以 `id: 'grok'` 向 Model Picker 的 `modelPicker.connections` 贡献连接卡片及 API 账号配置。 [Host 入口](src/index.ts) · [客户端注册](src/client/index.tsx)
+- **接入方式**。验证密钥并读取可用模型后，通过 `ctx.llm.registerAdapter` 发布该账号的路由，断开时撤回。原版默认连接保留 `grok` 路由。通过共享的 `agent/request-error` 处理明确的推理连接失败，按账号绑定等待的取消信号。客户端在 `settings.section` 提供设置入口，并以 `id: 'grok'` 向 Model Picker 的 `modelPicker.connections` 贡献连接卡片及 API 账号配置。 [Host 入口](src/index.ts) · [客户端注册](src/client/index.tsx)
 - **验证证据**。隔离 Web 已通过回环 API 验证连接、流式回复和断开。Desktop `0.2.2-rc.5` 已验证管理页卡片，真实 xAI 账号推理待验收。 [plugin.meta.json](plugin.meta.json)
 
 ## 连接
@@ -25,6 +25,8 @@
 ## 请求失败恢复
 
 在挂载 `@deepseek-ai/dsh-llm-retry` 的 Agent 会话中，Grok 将明确的 xAI HTTP 限流、暂时性服务错误、超时、已知传输中断、已识别的 Responses 流内服务错误和空完成交给宿主。宿主在同一失败步骤最多再尝试 5 次；合法的 `Retry-After` 由宿主处理，超过当前 10 秒上限时不自动重试。认证、余额或额度耗尽、请求无效、内容拒绝、未知失败和取消不由 Grok 的重试策略重试。HTTP 行为参见 [xAI Debugging Errors](https://docs.x.ai/developers/debugging)。
+
+若对 xAI Responses 的建连阶段确认网络不可达或 DNS 暂时失败，Agent 会话会进入独立的等网分支：按 5、10、20、40、60 秒退避（后续间隔上限 60 秒），自首次连接失败起 10 分钟后不再结束等待并交回宿主重试；该时限不截断后续请求准备或已发出的请求。停止会话、断开账号、更换密钥或卸载插件均结束等待。目录与密钥验证、HTTP 错误、证书失败和已开始的响应流不进入此分支。等网不消耗普通重试预算，恢复时只重发失败的模型步骤，不重跑已完成的工具。
 
 插件与 SDK 每次只发出一次请求，直接调用 `ctx.llm.stream()` 也不会自动重试。失败诊断只保留归一错误码、HTTP 状态和有效的等待时长等必要字段，不记录上游错误原文、标头、请求 ID 或凭据。Grok 只发送 DSH 执行的函数工具声明，不启用 xAI 服务端工具；失败的流不会成为可执行工具调用，重试可能重新计费。
 
