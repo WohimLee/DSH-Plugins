@@ -46,7 +46,7 @@ const failed = code => ({ type: 'response.failed', response: {
   error: { code, message: privateEcho },
 } });
 
-async function fixture(t, responses, { exhaust = false, cancel = false, networkClock, unload = false } = {}) {
+async function fixture(t, responses, { exhaust = false, cancel = false, networkClock, unload = false, source = 'user' } = {}) {
   const codexHome = await mkdtemp(join(tmpdir(), 'dsh-codex-recovery-'));
   const ctx = new Context();
   t.after(async () => {
@@ -118,7 +118,7 @@ async function fixture(t, responses, { exhaust = false, cancel = false, networkC
       });
     });
   }
-  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Run the tool and reply.' }], source: { kind: 'user' } }));
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Run the tool and reply.' }], source: { kind: source } }));
   await agent.whenIdle();
   return { agent, requests, executions, events: agent.session.snapshotEvents() };
 }
@@ -231,10 +231,10 @@ function assertNetworkWaits(events, delays, started = delays.length) {
     .map(({ data }) => data.retry), Array.from({ length: started }, (_, index) => index + 1));
 }
 
-test('network waits do not spend the ordinary request budget or replay the completed tool', { timeout: 5000 }, async t => {
+test('scheduled turns recover without spending the ordinary budget or replaying the completed tool', { timeout: 5000 }, async t => {
   const clock = fakeClock();
   const result = await fixture(t, [[toolRequest, completed], ...Array.from({ length: 6 }, () => connectionFailure()),
-    [failed('server_error')], [delta('recovered after network'), completed]], { exhaust: true, networkClock: clock });
+    [failed('server_error')], [delta('recovered after network'), completed]], { exhaust: true, networkClock: clock, source: 'schedule' });
   const { events, requests } = result;
   assertSingleTool(result, 9);
   assertNetworkWaits(events, [5000, 10000, 20000, 40000, 60000, 60000]);
